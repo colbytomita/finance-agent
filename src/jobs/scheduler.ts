@@ -127,12 +127,22 @@ async function catalystScan(): Promise<void> {
 log("scheduler starting — Ctrl+C to stop");
 log(`tracked tickers: ${getTrackedTickers().join(", ") || "(none yet)"}`);
 
-// Tick every minute; maybeRefresh applies the phase-appropriate interval.
-cron.schedule("* * * * *", () => void maybeRefresh());
+// Poll ~every minute; maybeRefresh self-throttles to the phase interval.
+// A self-scheduling timer (not cron) avoids node-cron's "missed execution"
+// warnings when the machine sleeps between ticks — on wake it just fires once
+// and reschedules, instead of flushing one warning per skipped minute.
+async function refreshLoop(): Promise<void> {
+  try {
+    await maybeRefresh();
+  } finally {
+    setTimeout(() => void refreshLoop(), 60_000);
+  }
+}
+
 // Catalyst scan every 4 hours on weekdays.
 cron.schedule("0 */4 * * 1-5", () => void catalystScan());
 // Daily maintenance at 8:00 local time (bars, setups, portfolio sync, news).
 cron.schedule("0 8 * * *", () => void dailyMaintenance());
 
-// Kick off an initial refresh immediately.
-void maybeRefresh();
+// Kick off the refresh loop immediately.
+void refreshLoop();
