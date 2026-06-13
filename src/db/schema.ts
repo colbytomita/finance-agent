@@ -205,6 +205,32 @@ export const appSettings = sqliteTable("app_settings", {
   updatedAt: text("updated_at").notNull(),
 });
 
+// AI-discovered watchlist candidates pending the user's accept/decline.
+// The discovery agent proposes tickers that pass the configured score "test";
+// accepting one promotes it into watchlist_items.
+export const agentCandidates = sqliteTable("agent_candidates", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticker: text("ticker").notNull().unique(),
+  companyName: text("company_name"),
+  price: real("price"),
+  overallScore: real("overall_score").notNull(),
+  valuationScore: real("valuation_score"),
+  momentumScore: real("momentum_score"),
+  catalystScore: real("catalyst_score"),
+  riskScore: real("risk_score"),
+  sentimentScore: real("sentiment_score"),
+  recommendation: text("recommendation"),
+  confidence: text("confidence").notNull().default("low"),
+  drawdownPercent: real("drawdown_percent"),
+  suggestedBuyLow: real("suggested_buy_low"),
+  suggestedBuyHigh: real("suggested_buy_high"),
+  rationale: text("rationale"),
+  generatedBy: text("generated_by").notNull().default("rules"), // rules | llm
+  status: text("status").notNull().default("pending"), // pending | accepted | declined
+  proposedAt: text("proposed_at").notNull(),
+  decidedAt: text("decided_at"),
+});
+
 export const scoreHistory = sqliteTable("score_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ticker: text("ticker").notNull(),

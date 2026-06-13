@@ -70,15 +70,13 @@ describe("AlpacaService", () => {
     expect(snap.dailyChangePercent).toBeCloseTo(5);
   });
 
-  it("maps historical bars to the Bar shape", async () => {
-    const svc = new AlpacaService({
-      ...cfg,
-      fetchFn: mockFetch({
-        "/bars": {
-          bars: [{ t: "2026-06-10T04:00:00Z", o: 1, h: 2, l: 0.5, c: 1.5, v: 1000 }],
-        },
-      }),
+  it("maps historical bars to the Bar shape and sends a start date", async () => {
+    const fetchFn = mockFetch({
+      "/bars": {
+        bars: [{ t: "2026-06-10T04:00:00Z", o: 1, h: 2, l: 0.5, c: 1.5, v: 1000 }],
+      },
     });
+    const svc = new AlpacaService({ ...cfg, fetchFn });
     const bars = await svc.getHistoricalBars("MSFT");
     expect(bars[0]).toEqual({
       date: "2026-06-10T04:00:00Z",
@@ -88,6 +86,9 @@ describe("AlpacaService", () => {
       close: 1.5,
       volume: 1000,
     });
+    // Alpaca returns only the latest bar unless `start` is supplied (regression guard).
+    const url = String((fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    expect(url).toMatch(/[?&]start=\d{4}-\d{2}-\d{2}/);
   });
 
   it("throws AlpacaError with status on API failure", async () => {

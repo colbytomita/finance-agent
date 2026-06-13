@@ -201,6 +201,28 @@ CREATE TABLE IF NOT EXISTS score_history (
   change_reason TEXT,
   recorded_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS agent_candidates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticker TEXT NOT NULL UNIQUE,
+  company_name TEXT,
+  price REAL,
+  overall_score REAL NOT NULL,
+  valuation_score REAL,
+  momentum_score REAL,
+  catalyst_score REAL,
+  risk_score REAL,
+  sentiment_score REAL,
+  recommendation TEXT,
+  confidence TEXT NOT NULL DEFAULT 'low',
+  drawdown_percent REAL,
+  suggested_buy_low REAL,
+  suggested_buy_high REAL,
+  rationale TEXT,
+  generated_by TEXT NOT NULL DEFAULT 'rules',
+  status TEXT NOT NULL DEFAULT 'pending',
+  proposed_at TEXT NOT NULL,
+  decided_at TEXT
+);
 `;
 
 let _db: BetterSQLite3Database<typeof schema> | null = null;

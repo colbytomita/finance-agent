@@ -18,6 +18,7 @@ const settingsSchema = z
     refreshIntervalExtendedHoursSec: z.coerce.number().min(60).max(7200),
     refreshIntervalClosedSec: z.coerce.number().min(300).max(86400),
     yahooBrowserEnabled: z.coerce.boolean(),
+    agentMinScore: z.coerce.number().min(1).max(10),
   })
   .partial();
 

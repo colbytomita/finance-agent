@@ -12,6 +12,7 @@ const NAV = [
   { href: "/", label: "Summary" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/watchlist", label: "Watchlist" },
+  { href: "/agent-watchlist", label: "Agent Picks" },
   { href: "/swing", label: "Swing Trading" },
   { href: "/catalysts", label: "Catalysts" },
   { href: "/settings", label: "Settings" },
@@ -26,7 +27,7 @@ export default function RootLayout({
         <header className="sticky top-0 z-20 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
           <div className="mx-auto flex max-w-screen-2xl items-center gap-6 px-4 py-2">
             <Link href="/" className="text-sm font-bold tracking-tight text-zinc-100">
-              Finance<span className="text-sky-400">Agent</span>
+              Colby <span className="text-sky-400">Tomita</span>
             </Link>
             <nav className="flex gap-4 text-sm">
               {NAV.map((n) => (

@@ -174,11 +174,16 @@ export class AlpacaService {
     timeframe = "1Day",
     limit = 365,
   ): Promise<Bar[]> {
+    // Alpaca returns only the most recent bar when `start` is omitted, so derive
+    // a start date from the requested limit (~1.5 calendar days per trading day
+    // to cover weekends/holidays).
+    const startMs = Date.now() - Math.ceil(limit * 1.5) * 86400000;
+    const start = new Date(startMs).toISOString().slice(0, 10);
     const data = await this.request<{
       bars?: { t: string; o: number; h: number; l: number; c: number; v: number }[];
     }>(
       this.dataBase,
-      `/v2/stocks/${encodeURIComponent(ticker)}/bars?timeframe=${timeframe}&limit=${limit}&adjustment=split&feed=iex`,
+      `/v2/stocks/${encodeURIComponent(ticker)}/bars?timeframe=${timeframe}&limit=${limit}&adjustment=split&feed=iex&start=${start}`,
     );
     return (data.bars ?? []).map((b) => ({
       date: b.t,

@@ -20,6 +20,7 @@ export interface AppConfig {
   refreshIntervalExtendedHoursSec: number;
   refreshIntervalClosedSec: number;
   yahooBrowserEnabled: boolean;
+  agentMinScore: number; // discovery agent proposes candidates scoring >= this (1–10)
   stockScoreWeights: {
     valuation: number;
     momentum: number;
@@ -52,6 +53,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   refreshIntervalExtendedHoursSec: 600,
   refreshIntervalClosedSec: 2400,
   yahooBrowserEnabled: true,
+  agentMinScore: 7,
   stockScoreWeights: {
     valuation: 0.2,
     momentum: 0.2,

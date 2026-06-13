@@ -10,6 +10,8 @@
 
 A market research and swing-trading **decision-support** dashboard (Next.js + TypeScript + Tailwind + SQLite). It tracks your portfolio, watchlist, and active swing trades; scores stocks (1–10) and trades (1–10); detects swing setups; tracks drawdowns, buy zones, and catalysts; and recommends **Enter / Wait / Hold / Add / Trim / Exit / Avoid** with plain-language explanations.
 
+A **discovery agent** ("Agent Picks") scans a universe of liquid stocks, scores each, and proposes any that clear a configurable score test as candidates you can **Accept** (promote to your watchlist with a suggested buy zone) or **Decline** — the agent never edits your watchlist on its own.
+
 > **Safety boundary:** this app never places trades, never guarantees returns, and labels all model-generated interpretation separately from raw data. Every data point carries a timestamp and staleness warning.
 
 ### Quick start
@@ -24,6 +26,15 @@ npm run jobs                      # (separate terminal) background refresh sched
 ```
 
 Without any API keys the app still runs: manual entry works everywhere, scores degrade to neutral/low-confidence, and the UI flags missing data. Alpaca enables price history, indicators, setups, and portfolio sync; an Anthropic key upgrades research briefs from rule-based to LLM-generated.
+
+### Getting real data in
+
+Data is pulled on demand and on a schedule — nothing is fabricated:
+
+1. Add tickers to your **Watchlist** (or sync your Alpaca portfolio). Only tracked tickers are refreshed.
+2. Click **Refresh data** (top of most pages) to pull live quotes (Alpaca + Yahoo extended hours), daily bars, and recompute scores/setups. Requires `npm run dev` to be running.
+3. For continuous, market-aware updates, run `npm run jobs` in a second terminal — it refreshes on a cadence, scans catalysts, runs a daily discovery scan, and does daily maintenance.
+4. On **Agent Picks**, click **Run agent scan** to have the discovery agent screen the universe and propose candidates.
 
 ### Commands
 

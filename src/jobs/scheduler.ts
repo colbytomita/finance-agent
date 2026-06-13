@@ -15,6 +15,7 @@ import {
 import { generateAlerts } from "@/services/alerts";
 import { rollCatalystStatuses, scanYahooNews } from "@/services/catalysts";
 import { AlpacaService } from "@/services/alpaca";
+import { runDiscoveryScan } from "@/services/discoveryAgent";
 
 const log = (msg: string) => console.log(`[jobs ${new Date().toISOString()}] ${msg}`);
 
@@ -101,6 +102,11 @@ async function dailyMaintenance(): Promise<void> {
       });
       log(`news scan added ${added} catalyst(s)`);
     }
+    const picks = await runDiscoveryScan().catch((e) => {
+      log(`discovery scan failed: ${e instanceof Error ? e.message : e}`);
+      return null;
+    });
+    if (picks) log(`discovery scan: ${picks.proposed} new pick(s) from ${picks.scanned} scanned`);
     generateAlerts();
     log("daily maintenance done");
   } catch (e) {

@@ -27,6 +27,7 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
   { key: "refreshIntervalExtendedHoursSec", label: "Refresh interval, pre/after hours (sec)", type: "number" },
   { key: "refreshIntervalClosedSec", label: "Refresh interval, closed (sec)", type: "number" },
   { key: "yahooBrowserEnabled", label: "Yahoo Finance browser connector", type: "checkbox" },
+  { key: "agentMinScore", label: "Agent pick min score (1–10)", type: "number", hint: "Discovery agent proposes stocks scoring at or above this. Higher = stricter, fewer picks." },
 ];
 
 export default function SettingsPage() {
