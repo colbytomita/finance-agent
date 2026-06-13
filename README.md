@@ -6,6 +6,41 @@
     </picture>
 </div>
 
+## Finance Agent
+
+A market research and swing-trading **decision-support** dashboard (Next.js + TypeScript + Tailwind + SQLite). It tracks your portfolio, watchlist, and active swing trades; scores stocks (1–10) and trades (1–10); detects swing setups; tracks drawdowns, buy zones, and catalysts; and recommends **Enter / Wait / Hold / Add / Trim / Exit / Avoid** with plain-language explanations.
+
+> **Safety boundary:** this app never places trades, never guarantees returns, and labels all model-generated interpretation separately from raw data. Every data point carries a timestamp and staleness warning.
+
+### Quick start
+
+```bash
+npm install
+npx playwright install chromium   # for the Yahoo Finance pre/after-hours connector
+cp .env.example .env              # add Alpaca + (optional) Anthropic keys
+npm run db:seed                   # optional demo data
+npm run dev                       # dashboard at http://localhost:3000
+npm run jobs                      # (separate terminal) background refresh scheduler
+```
+
+Without any API keys the app still runs: manual entry works everywhere, scores degrade to neutral/low-confidence, and the UI flags missing data. Alpaca enables price history, indicators, setups, and portfolio sync; an Anthropic key upgrades research briefs from rule-based to LLM-generated.
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `npm run dev` / `build` / `start` | Next.js app |
+| `npm run jobs` | cron scheduler (market-state-aware refresh, catalyst scan, daily maintenance) |
+| `npm run db:seed` | demo watchlist/trade/catalysts |
+| `npm test` | vitest suite (scoring, buy zones, risk, exits, parsers — 100 tests) |
+| `npm run typecheck` | strict TypeScript check |
+
+### Layout
+
+`src/services/*` — scoring, trade scoring, setup detection, risk management, buy zones, indicators, Alpaca, Yahoo browser connector, catalysts, research agent, alerts · `src/db/*` — Drizzle/SQLite schema (Postgres-ready) · `src/app/*` — dashboard views + API routes · `src/jobs/scheduler.ts` — background jobs.
+
+---
+
 ## Dependabot Demo Repository
 
 This repo contains some projects with outdated dependencies. Fork it to try out

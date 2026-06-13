@@ -5,6 +5,16 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+  # finance-agent app at the repo root
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: npm
     directory: "/javascript"
     schedule:

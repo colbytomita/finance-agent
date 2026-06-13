@@ -1,0 +1,142 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+interface SettingsResponse {
+  config: Record<string, unknown>;
+  integrations: {
+    alpacaConfigured: boolean;
+    alpacaMode: string;
+    llmConfigured: boolean;
+    llmProvider: string;
+  };
+}
+
+const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbox"; options?: string[]; hint?: string }[] = [
+  { key: "riskProfile", label: "Risk profile", type: "select", options: ["conservative", "balanced", "aggressive"], hint: "Adjusts risk-per-trade, R/R minimum, earnings avoidance, and concentration caps." },
+  { key: "accountValue", label: "Account value (fallback)", type: "number", hint: "Used for position sizing when Alpaca is not connected." },
+  { key: "riskPerTradePercent", label: "Risk per trade (%)", type: "number" },
+  { key: "minRiskReward", label: "Minimum risk/reward", type: "number" },
+  { key: "maxPortfolioConcentrationPercent", label: "Max position weight (%)", type: "number" },
+  { key: "maxSectorConcentrationPercent", label: "Max sector weight (%)", type: "number" },
+  { key: "stopLossWarningPercent", label: "Stop-loss warning distance (%)", type: "number" },
+  { key: "drawdownWarningPercent", label: "Drawdown warning (%)", type: "number" },
+  { key: "avoidEarningsWithinDays", label: "Avoid earnings within (days)", type: "number", hint: "0 disables earnings avoidance." },
+  { key: "staleDataMinutes", label: "Data stale after (minutes)", type: "number" },
+  { key: "refreshIntervalMarketOpenSec", label: "Refresh interval, market open (sec)", type: "number" },
+  { key: "refreshIntervalExtendedHoursSec", label: "Refresh interval, pre/after hours (sec)", type: "number" },
+  { key: "refreshIntervalClosedSec", label: "Refresh interval, closed (sec)", type: "number" },
+  { key: "yahooBrowserEnabled", label: "Yahoo Finance browser connector", type: "checkbox" },
+];
+
+export default function SettingsPage() {
+  const [data, setData] = useState<SettingsResponse | null>(null);
+  const [form, setForm] = useState<Record<string, unknown>>({});
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d: SettingsResponse) => {
+        setData(d);
+        setForm(d.config);
+      })
+      .catch(() => setMsg("Failed to load settings"));
+  }, []);
+
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("validation failed");
+      setMsg("Saved");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!data) return <p className="text-sm text-zinc-500">Loading settings…</p>;
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      <h1 className="text-lg font-bold">Settings</h1>
+
+      <section className="card">
+        <h2 className="card-title">Integrations (configured via .env — secrets never shown here)</h2>
+        <ul className="space-y-1 text-sm">
+          <li>
+            Alpaca:{" "}
+            {data.integrations.alpacaConfigured ? (
+              <span className="pos">connected ({data.integrations.alpacaMode} mode)</span>
+            ) : (
+              <span className="text-amber-400">not configured — set ALPACA_API_KEY / ALPACA_API_SECRET in .env</span>
+            )}
+          </li>
+          <li>
+            LLM research agent:{" "}
+            {data.integrations.llmConfigured ? (
+              <span className="pos">connected ({data.integrations.llmProvider})</span>
+            ) : (
+              <span className="text-zinc-400">no API key — rule-based summaries are used</span>
+            )}
+          </li>
+        </ul>
+      </section>
+
+      <section className="card space-y-3">
+        <h2 className="card-title">Risk & refresh configuration</h2>
+        {FIELDS.map((f) => (
+          <div key={f.key} className="flex items-center justify-between gap-4">
+            <div>
+              <label className="block">{f.label}</label>
+              {f.hint && <span className="text-[10px] text-zinc-600">{f.hint}</span>}
+            </div>
+            {f.type === "select" ? (
+              <select
+                value={String(form[f.key] ?? "")}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+              >
+                {f.options!.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+            ) : f.type === "checkbox" ? (
+              <input
+                type="checkbox"
+                checked={Boolean(form[f.key])}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.checked })}
+              />
+            ) : (
+              <input
+                type="number"
+                step="any"
+                className="w-32"
+                value={String(form[f.key] ?? "")}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+              />
+            )}
+          </div>
+        ))}
+        <div className="flex items-center gap-3 pt-2">
+          <button className="btn btn-primary" onClick={save} disabled={busy}>
+            {busy ? "Saving…" : "Save settings"}
+          </button>
+          {msg && <span className="text-xs text-zinc-400">{msg}</span>}
+        </div>
+      </section>
+
+      <p className="text-[11px] text-zinc-600">
+        This app is decision support only. It never places trades, never guarantees returns, and all
+        scores are heuristic interpretations of the data available to it.
+      </p>
+    </div>
+  );
+}
