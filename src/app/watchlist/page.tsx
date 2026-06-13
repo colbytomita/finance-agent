@@ -9,7 +9,15 @@ import {
 import { loadConfig } from "@/lib/config";
 import { portfolioWatchlistRecommendations } from "@/services/portfolioRecommendations";
 import { fmtMoney } from "@/lib/format";
-import { Freshness, Pct, RecBadge, ScoreBadge } from "@/components/badges";
+import { Freshness, Pct } from "@/components/badges";
+import {
+  BuyZoneInsight,
+  DrawdownInsight,
+  RecommendationInsight,
+  SetupInsight,
+  StockComponentInsight,
+  StockScoreInsight,
+} from "@/components/insights";
 import { AddWatchlistForm, DeleteButton } from "@/components/forms";
 import { PortfolioRecActions } from "@/components/PortfolioRecActions";
 import { RefreshButton } from "@/components/RefreshButton";
@@ -111,21 +119,31 @@ export default function WatchlistPage() {
                 <td className="text-xs tabular-nums text-zinc-400">
                   {fmtMoney(dd?.fiftyTwoWeekHigh)} / {fmtMoney(dd?.fiftyTwoWeekLow)}
                 </td>
-                <td><Pct value={dd?.drawdownPercent} /></td>
+                <td>
+                  <DrawdownInsight
+                    pct={dd?.drawdownPercent}
+                    currentPrice={dd?.currentPrice}
+                    high52={dd?.fiftyTwoWeekHigh}
+                  >
+                    <Pct value={dd?.drawdownPercent} />
+                  </DrawdownInsight>
+                </td>
                 <td className="text-xs tabular-nums text-zinc-400">
                   {w.targetBuyLow != null || w.targetBuyHigh != null
                     ? `${fmtMoney(w.targetBuyLow)}–${fmtMoney(w.targetBuyHigh)}`
                     : "—"}
                 </td>
-                <td className="text-xs text-zinc-400">{dd?.buyZoneStatus ?? "—"}</td>
-                <td className="text-xs text-zinc-300">
-                  {setup ? setup.setupType.replace(/_/g, " ") : "—"}
+                <td className="text-xs text-zinc-400">
+                  <BuyZoneInsight status={dd?.buyZoneStatus} distancePct={dd?.distanceFromBuyZonePercent} />
                 </td>
-                <td><ScoreBadge score={score?.catalystScore} /></td>
-                <td><ScoreBadge score={score?.riskScore} /></td>
-                <td><ScoreBadge score={score?.overallScore} /></td>
-                <td><ScoreBadge score={setup?.setupQualityScore} /></td>
-                <td><RecBadge rec={score?.recommendation} /></td>
+                <td className="text-xs text-zinc-300">
+                  {setup ? <SetupInsight setup={setup}>{setup.setupType.replace(/_/g, " ")}</SetupInsight> : "—"}
+                </td>
+                <td><StockComponentInsight score={score} component="catalyst" /></td>
+                <td><StockComponentInsight score={score} component="risk" /></td>
+                <td><StockScoreInsight score={score} weights={cfg.stockScoreWeights} /></td>
+                <td><SetupInsight setup={setup} /></td>
+                <td><RecommendationInsight score={score} /></td>
                 <td><Freshness capturedAt={snap?.capturedAt} staleMinutes={cfg.staleDataMinutes} /></td>
                 <td><DeleteButton url={`/api/watchlist/${w.id}`} /></td>
               </tr>

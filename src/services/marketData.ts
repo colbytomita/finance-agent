@@ -515,6 +515,12 @@ export function recomputeTradeScores(): void {
       .set({
         tradeScore: evaluation.tradeScore,
         recommendation: evaluation.action,
+        reasoningJson: JSON.stringify({
+          components: evaluation.components,
+          reasons: evaluation.reasons,
+          exit: evaluation.hardRulesTriggered,
+          trim: evaluation.trimReasons,
+        }),
         updatedAt: nowIso(),
       })
       .where(eq(schema.activeTrades.id, t.id))

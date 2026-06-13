@@ -117,6 +117,7 @@ export const activeTrades = sqliteTable("active_trades", {
   maxDrawdownPercent: real("max_drawdown_percent"),
   tradeScore: real("trade_score"),
   recommendation: text("recommendation"),
+  reasoningJson: text("reasoning_json"),
   thesis: text("thesis"),
   invalidationReason: text("invalidation_reason"),
   status: text("status").notNull().default("open"), // open | closed

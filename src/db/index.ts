@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS active_trades (
   max_drawdown_percent REAL,
   trade_score REAL,
   recommendation TEXT,
+  reasoning_json TEXT,
   thesis TEXT,
   invalidation_reason TEXT,
   status TEXT NOT NULL DEFAULT 'open',
@@ -235,6 +236,13 @@ export function getDb(): BetterSQLite3Database<typeof schema> {
   const sqlite = new Database(resolved);
   sqlite.pragma("journal_mode = WAL");
   sqlite.exec(DDL);
+  // Additive migrations for existing databases (the DDL above only creates
+  // missing tables, never alters existing ones).
+  try {
+    sqlite.exec("ALTER TABLE active_trades ADD COLUMN reasoning_json TEXT");
+  } catch {
+    // Column already present — ignore.
+  }
   _db = drizzle(sqlite, { schema });
   return _db;
 }

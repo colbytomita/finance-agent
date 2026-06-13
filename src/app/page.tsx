@@ -11,7 +11,8 @@ import {
 } from "@/lib/queries";
 import { loadConfig } from "@/lib/config";
 import { fmtMoney, fmtPct, fmtScore } from "@/lib/format";
-import { Freshness, Pct, RecBadge, ScoreBadge, SeverityDot } from "@/components/badges";
+import { Freshness, Pct, SeverityDot } from "@/components/badges";
+import { BuyZoneInsight, SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { RefreshButton } from "@/components/RefreshButton";
 
 export const dynamic = "force-dynamic";
@@ -79,11 +80,11 @@ export default function SummaryPage() {
             <ul className="space-y-1.5 text-sm">
               {tradesNeedingAttention.map((t) => (
                 <li key={t.id} className="flex items-center gap-2">
-                  <RecBadge rec={t.recommendation ?? "—"} />
+                  <TradeScoreInsight trade={t} kind="rec" />
                   <Link href={`/stock/${t.ticker}`} className="font-semibold hover:underline">
                     {t.ticker}
                   </Link>
-                  <ScoreBadge score={t.tradeScore} />
+                  <TradeScoreInsight trade={t} kind="score" />
                   <span className="muted text-xs">P/L {fmtPct(t.unrealizedGainLossPercent)}</span>
                 </li>
               ))}
@@ -107,7 +108,7 @@ export default function SummaryPage() {
             <ul className="space-y-1.5 text-sm">
               {setups.map((s) => (
                 <li key={s.id} className="flex items-center gap-2">
-                  <ScoreBadge score={s.setupQualityScore} />
+                  <SetupInsight setup={s} />
                   <Link href={`/stock/${s.ticker}`} className="font-semibold hover:underline">
                     {s.ticker}
                   </Link>
@@ -134,7 +135,9 @@ export default function SummaryPage() {
                   <Link href={`/stock/${w.ticker}`} className="font-semibold hover:underline">
                     {w.ticker}
                   </Link>
-                  <span className="text-xs text-zinc-400">{dd?.buyZoneStatus}</span>
+                  <BuyZoneInsight status={dd?.buyZoneStatus} distancePct={dd?.distanceFromBuyZonePercent}>
+                    <span className="text-xs text-zinc-400">{dd?.buyZoneStatus}</span>
+                  </BuyZoneInsight>
                   <span className="muted text-xs">
                     {fmtMoney(dd?.currentPrice ?? null)} · zone {fmtMoney(w.targetBuyLow)}–
                     {fmtMoney(w.targetBuyHigh)}
@@ -180,8 +183,8 @@ export default function SummaryPage() {
                   <Link href={`/stock/${t.ticker}`} className="font-semibold hover:underline">
                     {t.ticker}
                   </Link>
-                  <ScoreBadge score={t.tradeScore} />
-                  <RecBadge rec={t.recommendation} />
+                  <TradeScoreInsight trade={t} kind="score" />
+                  <TradeScoreInsight trade={t} kind="rec" />
                   <Pct value={t.unrealizedGainLossPercent} />
                   <span className="muted text-xs">score {fmtScore(t.tradeScore)}</span>
                 </li>

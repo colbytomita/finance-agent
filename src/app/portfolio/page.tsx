@@ -8,7 +8,13 @@ import {
 } from "@/lib/queries";
 import { loadConfig } from "@/lib/config";
 import { fmtMoney, fmtPct } from "@/lib/format";
-import { Freshness, Pct, RecBadge, ScoreBadge } from "@/components/badges";
+import { Freshness, Pct } from "@/components/badges";
+import {
+  BuyZoneInsight,
+  DrawdownInsight,
+  RecommendationInsight,
+  StockScoreInsight,
+} from "@/components/insights";
 import { AddHoldingForm, DeleteButton } from "@/components/forms";
 import { SyncPortfolioButton } from "@/components/SyncPortfolioButton";
 import { RefreshButton } from "@/components/RefreshButton";
@@ -95,15 +101,25 @@ export default function PortfolioPage() {
                   <Pct value={h.unrealizedGainLossPercent} />{" "}
                   <span className="muted text-xs">{fmtMoney(h.unrealizedGainLoss, 0)}</span>
                 </td>
-                <td><Pct value={dd?.drawdownPercent} /></td>
+                <td>
+                  <DrawdownInsight
+                    pct={dd?.drawdownPercent}
+                    currentPrice={dd?.currentPrice}
+                    high52={dd?.fiftyTwoWeekHigh}
+                  >
+                    <Pct value={dd?.drawdownPercent} />
+                  </DrawdownInsight>
+                </td>
                 <td className="text-xs text-zinc-400">
-                  {dd?.buyZoneStatus ?? "—"}
+                  <BuyZoneInsight status={dd?.buyZoneStatus} distancePct={dd?.distanceFromBuyZonePercent}>
+                    <span>{dd?.buyZoneStatus ?? "—"}</span>
+                  </BuyZoneInsight>
                   {dd?.distanceFromBuyZonePercent != null && dd.distanceFromBuyZonePercent !== 0 && (
                     <span className="muted"> ({fmtPct(dd.distanceFromBuyZonePercent, 0)})</span>
                   )}
                 </td>
-                <td><ScoreBadge score={score?.overallScore} /></td>
-                <td><RecBadge rec={score?.recommendation} /></td>
+                <td><StockScoreInsight score={score} weights={cfg.stockScoreWeights} /></td>
+                <td><RecommendationInsight score={score} /></td>
                 <td className="max-w-48 truncate text-xs text-emerald-300/80" title={cat.topCatalyst ?? ""}>
                   {cat.topCatalyst ?? "—"}
                 </td>

@@ -4,7 +4,8 @@ import { effectiveConfig } from "@/lib/config";
 import { currentAccountValue } from "@/services/marketData";
 import { suggestPositionSize } from "@/services/riskManagement";
 import { fmtDate, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
-import { Pct, RecBadge, ScoreBadge } from "@/components/badges";
+import { Pct } from "@/components/badges";
+import { SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { AddTradeForm, CloseTradeButton } from "@/components/forms";
 import { RefreshButton } from "@/components/RefreshButton";
 
@@ -99,7 +100,7 @@ export default function SwingPage() {
                     <td className="tabular-nums">
                       {s.riskRewardRatio.toFixed(1)}:1{belowMin && <span className="text-[10px] text-amber-400"> below min</span>}
                     </td>
-                    <td><ScoreBadge score={s.setupQualityScore} /></td>
+                    <td><SetupInsight setup={s} /></td>
                     <td className="text-xs tabular-nums">
                       {size.shares > 0 ? `${size.shares} sh ≈ ${fmtMoney(size.positionValue, 0)}` : "—"}
                     </td>
@@ -166,8 +167,8 @@ export default function SwingPage() {
                       <Pct value={t.unrealizedGainLossPercent} />{" "}
                       <span className="muted text-xs">{fmtMoney(t.unrealizedGainLoss, 0)}</span>
                     </td>
-                    <td><ScoreBadge score={t.tradeScore} /></td>
-                    <td><RecBadge rec={t.recommendation} /></td>
+                    <td><TradeScoreInsight trade={t} kind="score" /></td>
+                    <td><TradeScoreInsight trade={t} kind="rec" /></td>
                     <td className="tabular-nums text-red-300">{fmtMoney(t.stopLoss)}</td>
                     <td className="tabular-nums text-emerald-300">{fmtMoney(t.targetPrice1)}</td>
                     <td className="text-xs tabular-nums">{heldDays}d</td>
@@ -197,9 +198,9 @@ export default function SwingPage() {
                   : null;
               return (
                 <li key={t.id} className="flex flex-wrap items-center gap-2">
-                  <RecBadge rec={t.recommendation} />
+                  <TradeScoreInsight trade={t} kind="rec" />
                   <Link href={`/stock/${t.ticker}`} className="font-semibold hover:underline">{t.ticker}</Link>
-                  <ScoreBadge score={t.tradeScore} />
+                  <TradeScoreInsight trade={t} kind="score" />
                   {stopDist != null && (
                     <span className="text-xs text-amber-300">{fmtNum(stopDist, 1)}% from stop</span>
                   )}
