@@ -28,6 +28,7 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
   { key: "refreshIntervalClosedSec", label: "Refresh interval, closed (sec)", type: "number" },
   { key: "yahooBrowserEnabled", label: "Yahoo Finance browser connector", type: "checkbox" },
   { key: "agentMinScore", label: "Agent pick min score (1–10)", type: "number", hint: "Discovery agent proposes stocks scoring at or above this. Higher = stricter, fewer picks." },
+  { key: "portfolioWatchlistRecLimit", label: "Portfolio→watchlist suggestions shown", type: "number", hint: "How many of your holdings that aren't on the watchlist to suggest adding (Watchlist page). 0 hides them." },
 ];
 
 export default function SettingsPage() {

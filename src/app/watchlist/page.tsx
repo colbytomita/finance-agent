@@ -7,9 +7,11 @@ import {
   latestSnapshot,
 } from "@/lib/queries";
 import { loadConfig } from "@/lib/config";
+import { portfolioWatchlistRecommendations } from "@/services/portfolioRecommendations";
 import { fmtMoney } from "@/lib/format";
 import { Freshness, Pct, RecBadge, ScoreBadge } from "@/components/badges";
 import { AddWatchlistForm, DeleteButton } from "@/components/forms";
+import { PortfolioRecActions } from "@/components/PortfolioRecActions";
 import { RefreshButton } from "@/components/RefreshButton";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +19,7 @@ export const dynamic = "force-dynamic";
 export default function WatchlistPage() {
   const cfg = loadConfig();
   const items = allWatchlist();
+  const recs = portfolioWatchlistRecommendations(cfg.portfolioWatchlistRecLimit);
   const setups = activeSetups();
   const rows = items.map((w) => ({
     w,
@@ -35,6 +38,32 @@ export default function WatchlistPage() {
         </div>
       </div>
       <AddWatchlistForm />
+      {recs.length > 0 && (
+        <section className="card">
+          <h2 className="card-title">From your portfolio — not yet watched</h2>
+          <p className="mb-2 text-xs text-zinc-500">
+            Holdings you own that aren’t on your watchlist. Add one to track its buy zone and scores,
+            or dismiss to hide it. Showing up to {cfg.portfolioWatchlistRecLimit} (change in{" "}
+            <Link href="/settings" className="text-sky-300 hover:underline">Settings</Link>).
+          </p>
+          <ul className="space-y-1.5 text-sm">
+            {recs.map((r) => (
+              <li key={r.ticker} className="flex items-center gap-3">
+                <Link
+                  href={`/stock/${r.ticker}`}
+                  className="w-16 font-semibold text-sky-300 hover:underline"
+                >
+                  {r.ticker}
+                </Link>
+                <span className="min-w-0 flex-1 truncate text-zinc-400">{r.companyName ?? "—"}</span>
+                <span className="tabular-nums">{fmtMoney(r.currentPrice)}</span>
+                <span className="w-20 text-right"><Pct value={r.unrealizedGainLossPercent} /></span>
+                <PortfolioRecActions ticker={r.ticker} companyName={r.companyName} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="overflow-x-auto">
         <table className="data-table">
           <thead>

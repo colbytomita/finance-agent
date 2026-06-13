@@ -21,6 +21,7 @@ export interface AppConfig {
   refreshIntervalClosedSec: number;
   yahooBrowserEnabled: boolean;
   agentMinScore: number; // discovery agent proposes candidates scoring >= this (1–10)
+  portfolioWatchlistRecLimit: number; // max "add to watchlist" suggestions from holdings shown at once (0 hides)
   stockScoreWeights: {
     valuation: number;
     momentum: number;
@@ -54,6 +55,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   refreshIntervalClosedSec: 2400,
   yahooBrowserEnabled: true,
   agentMinScore: 7,
+  portfolioWatchlistRecLimit: 3,
   stockScoreWeights: {
     valuation: 0.2,
     momentum: 0.2,
