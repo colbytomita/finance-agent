@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import type { RiskProfile } from "./types";
+import type { Confidence, RiskProfile } from "./types";
 
 // Non-secret app settings live in the DB (editable from the Settings page).
 // Secrets (API keys) live in env vars only and are never sent to the frontend.
@@ -16,12 +16,23 @@ export interface AppConfig {
   drawdownWarningPercent: number;
   avoidEarningsWithinDays: number; // 0 = disabled
   staleDataMinutes: number; // data older than this is flagged stale
+  catalystFreshnessDays: number; // catalysts older than this stop counting as current drivers/risks
   refreshIntervalMarketOpenSec: number;
   refreshIntervalExtendedHoursSec: number;
   refreshIntervalClosedSec: number;
   yahooBrowserEnabled: boolean;
   agentMinScore: number; // discovery agent proposes candidates scoring >= this (1–10)
   portfolioWatchlistRecLimit: number; // max "add to watchlist" suggestions from holdings shown at once (0 hides)
+  // Real-world event ingestion (Catalyst Edge). Master switch gates the scheduled
+  // run; manual runs honor the per-source switches regardless.
+  eventIngestionEnabled: boolean;
+  eventSourceSecEnabled: boolean; // SEC EDGAR 8-K filings
+  eventSourceGdeltEnabled: boolean; // GDELT news coverage (needs gdeltQueries)
+  eventSourceIrEnabled: boolean; // company IR RSS (needs irFeeds)
+  eventIngestionMaxItems: number; // per-run cap on raw items (cost control)
+  eventMinConfidence: Confidence; // drop extracted events below this confidence
+  gdeltQueries: string[]; // advanced: GDELT search queries (not in settings form)
+  irFeeds: { ticker: string; url: string }[]; // advanced: IR feed URLs
   stockScoreWeights: {
     valuation: number;
     momentum: number;
@@ -50,12 +61,21 @@ export const DEFAULT_CONFIG: AppConfig = {
   drawdownWarningPercent: 15,
   avoidEarningsWithinDays: 3,
   staleDataMinutes: 30,
+  catalystFreshnessDays: 90,
   refreshIntervalMarketOpenSec: 120,
   refreshIntervalExtendedHoursSec: 600,
   refreshIntervalClosedSec: 2400,
   yahooBrowserEnabled: true,
   agentMinScore: 7,
   portfolioWatchlistRecLimit: 3,
+  eventIngestionEnabled: false,
+  eventSourceSecEnabled: true,
+  eventSourceGdeltEnabled: false,
+  eventSourceIrEnabled: false,
+  eventIngestionMaxItems: 25,
+  eventMinConfidence: "medium",
+  gdeltQueries: [],
+  irFeeds: [],
   stockScoreWeights: {
     valuation: 0.2,
     momentum: 0.2,

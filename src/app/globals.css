@@ -21,6 +21,11 @@ body {
 .data-table tbody tr:hover {
   @apply bg-zinc-900/60;
 }
+/* Opt a cell out of the default nowrap. Higher specificity than ".data-table td"
+   so plain utility classes (which lose the specificity fight) aren't needed. */
+.data-table td.wrap {
+  @apply whitespace-normal break-words;
+}
 
 .card {
   @apply rounded-lg border border-zinc-800 p-3;

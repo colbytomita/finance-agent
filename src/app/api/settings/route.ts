@@ -20,6 +20,12 @@ const settingsSchema = z
     yahooBrowserEnabled: z.coerce.boolean(),
     agentMinScore: z.coerce.number().min(1).max(10),
     portfolioWatchlistRecLimit: z.coerce.number().int().min(0).max(50),
+    eventIngestionEnabled: z.coerce.boolean(),
+    eventSourceSecEnabled: z.coerce.boolean(),
+    eventSourceGdeltEnabled: z.coerce.boolean(),
+    eventSourceIrEnabled: z.coerce.boolean(),
+    eventIngestionMaxItems: z.coerce.number().int().min(1).max(200),
+    eventMinConfidence: z.enum(["low", "medium", "high"]),
   })
   .partial();
 

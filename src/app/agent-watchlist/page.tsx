@@ -83,7 +83,9 @@ export default function AgentWatchlistPage() {
                   {c.confidence}
                   {c.generatedBy === "llm" && <span className="ml-1 text-violet-300" title="LLM-written rationale">· AI</span>}
                 </td>
-                <td className="max-w-72 text-xs text-zinc-300">{c.rationale ?? "—"}</td>
+                <td className="wrap text-xs text-zinc-300">
+                  <div className="max-w-72">{c.rationale ?? "—"}</div>
+                </td>
                 <td className="text-[11px] text-zinc-500">{fmtDateTime(c.proposedAt)}</td>
                 <td><CandidateActions id={c.id} /></td>
               </tr>

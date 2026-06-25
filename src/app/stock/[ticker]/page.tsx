@@ -9,6 +9,7 @@ import {
   tickerCatalysts,
 } from "@/lib/queries";
 import { getLatestNote } from "@/services/researchAgent";
+import { edgeCatalystsForTicker } from "@/services/catalystEdge";
 import { computeIndicators } from "@/services/indicators";
 import { loadConfig } from "@/lib/config";
 import { fmtDate, fmtMoney, fmtNum, fmtScore } from "@/lib/format";
@@ -43,11 +44,17 @@ export default async function StockDetailPage({
   }));
   const ind = bars.length > 0 ? computeIndicators(bars) : null;
   const catalysts = tickerCatalysts(ticker);
+  const edges = edgeCatalystsForTicker(ticker);
   const note = getLatestNote(ticker);
   const trade = openTrades().find((t) => t.ticker === ticker) ?? null;
-  const reasoning: Record<string, string[]> = score?.reasoningJson
+  const reasoning: Record<string, unknown> = score?.reasoningJson
     ? JSON.parse(score.reasoningJson)
     : {};
+  // reasoningJson holds per-component string[] plus a non-reason `weightsUsed`
+  // object — only keep the array entries for the "Why these scores" list.
+  const reasonEntries = Object.entries(reasoning).filter(
+    (e): e is [string, string[]] => Array.isArray(e[1]),
+  );
 
   const price = snap?.regularPrice ?? ind?.price ?? null;
   const levels = [
@@ -144,6 +151,36 @@ export default async function StockDetailPage({
               </ul>
             )}
           </section>
+
+          {/* Entity catalyst edge */}
+          {edges.length > 0 && (
+            <section className="card">
+              <h2 className="card-title">Entity catalyst edge</h2>
+              <ul className="space-y-2 text-sm">
+                {edges.map((e) => (
+                  <li key={e.id} className="flex items-start gap-2">
+                    <span
+                      className={`shrink-0 text-xs font-semibold tabular-nums ${
+                        e.impactScore > 0 ? "pos" : e.impactScore < 0 ? "neg" : "text-zinc-500"
+                      }`}
+                    >
+                      {e.impactScore > 0 ? "+" : ""}
+                      {e.impactScore}
+                    </span>
+                    <span>
+                      <span className="text-zinc-200">{e.title}</span>
+                      <span className="muted text-xs"> · confidence {e.confidence}</span>
+                      {e.summary && <p className="text-xs text-zinc-500">{e.summary}</p>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[10px] text-zinc-600">
+                Derived from the <Link href="/events" className="text-sky-400 underline">Catalyst Edge</Link>{" "}
+                event study — historical correlation across a small sample, not advice or a prediction.
+              </p>
+            </section>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -185,15 +222,15 @@ export default async function StockDetailPage({
           </section>
 
           {/* Why */}
-          {Object.keys(reasoning).length > 0 && (
+          {reasonEntries.length > 0 && (
             <section className="card">
               <h2 className="card-title">Why these scores</h2>
               <div className="space-y-2 text-xs">
-                {Object.entries(reasoning).map(([component, reasons]) => (
+                {reasonEntries.map(([component, reasons]) => (
                   <div key={component}>
                     <span className="font-semibold capitalize text-zinc-300">{component}</span>
                     <ul className="ml-3 list-disc text-zinc-400">
-                      {(reasons as string[]).map((r, i) => (
+                      {reasons.map((r, i) => (
                         <li key={i}>{r}</li>
                       ))}
                     </ul>

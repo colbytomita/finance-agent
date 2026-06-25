@@ -8,6 +8,7 @@ import { Pct } from "@/components/badges";
 import { SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { AddTradeForm, CloseTradeButton } from "@/components/forms";
 import { RefreshButton } from "@/components/RefreshButton";
+import { PlaceOrderButton } from "@/components/TradeOrder";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,13 @@ export default function SwingPage() {
   const stats = journalStats();
   const journal = journalEntries().slice(0, 25);
   const accountValue = currentAccountValue();
+
+  const alpacaConfigured = Boolean(process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET);
+  const alpacaMode: "paper" | "live" | null = alpacaConfigured
+    ? process.env.ALPACA_MODE === "live"
+      ? "live"
+      : "paper"
+    : null;
 
   const exitWatch = trades.filter((t) => {
     const price = t.currentPrice;
@@ -63,12 +71,13 @@ export default function SwingPage() {
                 <th>Suggested size</th>
                 <th>Max loss</th>
                 <th>Invalidation / note</th>
+                <th>Order</th>
               </tr>
             </thead>
             <tbody>
               {setups.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="py-4 text-center text-zinc-500">
+                  <td colSpan={12} className="py-4 text-center text-zinc-500">
                     No active setups detected. Setups need daily price history (Alpaca) and a refresh.
                   </td>
                 </tr>
@@ -110,6 +119,17 @@ export default function SwingPage() {
                     <td className="max-w-72 truncate text-xs text-zinc-500" title={s.invalidationCondition ?? ""}>
                       {s.invalidationCondition ?? "—"}
                     </td>
+                    <td>
+                      <PlaceOrderButton
+                        ticker={s.ticker}
+                        direction="long"
+                        suggestedShares={size.shares > 0 ? size.shares : undefined}
+                        entryPrice={mid}
+                        stopLoss={s.stopLoss}
+                        targetPrice1={s.targetPrice1}
+                        mode={alpacaMode}
+                      />
+                    </td>
                   </tr>
                 );
               })}
@@ -117,8 +137,11 @@ export default function SwingPage() {
           </table>
         </div>
         <p className="mt-1 text-[11px] text-zinc-600">
-          Setups are heuristic pattern detections — prepare your own order; nothing is placed automatically.
-          Sizing assumes {cfg.riskPerTradePercent}% account risk and your {cfg.maxPortfolioConcentrationPercent}% concentration cap.
+          Setups are heuristic pattern detections. Sizing assumes {cfg.riskPerTradePercent}% account risk and your{" "}
+          {cfg.maxPortfolioConcentrationPercent}% concentration cap.{" "}
+          {alpacaMode
+            ? `The Trade button sends a user-confirmed order to Alpaca (${alpacaMode}) and logs it as an open trade — nothing is placed automatically.`
+            : "Connect Alpaca in .env to enable the Trade button."}
         </p>
       </section>
 

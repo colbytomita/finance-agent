@@ -16,6 +16,8 @@ import { generateAlerts } from "@/services/alerts";
 import { rollCatalystStatuses, scanYahooNews } from "@/services/catalysts";
 import { AlpacaService } from "@/services/alpaca";
 import { runDiscoveryScan } from "@/services/discoveryAgent";
+import { runEventIngestion } from "@/services/eventIngestion";
+import { applyEntityEdge } from "@/services/catalystEdge";
 
 const log = (msg: string) => console.log(`[jobs ${new Date().toISOString()}] ${msg}`);
 
@@ -107,6 +109,25 @@ async function dailyMaintenance(): Promise<void> {
       return null;
     });
     if (picks) log(`discovery scan: ${picks.proposed} new pick(s) from ${picks.scanned} scanned`);
+    if (cfg.eventIngestionEnabled) {
+      const ing = await runEventIngestion().catch((e) => {
+        log(`event ingestion failed: ${e instanceof Error ? e.message : e}`);
+        return null;
+      });
+      if (ing)
+        log(
+          `event ingestion: ${ing.persisted} new mention(s) from ${ing.fetched} item(s) (${ing.generatedBy})`,
+        );
+      // Feed the measured entity edge back into scoring as catalysts.
+      const edge = await applyEntityEdge().catch((e) => {
+        log(`apply entity edge failed: ${e instanceof Error ? e.message : e}`);
+        return null;
+      });
+      if (edge)
+        log(
+          `entity edge: ${edge.catalystsWritten} catalyst(s), ${edge.tickersRecomputed} score(s) recomputed`,
+        );
+    }
     generateAlerts();
     log("daily maintenance done");
   } catch (e) {

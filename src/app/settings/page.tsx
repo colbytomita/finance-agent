@@ -29,6 +29,12 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
   { key: "yahooBrowserEnabled", label: "Yahoo Finance browser connector", type: "checkbox" },
   { key: "agentMinScore", label: "Agent pick min score (1–10)", type: "number", hint: "Discovery agent proposes stocks scoring at or above this. Higher = stricter, fewer picks." },
   { key: "portfolioWatchlistRecLimit", label: "Portfolio→watchlist suggestions shown", type: "number", hint: "How many of your holdings that aren't on the watchlist to suggest adding (Watchlist page). 0 hides them." },
+  { key: "eventIngestionEnabled", label: "Event ingestion (scheduled)", type: "checkbox", hint: "Catalyst Edge: pull real-world events on the daily schedule. Manual 'Run ingestion' works regardless." },
+  { key: "eventSourceSecEnabled", label: "Source: SEC EDGAR 8-K", type: "checkbox", hint: "Official, free filing feed of material corporate events." },
+  { key: "eventSourceGdeltEnabled", label: "Source: GDELT news", type: "checkbox", hint: "News coverage of public-figure statements (requires gdeltQueries in config)." },
+  { key: "eventSourceIrEnabled", label: "Source: company IR RSS", type: "checkbox", hint: "Company investor-relations feeds (requires irFeeds in config)." },
+  { key: "eventIngestionMaxItems", label: "Event ingestion item cap", type: "number", hint: "Max raw items processed per run. Lower = cheaper LLM extraction." },
+  { key: "eventMinConfidence", label: "Event min confidence", type: "select", options: ["low", "medium", "high"], hint: "Drop extracted events below this confidence before storing." },
 ];
 
 export default function SettingsPage() {

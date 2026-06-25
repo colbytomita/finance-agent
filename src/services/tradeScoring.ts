@@ -70,6 +70,8 @@ export interface TradeContext {
 export interface TradeEvaluation {
   tradeScore: number;
   components: TradeScoreComponents;
+  /** Effective weights used (catalyst is 0 when there are no current catalysts). */
+  weightsUsed: TradeScoreWeights;
   label: TradeRecommendationLabel;
   action: Recommendation;
   hardRulesTriggered: string[];
@@ -448,7 +450,13 @@ export function evaluateTrade(input: {
     marketConditionScore: mkt.score,
     thesisValidityScore: thesis.score,
   };
-  const score = combineTradeScore(components, weights);
+  // With no current catalysts, the catalyst component is a neutral no-data value;
+  // drop it from the blend (weight 0) so it doesn't drag the trade score. The
+  // weight-sum normalization in combineTradeScore redistributes automatically.
+  const baseTradeWeights = weights ?? DEFAULT_TRADE_WEIGHTS;
+  const weightsUsed: TradeScoreWeights =
+    catalysts.length > 0 ? baseTradeWeights : { ...baseTradeWeights, catalyst: 0 };
+  const score = combineTradeScore(components, weightsUsed);
   const label = tradeRecommendationLabel(score);
 
   const exitReasons = hardExitRules({
@@ -492,6 +500,7 @@ export function evaluateTrade(input: {
   return {
     tradeScore: score,
     components,
+    weightsUsed,
     label,
     action,
     hardRulesTriggered: exitReasons,
