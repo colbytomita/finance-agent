@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 // User-initiated trade entry. A "Trade" button on a setup row opens this dialog,
@@ -118,11 +119,12 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
         Trade
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setOpen(false)}
-        >
+      {open &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            onClick={() => setOpen(false)}
+          >
           <div
             className="card w-full max-w-lg max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
@@ -292,8 +294,9 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
               </form>
             )}
           </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

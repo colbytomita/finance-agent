@@ -1,10 +1,16 @@
 import Link from "next/link";
-import { activeSetups, journalStats, journalEntries, openTrades } from "@/lib/queries";
+import {
+  activeSetups,
+  journalStats,
+  journalEntries,
+  openTrades,
+  latestSnapshot,
+} from "@/lib/queries";
 import { effectiveConfig } from "@/lib/config";
 import { currentAccountValue } from "@/services/marketData";
 import { suggestPositionSize } from "@/services/riskManagement";
 import { fmtDate, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
-import { Pct } from "@/components/badges";
+import { Freshness, Pct } from "@/components/badges";
 import { SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { AddTradeForm, CloseTradeButton } from "@/components/forms";
 import { RefreshButton } from "@/components/RefreshButton";
@@ -61,6 +67,7 @@ export default function SwingPage() {
             <thead>
               <tr>
                 <th>Ticker</th>
+                <th>Price</th>
                 <th>Setup</th>
                 <th>Entry range</th>
                 <th>Stop</th>
@@ -77,7 +84,7 @@ export default function SwingPage() {
             <tbody>
               {setups.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="py-4 text-center text-zinc-500">
+                  <td colSpan={13} className="py-4 text-center text-zinc-500">
                     No active setups detected. Setups need daily price history (Alpaca) and a refresh.
                   </td>
                 </tr>
@@ -92,12 +99,32 @@ export default function SwingPage() {
                   maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
                 });
                 const belowMin = s.riskRewardRatio < cfg.minRiskReward;
+                const snap = latestSnapshot(s.ticker);
+                const price = snap?.regularPrice ?? null;
+                const inZone = price != null && price >= s.entryRangeLow && price <= s.entryRangeHigh;
+                const belowStop = price != null && price <= s.stopLoss;
+                const priceCls = belowStop
+                  ? "text-red-300"
+                  : inZone
+                    ? "text-emerald-300"
+                    : "text-zinc-200";
                 return (
                   <tr key={s.id} className={belowMin ? "opacity-50" : ""}>
                     <td>
                       <Link href={`/stock/${s.ticker}`} className="font-semibold text-sky-300 hover:underline">
                         {s.ticker}
                       </Link>
+                    </td>
+                    <td className="tabular-nums">
+                      {price != null ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span className={priceCls}>{fmtMoney(price)}</span>
+                          <Freshness capturedAt={snap?.capturedAt} staleMinutes={cfg.staleDataMinutes} />
+                        </span>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                      {inZone && <span className="block text-[10px] text-emerald-400">in entry zone</span>}
                     </td>
                     <td className="text-zinc-300">{s.setupType.replace(/_/g, " ")}</td>
                     <td className="tabular-nums">
