@@ -1,5 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { loadConfig } from "@/lib/config";
+import { isCatalystStale } from "@/services/catalysts";
 
 // Read-side helpers used by server components. Latest-row lookups per ticker.
 
@@ -49,12 +51,16 @@ export function tickerCatalysts(ticker: string, limit = 20) {
     .all();
 }
 
-/** Highest-|impact| non-expired catalyst, split into best positive / worst negative. */
+/** Highest-|impact| current (non-expired, non-stale) catalyst, split into best positive / worst negative. */
 export function topCatalystAndRisk(ticker: string): {
   topCatalyst: string | null;
   topRisk: string | null;
 } {
-  const rows = tickerCatalysts(ticker, 50).filter((c) => c.status !== "expired");
+  const freshnessDays = loadConfig().catalystFreshnessDays;
+  const now = Date.now();
+  const rows = tickerCatalysts(ticker, 50).filter(
+    (c) => c.status !== "expired" && !isCatalystStale(c, freshnessDays, now),
+  );
   const positive = rows.filter((c) => c.impactScore > 0).sort((a, b) => b.impactScore - a.impactScore);
   const negative = rows.filter((c) => c.impactScore < 0).sort((a, b) => a.impactScore - b.impactScore);
   return {

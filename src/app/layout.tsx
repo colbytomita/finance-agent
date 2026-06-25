@@ -15,6 +15,8 @@ const NAV = [
   { href: "/agent-watchlist", label: "Agent Picks" },
   { href: "/swing", label: "Swing Trading" },
   { href: "/catalysts", label: "Catalysts" },
+  { href: "/events", label: "Catalyst Edge" },
+  { href: "/universe", label: "Research Universe" },
   { href: "/settings", label: "Settings" },
 ];
 

@@ -9,6 +9,7 @@ import { computeDrawdown, evaluateBuyZone } from "./buyZone";
 import { scoreStock, type CatalystInput } from "./scoring";
 import { evaluateTrade } from "./tradeScoring";
 import { detectSetups } from "./setupDetection";
+import { isCatalystStale } from "./catalysts";
 
 // Orchestrates: fetch prices/bars -> persist snapshots -> recompute
 // drawdowns, stock scores, trade scores, setups. All steps tolerate partial
@@ -87,12 +88,40 @@ export interface RefreshResult {
 }
 
 /** Refresh price snapshots for all tracked tickers. Alpaca first, Yahoo for extended hours. */
+// The Yahoo connector drives a headless browser, so it's far slower than the
+// Alpaca REST snapshot. To keep a manual refresh responsive (and stop it hanging
+// for minutes when the market is closed and every ticker needs Yahoo), we scrape
+// with bounded concurrency and an overall time budget. Alpaca already supplies
+// the regular price, so any ticker the budget can't reach simply goes without
+// extended-hours data this round rather than blocking the whole refresh.
+const PRICE_REFRESH_CONCURRENCY = 5;
+const YAHOO_PHASE_BUDGET_MS = 75_000;
+
+/** Run `fn` over `items` with at most `limit` in flight; preserves input order. */
+async function mapPool<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx]);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
+  );
+  return results;
+}
+
 export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<RefreshResult[]> {
   const cfg = loadConfig();
   const tickers = getTrackedTickers();
   if (tickers.length === 0) return [];
   const alpaca = AlpacaService.fromEnv();
-  const results: RefreshResult[] = [];
 
   // Determine market state once (Alpaca clock if available).
   let marketState: MarketState = "UNKNOWN";
@@ -107,8 +136,9 @@ export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<
   // Yahoo adds extended-hours data — useful any time the market isn't in
   // regular session (pre, post, closed, or unknown state).
   const wantYahoo = (opts.useYahoo ?? cfg.yahooBrowserEnabled) && marketState !== "REGULAR";
+  const yahooDeadline = Date.now() + YAHOO_PHASE_BUDGET_MS;
 
-  for (const ticker of tickers) {
+  const fetchOne = async (ticker: string): Promise<RefreshResult> => {
     let quote: Quote | null = null;
     let error: string | undefined;
 
@@ -132,8 +162,9 @@ export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<
       }
     }
 
-    // Yahoo for extended-hours data (or as the only source without Alpaca).
-    if (wantYahoo || !quote) {
+    // Yahoo for extended-hours data (or as the only source without Alpaca), but
+    // only while we're within the time budget so the phase stays bounded.
+    if ((wantYahoo || !quote) && Date.now() < yahooDeadline) {
       try {
         const yahoo = getYahooService();
         const fields = await yahoo.getSummaryFields(ticker);
@@ -158,12 +189,12 @@ export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<
     if (quote) {
       saveSnapshot(quote);
       updateCurrentPrices(ticker, quote);
-      results.push({ ticker, ok: true, source: quote.source });
-    } else {
-      results.push({ ticker, ok: false, source: null, error: error ?? "no data source available" });
+      return { ticker, ok: true, source: quote.source };
     }
-  }
-  return results;
+    return { ticker, ok: false, source: null, error: error ?? "no data source available" };
+  };
+
+  return mapPool(tickers, PRICE_REFRESH_CONCURRENCY, fetchOne);
 }
 
 /** Push latest price into holdings and open trades for the ticker. */
@@ -221,35 +252,40 @@ function updateCurrentPrices(ticker: string, q: Quote): void {
   }
 }
 
+/** Persist daily bars for one ticker (idempotent; existing rows are kept). */
+export function saveBars(ticker: string, bars: Bar[], timeframe = "1Day", source = "alpaca"): void {
+  const db = getDb();
+  for (const b of bars) {
+    db.insert(schema.priceBars)
+      .values({
+        ticker,
+        timeframe,
+        barDate: b.date,
+        open: b.open,
+        high: b.high,
+        low: b.low,
+        close: b.close,
+        volume: b.volume,
+        source,
+      })
+      .onConflictDoNothing()
+      .run();
+  }
+}
+
 /** Fetch + persist daily bars (needs Alpaca). */
 export async function refreshBars(tickers?: string[]): Promise<void> {
   const alpaca = AlpacaService.fromEnv();
   if (!alpaca) return;
-  const db = getDb();
-  const list = tickers ?? getTrackedTickers();
-  for (const ticker of [...new Set([...list, "SPY"])]) {
+  const list = [...new Set([...(tickers ?? getTrackedTickers()), "SPY"])];
+  await mapPool(list, PRICE_REFRESH_CONCURRENCY, async (ticker) => {
     try {
       const bars = await alpaca.getHistoricalBars(ticker, "1Day", 400);
-      for (const b of bars) {
-        db.insert(schema.priceBars)
-          .values({
-            ticker,
-            timeframe: "1Day",
-            barDate: b.date,
-            open: b.open,
-            high: b.high,
-            low: b.low,
-            close: b.close,
-            volume: b.volume,
-            source: "alpaca",
-          })
-          .onConflictDoNothing()
-          .run();
-      }
+      saveBars(ticker, bars);
     } catch (e) {
       console.error(`[bars] ${ticker}:`, e instanceof Error ? e.message : e);
     }
-  }
+  });
 }
 
 /** Sync Alpaca positions into portfolio_holdings. */
@@ -284,17 +320,23 @@ export async function syncPortfolio(): Promise<{ synced: number } | { error: str
 
 export function getCatalystInputs(ticker: string): CatalystInput[] {
   const db = getDb();
+  const freshnessDays = loadConfig().catalystFreshnessDays;
+  const now = Date.now();
   const rows = db
     .select()
     .from(schema.catalysts)
     .where(eq(schema.catalysts.ticker, ticker))
     .all();
-  return rows.map((c) => ({
-    impactScore: c.impactScore,
-    confidence: (c.confidence as CatalystInput["confidence"]) ?? "low",
-    status: c.status,
-    title: c.title,
-  }));
+  // Drop expired and stale catalysts entirely so old events never sway any score
+  // component — including sentiment, which otherwise averages every catalyst.
+  return rows
+    .filter((c) => c.status !== "expired" && !isCatalystStale(c, freshnessDays, now))
+    .map((c) => ({
+      impactScore: c.impactScore,
+      confidence: (c.confidence as CatalystInput["confidence"]) ?? "low",
+      status: c.status,
+      title: c.title,
+    }));
 }
 
 export function daysToNextEarnings(ticker: string): number | null {
@@ -426,7 +468,10 @@ export function recomputeStockAnalysis(ticker: string): TickerAnalysis {
       sentimentScore: stockScore.components.sentimentScore,
       recommendation: stockScore.recommendation,
       confidence: stockScore.confidence,
-      reasoningJson: JSON.stringify(stockScore.reasoning),
+      reasoningJson: JSON.stringify({
+        ...stockScore.reasoning,
+        weightsUsed: stockScore.weightsUsed,
+      }),
       calculatedAt: nowIso(),
     })
     .run();

@@ -1,5 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { classifyCatalyst } from "../catalysts";
+import { classifyCatalyst, isCatalystStale, catalystEffectiveTime } from "../catalysts";
+
+describe("catalyst freshness", () => {
+  const now = Date.parse("2026-06-24T00:00:00Z");
+  const day = 86400000;
+
+  it("treats a 2-year-old event as stale (the Buffett/AAPL case)", () => {
+    const stale = { eventDate: "2024-05-04", discoveredAt: "2026-06-20T00:00:00Z" };
+    expect(isCatalystStale(stale, 90, now)).toBe(true);
+  });
+
+  it("keeps a recent event fresh", () => {
+    const recent = { eventDate: "2026-06-01", discoveredAt: "2026-06-01T00:00:00Z" };
+    expect(isCatalystStale(recent, 90, now)).toBe(false);
+  });
+
+  it("never marks a future (upcoming) event stale", () => {
+    const upcoming = { eventDate: "2026-09-01", discoveredAt: "2026-06-20T00:00:00Z" };
+    expect(isCatalystStale(upcoming, 90, now)).toBe(false);
+  });
+
+  it("falls back to discoveredAt when there is no event date", () => {
+    expect(catalystEffectiveTime({ eventDate: null, discoveredAt: "2026-06-20T00:00:00Z" })).toBe(
+      Date.parse("2026-06-20T00:00:00Z"),
+    );
+    expect(isCatalystStale({ eventDate: null, discoveredAt: "2025-01-01T00:00:00Z" }, 90, now)).toBe(true);
+    expect(isCatalystStale({ eventDate: null, discoveredAt: "2026-06-20T00:00:00Z" }, 90, now)).toBe(false);
+  });
+
+  it("uses the boundary exactly at freshnessDays", () => {
+    const exactly90 = { eventDate: new Date(now - 90 * day).toISOString(), discoveredAt: "x" };
+    expect(isCatalystStale(exactly90, 90, now)).toBe(false); // 90 days ago is still fresh
+    const past90 = { eventDate: new Date(now - 91 * day).toISOString(), discoveredAt: "x" };
+    expect(isCatalystStale(past90, 90, now)).toBe(true);
+  });
+});
 
 describe("classifyCatalyst", () => {
   it("classifies earnings beats as positive", () => {

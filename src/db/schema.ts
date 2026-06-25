@@ -125,6 +125,10 @@ export const activeTrades = sqliteTable("active_trades", {
   updatedAt: text("updated_at").notNull(),
   closedAt: text("closed_at"),
   exitPrice: real("exit_price"),
+  // Set when the trade was placed through a broker (Alpaca). Manual log-only
+  // trades leave these null.
+  broker: text("broker"), // e.g. alpaca-paper | alpaca-live
+  brokerOrderId: text("broker_order_id"),
 });
 
 export const tradeSetups = sqliteTable("trade_setups", {
@@ -230,6 +234,21 @@ export const agentCandidates = sqliteTable("agent_candidates", {
   status: text("status").notNull().default("pending"), // pending | accepted | declined
   proposedAt: text("proposed_at").notNull(),
   decidedAt: text("decided_at"),
+});
+
+// Real-world "who said what about which ticker" events, used by the event-study
+// ("catalyst edge") engine to measure how a ticker moved before/after a given
+// entity mentioned it, pooled across all of that entity's prior mentions.
+export const entityMentions = sqliteTable("entity_mentions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  entity: text("entity").notNull(), // speaker/source, e.g. "Donald Trump"
+  ticker: text("ticker").notNull(), // referenced stock, uppercase
+  claim: text("claim"), // short description of what was said
+  direction: text("direction").notNull().default("unknown"), // bullish | bearish | neutral | unknown
+  eventDate: text("event_date").notNull(), // ISO-8601 date the statement happened
+  sourceName: text("source_name"),
+  sourceUrl: text("source_url"),
+  createdAt: text("created_at").notNull(),
 });
 
 export const scoreHistory = sqliteTable("score_history", {

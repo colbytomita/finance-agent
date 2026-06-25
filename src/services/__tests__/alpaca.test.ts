@@ -119,4 +119,78 @@ describe("AlpacaService", () => {
     if (prevKey) process.env.ALPACA_API_KEY = prevKey;
     if (prevSecret) process.env.ALPACA_API_SECRET = prevSecret;
   });
+
+  it("builds a bracket order payload when both protective legs are set", () => {
+    const svc = new AlpacaService(cfg);
+    const body = svc.buildOrderPayload({
+      symbol: "msft",
+      qty: 10,
+      side: "buy",
+      type: "limit",
+      timeInForce: "day",
+      limitPrice: 400,
+      stopLoss: 390,
+      takeProfit: 420,
+    });
+    expect(body).toMatchObject({
+      symbol: "MSFT", // upper-cased
+      qty: "10",
+      side: "buy",
+      type: "limit",
+      time_in_force: "day",
+      limit_price: "400",
+      order_class: "bracket",
+      take_profit: { limit_price: "420" },
+      stop_loss: { stop_price: "390" },
+    });
+  });
+
+  it("uses OTO for one protective leg and a plain order for none", () => {
+    const svc = new AlpacaService(cfg);
+    const oto = svc.buildOrderPayload({
+      symbol: "AAPL", qty: 5, side: "buy", type: "market", timeInForce: "day", stopLoss: 100,
+    });
+    expect(oto).toMatchObject({ order_class: "oto", stop_loss: { stop_price: "100" } });
+    expect(oto.take_profit).toBeUndefined();
+
+    const plain = svc.buildOrderPayload({
+      symbol: "AAPL", qty: 5, side: "buy", type: "market", timeInForce: "day",
+    });
+    expect(plain.order_class).toBeUndefined();
+    expect(plain.limit_price).toBeUndefined();
+  });
+
+  it("rejects a limit order with no limit price", () => {
+    const svc = new AlpacaService(cfg);
+    expect(() =>
+      svc.buildOrderPayload({ symbol: "AAPL", qty: 5, side: "buy", type: "limit", timeInForce: "day" }),
+    ).toThrowError(AlpacaError);
+  });
+
+  it("placeOrder POSTs to /v2/orders and parses the response", async () => {
+    const fetchFn = mockFetch({
+      "/v2/orders": {
+        id: "o1",
+        symbol: "MSFT",
+        qty: "10",
+        side: "buy",
+        type: "limit",
+        order_class: "bracket",
+        status: "accepted",
+        limit_price: "400",
+        filled_avg_price: null,
+        submitted_at: "2026-06-24T00:00:00Z",
+      },
+    });
+    const svc = new AlpacaService({ ...cfg, fetchFn });
+    const order = await svc.placeOrder({
+      symbol: "MSFT", qty: 10, side: "buy", type: "limit", timeInForce: "day",
+      limitPrice: 400, stopLoss: 390, takeProfit: 420,
+    });
+    expect(order).toMatchObject({ id: "o1", status: "accepted", orderClass: "bracket", qty: 10 });
+    const call = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(String(call[0])).toContain("/v2/orders");
+    expect(call[1].method).toBe("POST");
+    expect(JSON.parse(call[1].body)).toMatchObject({ symbol: "MSFT", order_class: "bracket" });
+  });
 });

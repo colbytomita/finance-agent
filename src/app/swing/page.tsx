@@ -1,13 +1,20 @@
 import Link from "next/link";
-import { activeSetups, journalStats, journalEntries, openTrades } from "@/lib/queries";
+import {
+  activeSetups,
+  journalStats,
+  journalEntries,
+  openTrades,
+  latestSnapshot,
+} from "@/lib/queries";
 import { effectiveConfig } from "@/lib/config";
 import { currentAccountValue } from "@/services/marketData";
 import { suggestPositionSize } from "@/services/riskManagement";
 import { fmtDate, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
-import { Pct } from "@/components/badges";
+import { Freshness, Pct } from "@/components/badges";
 import { SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { AddTradeForm, CloseTradeButton } from "@/components/forms";
 import { RefreshButton } from "@/components/RefreshButton";
+import { PlaceOrderButton } from "@/components/TradeOrder";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +25,13 @@ export default function SwingPage() {
   const stats = journalStats();
   const journal = journalEntries().slice(0, 25);
   const accountValue = currentAccountValue();
+
+  const alpacaConfigured = Boolean(process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET);
+  const alpacaMode: "paper" | "live" | null = alpacaConfigured
+    ? process.env.ALPACA_MODE === "live"
+      ? "live"
+      : "paper"
+    : null;
 
   const exitWatch = trades.filter((t) => {
     const price = t.currentPrice;
@@ -53,6 +67,7 @@ export default function SwingPage() {
             <thead>
               <tr>
                 <th>Ticker</th>
+                <th>Price</th>
                 <th>Setup</th>
                 <th>Entry range</th>
                 <th>Stop</th>
@@ -63,12 +78,13 @@ export default function SwingPage() {
                 <th>Suggested size</th>
                 <th>Max loss</th>
                 <th>Invalidation / note</th>
+                <th>Order</th>
               </tr>
             </thead>
             <tbody>
               {setups.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="py-4 text-center text-zinc-500">
+                  <td colSpan={13} className="py-4 text-center text-zinc-500">
                     No active setups detected. Setups need daily price history (Alpaca) and a refresh.
                   </td>
                 </tr>
@@ -83,12 +99,32 @@ export default function SwingPage() {
                   maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
                 });
                 const belowMin = s.riskRewardRatio < cfg.minRiskReward;
+                const snap = latestSnapshot(s.ticker);
+                const price = snap?.regularPrice ?? null;
+                const inZone = price != null && price >= s.entryRangeLow && price <= s.entryRangeHigh;
+                const belowStop = price != null && price <= s.stopLoss;
+                const priceCls = belowStop
+                  ? "text-red-300"
+                  : inZone
+                    ? "text-emerald-300"
+                    : "text-zinc-200";
                 return (
                   <tr key={s.id} className={belowMin ? "opacity-50" : ""}>
                     <td>
                       <Link href={`/stock/${s.ticker}`} className="font-semibold text-sky-300 hover:underline">
                         {s.ticker}
                       </Link>
+                    </td>
+                    <td className="tabular-nums">
+                      {price != null ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span className={priceCls}>{fmtMoney(price)}</span>
+                          <Freshness capturedAt={snap?.capturedAt} staleMinutes={cfg.staleDataMinutes} />
+                        </span>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                      {inZone && <span className="block text-[10px] text-emerald-400">in entry zone</span>}
                     </td>
                     <td className="text-zinc-300">{s.setupType.replace(/_/g, " ")}</td>
                     <td className="tabular-nums">
@@ -110,6 +146,17 @@ export default function SwingPage() {
                     <td className="max-w-72 truncate text-xs text-zinc-500" title={s.invalidationCondition ?? ""}>
                       {s.invalidationCondition ?? "—"}
                     </td>
+                    <td>
+                      <PlaceOrderButton
+                        ticker={s.ticker}
+                        direction="long"
+                        suggestedShares={size.shares > 0 ? size.shares : undefined}
+                        entryPrice={mid}
+                        stopLoss={s.stopLoss}
+                        targetPrice1={s.targetPrice1}
+                        mode={alpacaMode}
+                      />
+                    </td>
                   </tr>
                 );
               })}
@@ -117,8 +164,11 @@ export default function SwingPage() {
           </table>
         </div>
         <p className="mt-1 text-[11px] text-zinc-600">
-          Setups are heuristic pattern detections — prepare your own order; nothing is placed automatically.
-          Sizing assumes {cfg.riskPerTradePercent}% account risk and your {cfg.maxPortfolioConcentrationPercent}% concentration cap.
+          Setups are heuristic pattern detections. Sizing assumes {cfg.riskPerTradePercent}% account risk and your{" "}
+          {cfg.maxPortfolioConcentrationPercent}% concentration cap.{" "}
+          {alpacaMode
+            ? `The Trade button sends a user-confirmed order to Alpaca (${alpacaMode}) and logs it as an open trade — nothing is placed automatically.`
+            : "Connect Alpaca in .env to enable the Trade button."}
         </p>
       </section>
 

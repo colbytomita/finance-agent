@@ -224,22 +224,6 @@ export class YahooFinanceBrowserService {
     return fields;
   }
 
-  async getRegularPrice(ticker: string): Promise<number | null> {
-    return (await this.getSummaryFields(ticker))?.regularPrice ?? null;
-  }
-  async getPreMarketPrice(ticker: string): Promise<number | null> {
-    return (await this.getSummaryFields(ticker))?.preMarketPrice ?? null;
-  }
-  async getAfterHoursPrice(ticker: string): Promise<number | null> {
-    return (await this.getSummaryFields(ticker))?.afterHoursPrice ?? null;
-  }
-  async getDayChange(ticker: string): Promise<number | null> {
-    return (await this.getSummaryFields(ticker))?.regularChangePercent ?? null;
-  }
-  async getMarketState(ticker: string): Promise<MarketState> {
-    return (await this.getSummaryFields(ticker))?.marketState ?? "UNKNOWN";
-  }
-
   toQuote(fields: YahooSummaryFields): Quote {
     return {
       ticker: fields.ticker,

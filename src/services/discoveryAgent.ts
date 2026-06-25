@@ -9,6 +9,7 @@ import { computeDrawdown, type DrawdownReport } from "./buyZone";
 import { scoreStock, DEFAULT_STOCK_WEIGHTS, type StockScoreResult, type StockScoreWeights, type CatalystInput } from "./scoring";
 import { getCatalystInputs } from "./marketData";
 import { getProvider } from "./researchAgent";
+import { edgeCatalystsForTicker } from "./catalystEdge";
 
 // Discovery / "scout" agent. Scans a universe of liquid stocks, scores each with
 // the same engine used for tracked tickers, and proposes those that pass the
@@ -220,6 +221,13 @@ export async function runDiscoveryScan(opts: { universe?: string[]; minScore?: n
 
       const { low, high } = suggestBuyZone(a);
       const rationale = await buildRationale(a);
+      // Surface any entity catalyst edge for this ticker in the rationale.
+      const edges = edgeCatalystsForTicker(a.ticker);
+      let rationaleText = rationale.text;
+      if (edges.length > 0) {
+        const top = [...edges].sort((x, y) => Math.abs(y.impactScore) - Math.abs(x.impactScore))[0];
+        rationaleText += ` Entity edge: ${top.title} (impact ${top.impactScore > 0 ? "+" : ""}${top.impactScore}).`;
+      }
       const now = nowIso();
       const values = {
         ticker: a.ticker,
@@ -236,7 +244,7 @@ export async function runDiscoveryScan(opts: { universe?: string[]; minScore?: n
         drawdownPercent: a.drawdown?.drawdownFrom52wHighPercent ?? null,
         suggestedBuyLow: low,
         suggestedBuyHigh: high,
-        rationale: rationale.text,
+        rationale: rationaleText,
         generatedBy: rationale.by,
         status: "pending" as const,
         proposedAt: now,

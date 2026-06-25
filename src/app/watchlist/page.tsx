@@ -21,12 +21,19 @@ import {
 import { AddWatchlistForm, DeleteButton } from "@/components/forms";
 import { PortfolioRecActions } from "@/components/PortfolioRecActions";
 import { RefreshButton } from "@/components/RefreshButton";
+import { PlaceOrderButton } from "@/components/TradeOrder";
 
 export const dynamic = "force-dynamic";
 
 export default function WatchlistPage() {
   const cfg = loadConfig();
   const items = allWatchlist();
+  const alpacaConfigured = Boolean(process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET);
+  const alpacaMode: "paper" | "live" | null = alpacaConfigured
+    ? process.env.ALPACA_MODE === "live"
+      ? "live"
+      : "paper"
+    : null;
   const recs = portfolioWatchlistRecommendations(cfg.portfolioWatchlistRecLimit);
   const setups = activeSetups();
   const rows = items.map((w) => ({
@@ -91,13 +98,14 @@ export default function WatchlistPage() {
               <th>Setup score</th>
               <th>Rec</th>
               <th>Updated</th>
+              <th>Order</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={16} className="py-6 text-center text-zinc-500">
+                <td colSpan={17} className="py-6 text-center text-zinc-500">
                   Watchlist is empty — add a ticker above.
                 </td>
               </tr>
@@ -145,6 +153,15 @@ export default function WatchlistPage() {
                 <td><SetupInsight setup={setup} /></td>
                 <td><RecommendationInsight score={score} /></td>
                 <td><Freshness capturedAt={snap?.capturedAt} staleMinutes={cfg.staleDataMinutes} /></td>
+                <td>
+                  <PlaceOrderButton
+                    ticker={w.ticker}
+                    direction="long"
+                    entryPrice={snap?.regularPrice ?? dd?.currentPrice ?? undefined}
+                    stopLoss={w.maxRiskPrice}
+                    mode={alpacaMode}
+                  />
+                </td>
                 <td><DeleteButton url={`/api/watchlist/${w.id}`} /></td>
               </tr>
             ))}

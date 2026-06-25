@@ -1,0 +1,3580 @@
+{
+  "title": "Market Catalyst Research Universe",
+  "note": "Curated catalyst-research reference — who/what/where to watch for market-moving catalysts. Decision support only; not advice, not a prediction, and not a buy/sell list.",
+  "summary": {
+    "people": 55,
+    "events": 35,
+    "sources": 60,
+    "total": 150
+  },
+  "people": [
+    {
+      "rank": 1,
+      "name": "Federal Reserve / FOMC",
+      "category": "Regulator / central bank",
+      "marketArea": "Rates, FX, equities, bonds, commodities",
+      "tickers": "SPY, QQQ, TLT, DXY, banks, housing",
+      "why": "Policy statement, dot plot, minutes, and chair press conference reset discount rates and risk appetite.",
+      "impactExample": "Caused: Powell's 2022 Jackson Hole speech coincided with S&P 500 -3.4% and Dow -1,000 points on Aug. 26, 2022.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+          "label": "FOMC calendar"
+        },
+        {
+          "url": "https://www.axios.com/2022/08/26/fed-powell-speech-jackson-hole-inflation",
+          "label": "impact report"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Monthly / meeting-driven",
+      "bestMonitor": "Fed site, RSS, press conference, minutes",
+      "queries": "site:federalreserve.gov FOMC statement projections minutes",
+      "limitations": "Market impact depends on surprise versus rates curve pricing."
+    },
+    {
+      "rank": 2,
+      "name": "Jerome Powell and Fed chair communications",
+      "category": "Person / central banker",
+      "marketArea": "Macro, rates, equities",
+      "tickers": "SPX, Nasdaq, 2Y/10Y Treasuries",
+      "why": "Chair language often matters more than the rate decision when policy path is uncertain.",
+      "impactExample": "Caused: Jackson Hole 2022 \"pain\" message triggered a broad risk-off session.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.federalreserve.gov/newsevents/speeches.htm",
+          "label": "Fed speeches"
+        },
+        {
+          "url": "https://www.axios.com/2022/08/26/fed-powell-speech-jackson-hole-inflation",
+          "label": "Axios"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Monthly",
+      "bestMonitor": "Fed speeches, FOMC pressers, testimony",
+      "queries": "Powell speech inflation labor market rate cuts",
+      "limitations": "Role-dependent; monitor the office as much as the person."
+    },
+    {
+      "rank": 3,
+      "name": "U.S. Bureau of Labor Statistics",
+      "category": "Government data source",
+      "marketArea": "Rates, equities, FX",
+      "tickers": "CPI, payrolls, wages, Fed-sensitive assets",
+      "why": "CPI and jobs surprises alter Fed expectations instantly.",
+      "impactExample": "Caused: Hot CPI on Sep. 13, 2022 coincided with S&P 500 -4.3%, one of 2022's largest one-day drops.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.bls.gov/schedule/news_release/cpi.htm",
+          "label": "CPI schedule"
+        },
+        {
+          "url": "https://www.bls.gov/schedule/news_release/empsit.htm",
+          "label": "Jobs schedule"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Monthly",
+      "bestMonitor": "BLS calendar and 8:30am ET releases",
+      "queries": "BLS CPI core services shelter surprise",
+      "limitations": "Data revisions and seasonal factors can reverse first read."
+    },
+    {
+      "rank": 4,
+      "name": "Hindenburg Research",
+      "category": "Short seller / research firm",
+      "marketArea": "Single stocks, credit, global equities",
+      "tickers": "ADANI, NKLA, CLOV, IEP, listed targets",
+      "why": "Detailed public short reports can trigger immediate repricing and regulatory follow-through.",
+      "impactExample": "Caused: Adani Group lost over $100bn in market value after Jan. 2023 report; Nikola fell sharply after Sep. 2020 report.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://hindenburgresearch.com/",
+          "label": "site"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Hindenburg_Research",
+          "label": "impact summary"
+        }
+      ],
+      "scores": "Rel 4 / Infl 5",
+      "frequency": "Rare / event-driven",
+      "bestMonitor": "Website, X, SEC response filings",
+      "queries": "Hindenburg Research new report ticker",
+      "limitations": "Short bias; claims require independent verification."
+    },
+    {
+      "rank": 5,
+      "name": "Nvidia / Jensen Huang",
+      "category": "Company / CEO",
+      "marketArea": "Stocks, semiconductors, AI infrastructure",
+      "tickers": "NVDA, AMD, TSM, AVGO, SMCI, SOXX",
+      "why": "Guidance, product roadmap, supply commentary, and GTC keynotes drive the AI capex trade.",
+      "impactExample": "Caused: NVDA surged about 24-25% after May 2023 AI-driven revenue guide, lifting AI semis.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://investor.nvidia.com/events-and-presentations/events-and-presentations/default.aspx",
+          "label": "Nvidia IR"
+        },
+        {
+          "url": "https://www.investopedia.com/5-things-to-know-before-markets-open-may-25-2023-7503984",
+          "label": "impact report"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Quarterly / event-driven",
+      "bestMonitor": "IR, GTC, earnings call, product keynotes",
+      "queries": "Nvidia guide data center Blackwell supply HBM",
+      "limitations": "High expectations make direction dependent on whisper numbers."
+    },
+    {
+      "rank": 6,
+      "name": "Elon Musk",
+      "category": "CEO / social account",
+      "marketArea": "Stocks, EVs, crypto",
+      "tickers": "TSLA, DOGE, X ecosystem, suppliers",
+      "why": "Posts and interviews can move Tesla, EV sentiment, and crypto narratives.",
+      "impactExample": "Caused: Aug. 7, 2018 \"funding secured\" tweet lifted Tesla about 11% before SEC action and later litigation.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.sec.gov/news/press-release/2018-219",
+          "label": "SEC action"
+        },
+        {
+          "url": "https://www.axios.com/2023/01/24/elon-musk-tesla-investors-funding-secured-tweet",
+          "label": "impact report"
+        }
+      ],
+      "scores": "Rel 3 / Infl 5",
+      "frequency": "Daily",
+      "bestMonitor": "X, Tesla IR, SEC filings",
+      "queries": "from:elonmusk Tesla delivery FSD China funding",
+      "limitations": "High false-positive rate; humor and ambiguity often move price without durable fundamentals."
+    },
+    {
+      "rank": 7,
+      "name": "OPEC+ and Saudi Energy Ministry",
+      "category": "Organization / commodity cartel",
+      "marketArea": "Commodities, inflation, FX, energy equities",
+      "tickers": "WTI, Brent, XLE, airlines, chemicals",
+      "why": "Production cuts or quota changes can reprice crude, inflation breakevens, and energy equities.",
+      "impactExample": "Caused: Surprise Apr. 2023 output cut drove oil up about 6%.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.opec.org/opec_web/en/",
+          "label": "OPEC"
+        },
+        {
+          "url": "https://www.investopedia.com/oil-surges-on-opec-7374908",
+          "label": "impact report"
+        }
+      ],
+      "scores": "Rel 4 / Infl 5",
+      "frequency": "Monthly / event-driven",
+      "bestMonitor": "OPEC releases, JMMC meetings, Saudi statements",
+      "queries": "OPEC+ surprise cut quota compliance Saudi voluntary cut",
+      "limitations": "Leaks and trial balloons are common; wait for official communique."
+    },
+    {
+      "rank": 8,
+      "name": "Keith Gill / Roaring Kitty",
+      "category": "Social account / individual trader",
+      "marketArea": "Single stocks, meme equities, options",
+      "tickers": "GME, AMC, retail shorts",
+      "why": "Posts can reignite retail flow and options gamma dynamics in heavily shorted names.",
+      "impactExample": "Caused: May 13, 2024 X post sent GME up about 66% intraday; Jan. 2021 saga saw extreme multi-week squeeze.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.marketwatch.com/livecoverage/gamestop-stock-surge-roaring-kitty-ignites-revenge-of-meme-stock/card/gamestop-stock-surges-EopEby6efVaCqps6c122",
+          "label": "2024 impact"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/GameStop_short_squeeze",
+          "label": "2021 summary"
+        }
+      ],
+      "scores": "Rel 2 / Infl 5",
+      "frequency": "Rare / bursty",
+      "bestMonitor": "X, Reddit, YouTube, options flow",
+      "queries": "Roaring Kitty GME position YOLO update",
+      "limitations": "Signal is mostly flow and reflexivity, not fundamental value."
+    },
+    {
+      "rank": 9,
+      "name": "Elliott Management",
+      "category": "Activist investor",
+      "marketArea": "Stocks, credit, governance",
+      "tickers": "CRM, NRG, ATUS, global large caps",
+      "why": "Stake disclosures and letters often force margin, asset sale, buyback, or board-change debates.",
+      "impactExample": "Caused: Salesforce rose about 3% after Jan. 2023 Elliott stake report.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.elliottmgmt.com/",
+          "label": "site"
+        },
+        {
+          "url": "https://www.investopedia.com/salesforce-shares-jump-on-activist-investor-stake-7098389",
+          "label": "impact report"
+        }
+      ],
+      "scores": "Rel 4 / Infl 5",
+      "frequency": "Event-driven",
+      "bestMonitor": "13D filings, letters, press reports",
+      "queries": "Elliott Management stake letter board margin",
+      "limitations": "Activist outcomes depend on board response and shareholder support."
+    },
+    {
+      "rank": 10,
+      "name": "Carl Icahn / Icahn Enterprises",
+      "category": "Activist investor",
+      "marketArea": "Stocks, special situations",
+      "tickers": "NFLX, AAPL, CLX, IEP, CVI",
+      "why": "Stake disclosures historically moved targets and can start strategic-review pressure.",
+      "impactExample": "Caused: Netflix shares soared after Icahn disclosed roughly 10% stake in Oct. 2012.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.ielp.com/",
+          "label": "IEP"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Carl_Icahn",
+          "label": "impact summary"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "SEC 13D, IEP releases, X",
+      "queries": "Icahn 13D stake undervalued sale",
+      "limitations": "Influence has varied with fund performance and target size."
+    },
+    {
+      "rank": 11,
+      "name": "Bill Ackman / Pershing Square",
+      "category": "Investor / activist",
+      "marketArea": "Stocks, credit, macro narrative",
+      "tickers": "HLF, CP, CMG, rates hedges",
+      "why": "Public letters and presentations can focus market attention on governance, fraud, or capital allocation.",
+      "impactExample": "Caused: 2012 Herbalife short thesis pressured HLF initially and triggered multi-year regulatory/activist battle.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://pershingsquareholdings.com/",
+          "label": "Pershing"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Herbalife",
+          "label": "Herbalife summary"
+        }
+      ],
+      "scores": "Rel 3 / Infl 4",
+      "frequency": "Event-driven / social",
+      "bestMonitor": "Letters, presentations, X, 13F",
+      "queries": "Ackman presentation short thesis stake",
+      "limitations": "Talks his book; some high-profile theses failed or reversed."
+    },
+    {
+      "rank": 12,
+      "name": "Berkshire Hathaway / Warren Buffett",
+      "category": "Investor / conglomerate",
+      "marketArea": "Stocks, insurance, financials, consumer",
+      "tickers": "BRK, AAPL, OXY, BAC, Japan trading houses",
+      "why": "13F changes, annual letter, and deal announcements influence quality/value sentiment.",
+      "impactExample": "Caused: Berkshire stakes in OXY and Japanese trading houses repeatedly moved investor attention and target prices.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.berkshirehathaway.com/reports.html",
+          "label": "letters"
+        },
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "SEC filings"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Quarterly / annual",
+      "bestMonitor": "13F, annual meeting, press releases",
+      "queries": "Berkshire 13F new stake OXY buyback letter",
+      "limitations": "13F data is delayed; positions may be stale."
+    },
+    {
+      "rank": 13,
+      "name": "FDA CDER / CBER",
+      "category": "Regulator",
+      "marketArea": "Biotech, healthcare equities",
+      "tickers": "XBI, IBB, small-cap biotech",
+      "why": "PDUFA, adcom, CRL, label, REMS, and safety decisions can reprice biotech equity value overnight.",
+      "impactExample": "Caused: FDA approvals can double small biotech stocks; complete response letters can erase financing runway.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.fda.gov/advisory-committees/advisory-committee-calendar",
+          "label": "adcom calendar"
+        },
+        {
+          "url": "https://www.accessdata.fda.gov/scripts/cder/daf/",
+          "label": "Drugs@FDA"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Weekly / event-driven",
+      "bestMonitor": "FDA calendars, company 8-Ks, press releases",
+      "queries": "FDA PDUFA advisory committee briefing documents ticker",
+      "limitations": "No official master PDUFA calendar; company disclosures fill gaps."
+    },
+    {
+      "rank": 14,
+      "name": "U.S. Treasury",
+      "category": "Government issuer / policy body",
+      "marketArea": "Rates, FX, banks, money markets",
+      "tickers": "USTs, TLT, KRE, dollar liquidity",
+      "why": "Refunding, auction sizes, cash balance, sanctions, and debt-ceiling actions move duration and liquidity.",
+      "impactExample": "Caused: Quarterly refunding surprises have moved Treasury yields and equity duration proxies.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding",
+          "label": "refunding"
+        },
+        {
+          "url": "https://home.treasury.gov/news/press-releases",
+          "label": "releases"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly / quarterly",
+      "bestMonitor": "Treasury releases, auction calendar",
+      "queries": "Treasury refunding coupon sizes buyback TBAC minutes",
+      "limitations": "Market impact is curve-positioning dependent."
+    },
+    {
+      "rank": 15,
+      "name": "Donald Trump / White House trade policy",
+      "category": "Government official / policy source",
+      "marketArea": "Equities, FX, commodities, rates",
+      "tickers": "China-sensitive stocks, autos, retail, industrials",
+      "why": "Tariffs, sanctions, and executive-order headlines can cause broad gap risk and sector rotations.",
+      "impactExample": "Caused: Prior tariff escalation days drove large index and China-exposed equity moves.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.whitehouse.gov/briefing-room/",
+          "label": "White House"
+        },
+        {
+          "url": "https://www.federalregister.gov/presidential-documents/executive-orders",
+          "label": "Federal Register"
+        }
+      ],
+      "scores": "Rel 3 / Infl 5",
+      "frequency": "Daily / event-driven",
+      "bestMonitor": "White House, Federal Register, Truth Social/X, USTR",
+      "queries": "tariff executive order China autos semiconductors",
+      "limitations": "Political statements can be negotiating tactics; official implementation matters."
+    },
+    {
+      "rank": 16,
+      "name": "European Central Bank / Christine Lagarde",
+      "category": "Central bank",
+      "marketArea": "Rates, FX, European equities",
+      "tickers": "EURUSD, Euro banks, STOXX, bunds",
+      "why": "ECB decisions and press conference language drive euro rates and bank margins.",
+      "impactExample": "Caused: ECB rate-path shifts often move EUR, bunds, and European bank equities.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html",
+          "label": "ECB calendar"
+        },
+        {
+          "url": "https://www.ecb.europa.eu/press/html/index.en.html",
+          "label": "press"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Monthly",
+      "bestMonitor": "ECB calendar, speeches",
+      "queries": "ECB Lagarde press conference inflation wages",
+      "limitations": "Fragmentation and sovereign spread risk can dominate policy signal."
+    },
+    {
+      "rank": 17,
+      "name": "Bank of Japan / Governor communications",
+      "category": "Central bank",
+      "marketArea": "Rates, FX, global duration",
+      "tickers": "JPY, JGBs, Nikkei, U.S. yields",
+      "why": "Yield-curve-control and normalization changes can spill into global bond markets.",
+      "impactExample": "Caused: Dec. 2022 surprise YCC adjustment jolted yen and global bond markets.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm",
+          "label": "BOJ meetings"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Yield_curve_control",
+          "label": "impact summary"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Monthly",
+      "bestMonitor": "BOJ schedule, speeches, JGB operations",
+      "queries": "BOJ yield curve control JGB purchase yen intervention",
+      "limitations": "Leaks and local press previews can move markets before official decision."
+    },
+    {
+      "rank": 18,
+      "name": "People's Bank of China / State Council / Politburo",
+      "category": "Policy body",
+      "marketArea": "Equities, FX, commodities",
+      "tickers": "CNH, H-shares, miners, luxury, internet ADRs",
+      "why": "Stimulus, reserve requirement, property, tech, and reopening policy can drive global cyclicals.",
+      "impactExample": "Caused: China stimulus and regulatory headlines repeatedly moved China internet, metals, and luxury names.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "http://www.pbc.gov.cn/en/3688006/index.html",
+          "label": "PBOC"
+        },
+        {
+          "url": "https://english.www.gov.cn/news/",
+          "label": "State Council"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Weekly / event-driven",
+      "bestMonitor": "Official releases, Xinhua, State Council",
+      "queries": "China Politburo stimulus property reserve requirement",
+      "limitations": "Translation, implementation, and local-policy follow-through matter."
+    },
+    {
+      "rank": 19,
+      "name": "SEC and SEC Chair communications",
+      "category": "Regulator",
+      "marketArea": "Stocks, crypto, market structure",
+      "tickers": "COIN, HOOD, crypto ETFs, exchanges",
+      "why": "Enforcement, rulemaking, ETF decisions, and market-structure proposals can move regulated financials and crypto.",
+      "impactExample": "Caused: Crypto enforcement and spot ETF decisions have moved bitcoin, exchanges, and miners.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.sec.gov/newsroom/press-releases",
+          "label": "SEC press"
+        },
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "EDGAR"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly",
+      "bestMonitor": "SEC press, litigation docket, EDGAR",
+      "queries": "SEC enforcement Coinbase ETF approval rulemaking",
+      "limitations": "Legal outcomes often take months or years after initial headline."
+    },
+    {
+      "rank": 20,
+      "name": "FTC / DOJ Antitrust Division",
+      "category": "Regulator / litigation source",
+      "marketArea": "Stocks, M&A, mega-cap tech",
+      "tickers": "MSFT, GOOGL, AMZN, META, pharma M&A",
+      "why": "Merger challenges and monopolization suits can reprice deal probability and business models.",
+      "impactExample": "Caused: Major tech and healthcare antitrust filings have moved target/acquirer spreads and mega-cap sentiment.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.ftc.gov/news-events/news/press-releases",
+          "label": "FTC releases"
+        },
+        {
+          "url": "https://www.justice.gov/atr/press-room",
+          "label": "DOJ ATR"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly / event-driven",
+      "bestMonitor": "FTC/DOJ press, PACER, CourtListener",
+      "queries": "DOJ FTC antitrust complaint merger injunction ticker",
+      "limitations": "Early complaints do not equal final remedy; court calendars matter."
+    },
+    {
+      "rank": 21,
+      "name": "Muddy Waters / Carson Block",
+      "category": "Short seller",
+      "marketArea": "Single stocks, China ADRs, accounting risk",
+      "tickers": "LKNCY, GSX/GOTU, Sino-Forest history",
+      "why": "Forensic short reports can reveal accounting or governance gaps before regulators act.",
+      "impactExample": "Anticipated: Muddy Waters amplified Luckin Coffee allegations before Luckin disclosed fabricated sales and stock collapsed in 2020.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.muddywatersresearch.com/",
+          "label": "site"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Luckin_Coffee",
+          "label": "Luckin summary"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Rare",
+      "bestMonitor": "Website, X, SEC filings",
+      "queries": "Muddy Waters report fraud accounting ticker",
+      "limitations": "Short bias; anonymous-source claims need careful corroboration."
+    },
+    {
+      "rank": 22,
+      "name": "Citron Research / Andrew Left",
+      "category": "Short seller / social account",
+      "marketArea": "Single stocks, momentum shorts",
+      "tickers": "GME, SHOP, CVNA, small/mid caps",
+      "why": "Historically influential short calls can trigger volatility even when wrong.",
+      "impactExample": "Caused: Citron's 2021 GME short call became a catalyst for retail backlash and squeeze dynamics.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://citronresearch.com/",
+          "label": "site"
+        },
+        {
+          "url": "https://www.marketwatch.com/livecoverage/gamestop-stock-surge-roaring-kitty-ignites-revenge-of-meme-stock/card/citron-research-s-andrew-left-is-shorting-gamestop-again-after-his-2021-short-flopped-hgn74mOCk21yZU86m2dy",
+          "label": "impact report"
+        }
+      ],
+      "scores": "Rel 2 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "X, site, interviews",
+      "queries": "Citron short report price target ticker",
+      "limitations": "Track as volatility catalyst, not necessarily truth signal."
+    },
+    {
+      "rank": 23,
+      "name": "Starboard Value / Jeff Smith",
+      "category": "Activist investor",
+      "marketArea": "Stocks, governance, operational turnarounds",
+      "tickers": "VRT, CRM, DRI, SBUX, ADSK",
+      "why": "Operational activist campaigns can change margin targets and strategic alternatives.",
+      "impactExample": "Caused: Vertiv rose over 10% after Starboard disclosed stake in Oct. 2022.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.starboardvalue.com/",
+          "label": "site"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Starboard_Value",
+          "label": "impact summary"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "13D, investor presentations",
+      "queries": "Starboard Value stake presentation margin board",
+      "limitations": "Less impact when target already has self-help priced in."
+    },
+    {
+      "rank": 24,
+      "name": "Trian Partners / Nelson Peltz",
+      "category": "Activist investor",
+      "marketArea": "Stocks, consumer, media, industrials",
+      "tickers": "DIS, PG, GE, MDLZ",
+      "why": "Proxy fights and board campaigns focus debate on margins, succession, capital allocation.",
+      "impactExample": "Caused: Disney proxy campaigns affected sentiment and helped frame cost-cutting debate in 2023-2024.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://trianpartners.com/",
+          "label": "site"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Trian_Partners",
+          "label": "impact summary"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "13D, proxy materials, campaign websites",
+      "queries": "Trian proxy fight board seats presentation",
+      "limitations": "Election losses can unwind campaign premium."
+    },
+    {
+      "rank": 25,
+      "name": "Michael Burry / Scion Asset Management",
+      "category": "Investor / 13F filer",
+      "marketArea": "Stocks, macro sentiment",
+      "tickers": "Regional banks, China ADRs, shorts, SPY/QQQ puts",
+      "why": "Filings and posts can attract attention to crowded risks or contrarian longs.",
+      "impactExample": "Anticipated: Known for housing-crisis short; later 13F positions often trigger media and retail attention.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "SEC filings"
+        },
+        {
+          "url": "https://www.sec.gov/Archives/edgar/data/1649339/",
+          "label": "Scion EDGAR"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Quarterly / sporadic",
+      "bestMonitor": "13F, X if active",
+      "queries": "Scion 13F Burry puts short",
+      "limitations": "13F lag is large and derivatives disclosure can be misread."
+    },
+    {
+      "rank": 26,
+      "name": "David Einhorn / Greenlight Capital",
+      "category": "Investor / short seller",
+      "marketArea": "Stocks, accounting, value",
+      "tickers": "LEH history, GM, GLRE, single-name shorts",
+      "why": "Sohn presentations and letters can spotlight accounting or capital allocation issues.",
+      "impactExample": "Anticipated: Lehman critique before 2008 collapse remains a template for forensic short influence.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.greenlightcapital.com/",
+          "label": "site"
+        },
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "SEC filings"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Quarterly / event",
+      "bestMonitor": "Letters, Sohn, 13F",
+      "queries": "Einhorn Sohn short thesis Greenlight letter",
+      "limitations": "Public signals are intermittent and sometimes delayed."
+    },
+    {
+      "rank": 27,
+      "name": "Dan Loeb / Third Point",
+      "category": "Activist investor",
+      "marketArea": "Stocks, governance, event-driven",
+      "tickers": "DIS, SHEL, NESTLE, SONY",
+      "why": "Public letters can catalyze break-up, buyback, and management-change debates.",
+      "impactExample": "Caused: Disney campaign added board/governance pressure before later activist waves.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://thirdpointlimited.com/",
+          "label": "site"
+        },
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "filings"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Quarterly / event",
+      "bestMonitor": "Investor letters, 13D, press",
+      "queries": "Third Point letter stake split board",
+      "limitations": "Some letters are private until leaked or summarized."
+    },
+    {
+      "rank": 28,
+      "name": "Ryan Cohen",
+      "category": "Founder / activist / board chair",
+      "marketArea": "Single stocks, meme equities, retail",
+      "tickers": "GME, BBBY history, CHWY",
+      "why": "Stake disclosures and cryptic posts can trigger retail interest and governance repricing.",
+      "impactExample": "Caused: Jan. 2021 GameStop board appointment was an early squeeze catalyst.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "SEC filings"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/GameStop_short_squeeze",
+          "label": "GME summary"
+        }
+      ],
+      "scores": "Rel 2 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "SEC filings, X, company releases",
+      "queries": "Ryan Cohen 13D board letter GameStop",
+      "limitations": "Cryptic posts are high-noise; filings are higher signal."
+    },
+    {
+      "rank": 29,
+      "name": "Jamie Dimon / JPMorgan",
+      "category": "CEO / bank leader",
+      "marketArea": "Financials, credit, macro",
+      "tickers": "JPM, KRE, XLF, credit markets",
+      "why": "Bank earnings, credit commentary, and annual letter inform credit cycle and capital-market risk.",
+      "impactExample": "Anticipated: Repeated recession, CRE, and liquidity warnings influence financial-sector narrative.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.jpmorganchase.com/ir/annual-report",
+          "label": "annual report"
+        },
+        {
+          "url": "https://www.jpmorganchase.com/ir/events",
+          "label": "events"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Quarterly",
+      "bestMonitor": "Earnings call, annual letter, interviews",
+      "queries": "Dimon credit losses CRE consumer annual letter",
+      "limitations": "Macro views are influential but not always timely trading signals."
+    },
+    {
+      "rank": 30,
+      "name": "Tim Cook / Apple",
+      "category": "CEO / company source",
+      "marketArea": "Technology, consumer, supply chain",
+      "tickers": "AAPL, QCOM, SWKS, TSM, China suppliers",
+      "why": "iPhone demand, China, services, and capital-return commentary affect a mega-cap index weight and suppliers.",
+      "impactExample": "Caused: Apple guidance and product-cycle commentary frequently move suppliers and Nasdaq sentiment.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://investor.apple.com/investor-relations/default.aspx",
+          "label": "Apple IR"
+        },
+        {
+          "url": "https://www.apple.com/newsroom/",
+          "label": "newsroom"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Quarterly / event",
+      "bestMonitor": "Earnings, WWDC, product launches, supply-chain press",
+      "queries": "Apple iPhone China services margin guidance",
+      "limitations": "Supply-chain leaks can be early but noisy."
+    },
+    {
+      "rank": 31,
+      "name": "Satya Nadella / Microsoft",
+      "category": "CEO / company source",
+      "marketArea": "Software, AI, cloud, indexes",
+      "tickers": "MSFT, NVDA, ORCL, CRM, cloud peers",
+      "why": "Azure AI growth and capex commentary affect software, semis, and AI infrastructure read-throughs.",
+      "impactExample": "Caused: AI and cloud disclosures have repeatedly moved MSFT and AI supply-chain names.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.microsoft.com/en-us/investor/events",
+          "label": "MSFT IR events"
+        },
+        {
+          "url": "https://news.microsoft.com/",
+          "label": "newsroom"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Quarterly",
+      "bestMonitor": "Earnings, Build, Ignite, OpenAI partnership updates",
+      "queries": "Microsoft Azure AI capex copilot guide",
+      "limitations": "Backlog and capacity comments are often hard to compare across quarters."
+    },
+    {
+      "rank": 32,
+      "name": "Mark Zuckerberg / Meta",
+      "category": "CEO / company source",
+      "marketArea": "Internet, AI, advertising",
+      "tickers": "META, GOOGL, SNAP, PINS, NVDA",
+      "why": "Capex, AI, Reels, and expense discipline can move ad-tech and AI infrastructure sentiment.",
+      "impactExample": "Caused: 2022-2023 expense-reset and \"year of efficiency\" commentary drove large META repricing.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://investor.fb.com/investor-events/default.aspx",
+          "label": "Meta IR"
+        },
+        {
+          "url": "https://about.fb.com/news/",
+          "label": "newsroom"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Quarterly",
+      "bestMonitor": "Earnings, Connect, Threads updates",
+      "queries": "Meta capex AI ads Reels guidance",
+      "limitations": "Capex headlines can swamp core ad performance."
+    },
+    {
+      "rank": 33,
+      "name": "Lisa Su / AMD",
+      "category": "CEO / company source",
+      "marketArea": "Semiconductors, AI, PCs",
+      "tickers": "AMD, NVDA, INTC, SOXX",
+      "why": "AI accelerator and server CPU commentary provides second read on data-center demand and competition.",
+      "impactExample": "Caused: MI300 and data-center updates have moved AMD and AI chip peers.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://ir.amd.com/news-events/ir-calendar",
+          "label": "AMD IR"
+        },
+        {
+          "url": "https://www.amd.com/en/newsroom.html",
+          "label": "newsroom"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Quarterly / event",
+      "bestMonitor": "Earnings, CES, Computex",
+      "queries": "AMD MI300 MI350 GPU guide customer traction",
+      "limitations": "Competitive claims need customer and supply-chain corroboration."
+    },
+    {
+      "rank": 34,
+      "name": "TSMC management",
+      "category": "Company / foundry bellwether",
+      "marketArea": "Semiconductors, AI, hardware",
+      "tickers": "TSM, NVDA, AAPL, AMD, ASML",
+      "why": "Monthly revenue, capex, node utilization, and AI demand frame global chip cycle.",
+      "impactExample": "Anticipated: TSMC monthly revenue often confirms or challenges AI/Apple supply-chain narratives.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://investor.tsmc.com/english/monthly-revenue",
+          "label": "monthly revenue"
+        },
+        {
+          "url": "https://investor.tsmc.com/english/quarterly-results",
+          "label": "results"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Monthly / quarterly",
+      "bestMonitor": "Monthly sales, earnings call",
+      "queries": "TSMC monthly revenue capex AI demand utilization",
+      "limitations": "Currency and customer mix complicate read-throughs."
+    },
+    {
+      "rank": 35,
+      "name": "ASML management",
+      "category": "Company / equipment bellwether",
+      "marketArea": "Semiconductors, capex",
+      "tickers": "ASML, KLAC, LRCX, AMAT, TSM",
+      "why": "Bookings, backlog, China export restrictions, and EUV demand signal capex cycle.",
+      "impactExample": "Caused: ASML order-book surprises have moved global semiconductor equipment shares.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.asml.com/en/investors",
+          "label": "ASML IR"
+        },
+        {
+          "url": "https://www.asml.com/en/news",
+          "label": "news"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Quarterly",
+      "bestMonitor": "Earnings, export-control releases",
+      "queries": "ASML bookings EUV China export control backlog",
+      "limitations": "Orders are lumpy and can reflect timing rather than demand collapse."
+    },
+    {
+      "rank": 36,
+      "name": "Michael Saylor / MicroStrategy",
+      "category": "Executive / social account",
+      "marketArea": "Crypto, equities, convertibles",
+      "tickers": "MSTR, BTC, crypto miners",
+      "why": "Bitcoin purchase announcements and financing plans move MSTR premium and crypto-equity sentiment.",
+      "impactExample": "Caused: Repeated BTC purchase and convertible issuance headlines have moved MSTR and miner sympathy.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.microstrategy.com/press",
+          "label": "MSTR press"
+        },
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "SEC filings"
+        }
+      ],
+      "scores": "Rel 3 / Infl 4",
+      "frequency": "Weekly / event",
+      "bestMonitor": "X, 8-Ks, prospectus filings",
+      "queries": "MicroStrategy bitcoin purchase convertible ATM",
+      "limitations": "Equity impact is leverage and premium-driven, not just BTC price."
+    },
+    {
+      "rank": 37,
+      "name": "Brian Armstrong / Coinbase",
+      "category": "CEO / crypto policy voice",
+      "marketArea": "Crypto, financials",
+      "tickers": "COIN, BTC, ETH, crypto ETFs",
+      "why": "Regulatory commentary, product launches, and exchange-volume updates affect Coinbase and crypto policy sentiment.",
+      "impactExample": "Caused: SEC litigation and product/regulatory updates have moved COIN materially.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://investor.coinbase.com/news/default.aspx",
+          "label": "Coinbase IR"
+        },
+        {
+          "url": "https://www.coinbase.com/blog",
+          "label": "blog"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Weekly",
+      "bestMonitor": "X, blog, SEC docket, earnings",
+      "queries": "Coinbase SEC litigation staking volume custody ETF",
+      "limitations": "Crypto beta often dominates idiosyncratic news."
+    },
+    {
+      "rank": 38,
+      "name": "Binance / CZ and exchange leadership",
+      "category": "Crypto organization / social account",
+      "marketArea": "Crypto, FX, risk assets",
+      "tickers": "BTC, BNB, crypto exchanges, miners",
+      "why": "Exchange legal, solvency, listing, delisting, or settlement headlines can move crypto liquidity.",
+      "impactExample": "Caused: Binance regulatory headlines have repeatedly moved BNB and broader crypto sentiment.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.binance.com/en/support/announcement",
+          "label": "announcements"
+        },
+        {
+          "url": "https://www.justice.gov/news",
+          "label": "DOJ news"
+        }
+      ],
+      "scores": "Rel 2 / Infl 4",
+      "frequency": "Daily / event",
+      "bestMonitor": "Exchange announcements, DOJ/SEC/CFTC",
+      "queries": "Binance settlement outflows reserves delisting",
+      "limitations": "Rumors are frequent; verify with on-chain and official statements."
+    },
+    {
+      "rank": 39,
+      "name": "Cathie Wood / ARK Invest",
+      "category": "Investor / thematic manager",
+      "marketArea": "Growth stocks, innovation, crypto",
+      "tickers": "ARKK, TSLA, COIN, ROKU, genomics",
+      "why": "Daily trade disclosures and thematic research influence retail growth-stock narratives.",
+      "impactExample": "Anticipated: ARK buying/selling has highlighted high-beta innovation rotations, especially 2020-2022.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.ark-funds.com/trade-notifications",
+          "label": "trade notifications"
+        },
+        {
+          "url": "https://www.ark-invest.com/research",
+          "label": "research"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "ARK trade emails, research, webinars",
+      "queries": "ARK trade notification TSLA COIN AI genomics",
+      "limitations": "Retail signal can be contrarian during crowded drawdowns."
+    },
+    {
+      "rank": 40,
+      "name": "Ray Dalio / Bridgewater",
+      "category": "Investor / macro thinker",
+      "marketArea": "Macro, rates, currencies",
+      "tickers": "China, U.S. debt, gold, bonds",
+      "why": "Macro framework and public warnings influence institutional debate on debt cycles and geopolitics.",
+      "impactExample": "Anticipated: Long-running debt-cycle and China commentary has shaped macro allocation conversations.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.bridgewater.com/research-and-insights",
+          "label": "research"
+        },
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "13F"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Monthly / event",
+      "bestMonitor": "Bridgewater research, interviews",
+      "queries": "Dalio debt cycle China gold reserve currency",
+      "limitations": "Useful for regime framing, less for precise event timing."
+    },
+    {
+      "rank": 41,
+      "name": "Stanley Druckenmiller / Duquesne",
+      "category": "Investor / macro",
+      "marketArea": "Macro, AI equities, rates",
+      "tickers": "NVDA, MSFT, rates, dollar",
+      "why": "Public comments and 13F changes can validate or challenge macro and AI positioning.",
+      "impactExample": "Anticipated: Public AI and fiscal-risk comments have influenced investor debate around crowded themes.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "13F"
+        },
+        {
+          "url": "https://www.cnbc.com/",
+          "label": "interviews"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Quarterly / event",
+      "bestMonitor": "13F, conference interviews",
+      "queries": "Druckenmiller AI Nvidia rates fiscal deficit",
+      "limitations": "Public remarks are sparse and often after positions change."
+    },
+    {
+      "rank": 42,
+      "name": "Jeffrey Gundlach / DoubleLine",
+      "category": "Investor / fixed income",
+      "marketArea": "Bonds, rates, credit",
+      "tickers": "TLT, HYG, mortgage REITs, banks",
+      "why": "Fixed-income webcasts and recession calls shape credit and duration debate.",
+      "impactExample": "Anticipated: Yield-curve and credit warnings often precede broader macro risk discussions.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://doubleline.com/webcasts/",
+          "label": "webcasts"
+        },
+        {
+          "url": "https://doubleline.com/insights/",
+          "label": "insights"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Monthly",
+      "bestMonitor": "Webcasts, interviews",
+      "queries": "Gundlach yield curve recession credit spreads",
+      "limitations": "Forecast timing can be early; better as risk monitor."
+    },
+    {
+      "rank": 43,
+      "name": "Nick Timiraos / Wall Street Journal",
+      "category": "Journalist / Fed watcher",
+      "marketArea": "Rates, equities, FX",
+      "tickers": "Fed-sensitive assets",
+      "why": "Fed reporting is closely watched as a read on policy debate and communication strategy.",
+      "impactExample": "Anticipated: WSJ Fed previews have moved market odds before FOMC decisions.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.wsj.com/news/author/nick-timiraos",
+          "label": "author page"
+        },
+        {
+          "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+          "label": "FOMC calendar"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Weekly / meeting-driven",
+      "bestMonitor": "WSJ, X",
+      "queries": "Nick Timiraos Fed preview rate decision",
+      "limitations": "Reporting is interpretive; not an official Fed source."
+    },
+    {
+      "rank": 44,
+      "name": "Mark Gurman / Bloomberg",
+      "category": "Journalist / product reporter",
+      "marketArea": "Technology, consumer hardware",
+      "tickers": "AAPL, suppliers, wearables",
+      "why": "Apple product and roadmap reporting can move supplier expectations before launches.",
+      "impactExample": "Anticipated: Apple headset, iPhone, and AI feature reports have shaped supplier and product-cycle sentiment.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.bloomberg.com/authors/AS6n2L_A9l4/mark-gurman",
+          "label": "author page"
+        },
+        {
+          "url": "https://www.apple.com/newsroom/",
+          "label": "Apple newsroom"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Weekly",
+      "bestMonitor": "Bloomberg, newsletter, X",
+      "queries": "Gurman Apple launch iPhone AI supplier",
+      "limitations": "Product timing can slip; supplier economics differ from launch buzz."
+    },
+    {
+      "rank": 45,
+      "name": "Ming-Chi Kuo",
+      "category": "Analyst / supply-chain source",
+      "marketArea": "Technology hardware",
+      "tickers": "AAPL, TSM, Largan, Hon Hai, QCOM",
+      "why": "Apple and hardware supply-chain notes often lead product-cycle expectations.",
+      "impactExample": "Anticipated: iPhone and headset supply-chain checks have moved supplier narratives.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://medium.com/@mingchikuo",
+          "label": "posts"
+        },
+        {
+          "url": "https://www.apple.com/newsroom/",
+          "label": "Apple source"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Weekly / event",
+      "bestMonitor": "Medium, X, broker notes where available",
+      "queries": "Ming-Chi Kuo iPhone shipment cut supplier",
+      "limitations": "Supply-chain checks can mistake production timing for demand."
+    },
+    {
+      "rank": 46,
+      "name": "Dan Ives / Wedbush",
+      "category": "Analyst / strategist",
+      "marketArea": "Technology, AI, EVs",
+      "tickers": "TSLA, AAPL, MSFT, NVDA",
+      "why": "Widely syndicated analyst calls can reinforce retail and media narratives around tech catalysts.",
+      "impactExample": "Caused: High-visibility TSLA and AI target changes often affect premarket sentiment.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.wedbush.com/",
+          "label": "Wedbush"
+        },
+        {
+          "url": "https://www.cnbc.com/",
+          "label": "media appearances"
+        }
+      ],
+      "scores": "Rel 2 / Infl 2",
+      "frequency": "Weekly",
+      "bestMonitor": "Broker notes, TV, X",
+      "queries": "Dan Ives Tesla price target AI checks",
+      "limitations": "Often narrative-amplifying rather than primary information."
+    },
+    {
+      "rank": 47,
+      "name": "Adam Jonas / Morgan Stanley",
+      "category": "Analyst",
+      "marketArea": "Autos, EVs, autonomy",
+      "tickers": "TSLA, GM, F, RIVN, LCID",
+      "why": "Autonomy, EV, and valuation-framework notes can shift long-duration auto narratives.",
+      "impactExample": "Caused: Tesla target and autonomy scenario notes have moved TSLA sentiment in multiple cycles.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.morganstanley.com/ideas",
+          "label": "Morgan Stanley ideas"
+        },
+        {
+          "url": "https://ir.tesla.com/",
+          "label": "Tesla IR"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Monthly",
+      "bestMonitor": "Broker notes, media summaries",
+      "queries": "Adam Jonas Tesla autonomy price target",
+      "limitations": "Scenario values can be highly assumption-sensitive."
+    },
+    {
+      "rank": 48,
+      "name": "Jim Cramer / CNBC",
+      "category": "Media personality",
+      "marketArea": "Retail flow, single stocks",
+      "tickers": "Large-cap retail favorites",
+      "why": "Can amplify narratives and short-term retail demand around earnings or product stories.",
+      "impactExample": "Caused: Mentions can create short-lived retail flow, especially small/mid-cap names.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.cnbc.com/mad-money/",
+          "label": "Mad Money"
+        },
+        {
+          "url": "https://www.cnbc.com/",
+          "label": "CNBC"
+        }
+      ],
+      "scores": "Rel 1 / Infl 2",
+      "frequency": "Daily",
+      "bestMonitor": "CNBC, X",
+      "queries": "Cramer buy sell recommendation ticker",
+      "limitations": "High entertainment bias; use as sentiment input only."
+    },
+    {
+      "rank": 49,
+      "name": "ZeroHedge",
+      "category": "Financial media / social account",
+      "marketArea": "Macro, rates, commodities, crypto",
+      "tickers": "SPX, bonds, banks, gold, BTC",
+      "why": "Fast aggregation of macro and positioning narratives can precede wider retail/institutional discussion.",
+      "impactExample": "Caused: Viral macro posts can move attention around bank, China, or rates stress before confirmation.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.zerohedge.com/",
+          "label": "site"
+        },
+        {
+          "url": "https://x.com/zerohedge",
+          "label": "X"
+        }
+      ],
+      "scores": "Rel 1 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "Website, RSS, X",
+      "queries": "ZeroHedge bank stress swap spreads liquidity",
+      "limitations": "Strong bias and rumor risk; verify through primary sources."
+    },
+    {
+      "rank": 50,
+      "name": "Walter Bloomberg",
+      "category": "Social news account",
+      "marketArea": "Equities, macro, commodities, crypto",
+      "tickers": "Broad markets",
+      "why": "Rapid headline relay can alert a finance agent before full article publication.",
+      "impactExample": "Caused: Fast reposts can trigger short-lived market reactions around policy, OPEC, and company headlines.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://x.com/DeItaone",
+          "label": "X"
+        },
+        {
+          "url": "https://www.reuters.com/markets/",
+          "label": "Reuters markets"
+        }
+      ],
+      "scores": "Rel 2 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "X list with verification follow-up",
+      "queries": "from:DeItaone Fed OPEC FDA merger",
+      "limitations": "Aggregator only; not primary, prone to context loss."
+    },
+    {
+      "rank": 51,
+      "name": "International Energy Agency",
+      "category": "Organization / data source",
+      "marketArea": "Commodities, energy equities",
+      "tickers": "Oil, gas, renewables, XLE",
+      "why": "Oil market reports and demand forecasts influence crude balances and energy equities.",
+      "impactExample": "Anticipated: IEA demand/supply revisions often move oil narrative around OPEC decisions.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.iea.org/reports/oil-market-report",
+          "label": "oil report"
+        },
+        {
+          "url": "https://www.iea.org/news",
+          "label": "news"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Monthly",
+      "bestMonitor": "IEA reports, press releases",
+      "queries": "IEA oil demand revision inventory supply",
+      "limitations": "Forecasts can conflict with OPEC and private data."
+    },
+    {
+      "rank": 52,
+      "name": "U.S. Energy Information Administration",
+      "category": "Government data source",
+      "marketArea": "Commodities, energy equities",
+      "tickers": "WTI, natural gas, refiners, E&Ps",
+      "why": "Weekly petroleum and gas storage data can move crude, products, and natural gas.",
+      "impactExample": "Caused: Large inventory surprises regularly move WTI, gasoline, and natgas futures intraday.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.eia.gov/petroleum/supply/weekly/",
+          "label": "weekly petroleum"
+        },
+        {
+          "url": "https://www.eia.gov/naturalgas/storage/",
+          "label": "gas storage"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Weekly",
+      "bestMonitor": "EIA releases, API as preview",
+      "queries": "EIA crude draw build gasoline distillate storage surprise",
+      "limitations": "Weather, exports, and refinery outages complicate read-through."
+    },
+    {
+      "rank": 53,
+      "name": "U.S. Supreme Court / major courts",
+      "category": "Court / legal source",
+      "marketArea": "Stocks, sectors, policy",
+      "tickers": "Big tech, pharma, banks, energy",
+      "why": "Rulings can alter regulatory power, damages, patents, merger probability, and business models.",
+      "impactExample": "Caused: Patent, antitrust, and administrative-law rulings have moved affected sectors and deal spreads.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.supremecourt.gov/opinions/slipopinion/25",
+          "label": "opinions"
+        },
+        {
+          "url": "https://www.courtlistener.com/",
+          "label": "CourtListener"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly / term-driven",
+      "bestMonitor": "SCOTUS opinions, PACER/CourtListener",
+      "queries": "Supreme Court opinion antitrust patent EPA FTC",
+      "limitations": "Legal significance often requires expert interpretation."
+    },
+    {
+      "rank": 54,
+      "name": "S&P Dow Jones / MSCI / FTSE Russell",
+      "category": "Index providers",
+      "marketArea": "Stocks, ETFs, passive flows",
+      "tickers": "SPX, Russell, MSCI EM/DM, sector ETFs",
+      "why": "Index additions, deletions, and float changes can force passive buying/selling.",
+      "impactExample": "Caused: S&P 500 inclusion announcements often move target stocks before effective dates.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.spglobal.com/spdji/en/index-announcements/",
+          "label": "S&P DJI"
+        },
+        {
+          "url": "https://www.lseg.com/en/ftse-russell/resources/index-resources",
+          "label": "FTSE Russell"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Monthly / quarterly",
+      "bestMonitor": "Provider announcements, rebalance calendars",
+      "queries": "S&P 500 inclusion deletion MSCI rebalance Russell reconstitution",
+      "limitations": "Estimated flows need float, liquidity, and ETF-holder analysis."
+    },
+    {
+      "rank": 55,
+      "name": "Major company IR teams",
+      "category": "Primary issuer source",
+      "marketArea": "Stocks, sectors, credit",
+      "tickers": "All public issuers",
+      "why": "Investor days, earnings dates, presentations, 8-Ks, and guidance changes are the cleanest source of company-specific catalysts.",
+      "impactExample": "Caused: Guidance resets and investor-day targets routinely drive 5-20% single-stock moves.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "SEC EDGAR"
+        },
+        {
+          "url": "https://www.nasdaq.com/market-activity/earnings",
+          "label": "earnings calendar"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Daily / quarterly",
+      "bestMonitor": "IR email alerts, RSS, SEC 8-K",
+      "queries": "site:investors.company.com investor day guidance presentation 8-K",
+      "limitations": "Company framing is biased; pair with filings, transcripts, and independent data."
+    }
+  ],
+  "events": [
+    {
+      "rank": 1,
+      "name": "FOMC decision, dot plot, minutes, press conference",
+      "category": "Macro / central bank",
+      "marketArea": "Rates, equities, FX",
+      "tickers": "SPY, QQQ, TLT, banks, housing",
+      "why": "Sets discount-rate path and liquidity expectations.",
+      "impactExample": "Caused: 2022 hawkish Fed communication triggered multiple large equity selloffs.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+          "label": "Fed calendar"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "8 meetings per year",
+      "bestMonitor": "Fed calendar, statement diff, presser transcript",
+      "queries": "FOMC statement dot plot terminal rate Powell",
+      "limitations": "Expected moves often priced; statement nuance matters."
+    },
+    {
+      "rank": 2,
+      "name": "U.S. CPI release",
+      "category": "Macro data",
+      "marketArea": "Rates, equities, FX, commodities",
+      "tickers": "SPY, QQQ, TLT, DXY, gold",
+      "why": "Highest-frequency inflation shock for Fed expectations.",
+      "impactExample": "Caused: Sep. 13, 2022 hot CPI aligned with S&P 500 -4.3%.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.bls.gov/schedule/news_release/cpi.htm",
+          "label": "BLS CPI schedule"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Monthly",
+      "bestMonitor": "BLS 8:30am ET release, Econoday consensus",
+      "queries": "CPI core shelter supercore surprise",
+      "limitations": "Revisions and composition matter more than headline."
+    },
+    {
+      "rank": 3,
+      "name": "Employment Situation / nonfarm payrolls",
+      "category": "Macro data",
+      "marketArea": "Rates, equities, FX",
+      "tickers": "SPY, TLT, USD, small caps",
+      "why": "Jobs, unemployment, and wages shift growth/inflation balance.",
+      "impactExample": "Caused: Payroll surprises routinely move front-end yields and index futures within seconds.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.bls.gov/schedule/news_release/empsit.htm",
+          "label": "BLS jobs schedule"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Monthly",
+      "bestMonitor": "BLS release, revisions table",
+      "queries": "nonfarm payrolls unemployment average hourly earnings revision",
+      "limitations": "Birth-death model and revisions can reverse initial interpretation."
+    },
+    {
+      "rank": 4,
+      "name": "Nvidia earnings and GTC / AI product events",
+      "category": "Earnings / product",
+      "marketArea": "Stocks, semis, AI supply chain",
+      "tickers": "NVDA, AMD, TSM, AVGO, SMCI, SOXX",
+      "why": "AI capex bellwether for semis, power, networking, and cloud.",
+      "impactExample": "Caused: May 2023 guide drove NVDA +24-25% and AI sympathy rally.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://investor.nvidia.com/events-and-presentations/events-and-presentations/default.aspx",
+          "label": "Nvidia events"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Quarterly / annual",
+      "bestMonitor": "IR, GTC agenda, earnings transcript",
+      "queries": "Nvidia data center guide Blackwell supply GTC keynote",
+      "limitations": "Whisper expectations can exceed consensus by a lot."
+    },
+    {
+      "rank": 5,
+      "name": "FDA PDUFA decisions and advisory committee votes",
+      "category": "Healthcare / regulatory",
+      "marketArea": "Biotech equities",
+      "tickers": "XBI, IBB, single-name biotechs",
+      "why": "Binary approval, label, safety, or CRL outcomes can define company value.",
+      "impactExample": "Caused: Approval/CRL decisions often move small biotechs 30-80%.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.fda.gov/advisory-committees/advisory-committee-calendar",
+          "label": "FDA adcom"
+        },
+        {
+          "url": "https://www.accessdata.fda.gov/scripts/cder/daf/",
+          "label": "Drugs@FDA"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Weekly / event",
+      "bestMonitor": "FDA, company 8-Ks, BioPharmCatalyst",
+      "queries": "PDUFA date advisory committee briefing document CRL",
+      "limitations": "No single official PDUFA calendar; need issuer confirmation."
+    },
+    {
+      "rank": 6,
+      "name": "OPEC+ ministerial and JMMC meetings",
+      "category": "Commodity / policy",
+      "marketArea": "Oil, inflation, FX",
+      "tickers": "WTI, Brent, XLE, airlines",
+      "why": "Supply decisions change crude balances and inflation inputs.",
+      "impactExample": "Caused: Apr. 2023 surprise cut sent oil about +6%.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.opec.org/opec_web/en/",
+          "label": "OPEC"
+        }
+      ],
+      "scores": "Rel 4 / Infl 5",
+      "frequency": "Monthly / event",
+      "bestMonitor": "OPEC, delegates, energy wires",
+      "queries": "OPEC+ quota voluntary cut JMMC compliance",
+      "limitations": "Pre-meeting leaks can be strategic."
+    },
+    {
+      "rank": 7,
+      "name": "Major technology earnings cluster",
+      "category": "Earnings / sector",
+      "marketArea": "Equities, indexes",
+      "tickers": "MSFT, AAPL, GOOGL, AMZN, META, TSLA",
+      "why": "Mega-cap weights can move index EPS, capex, AI, cloud, and consumer narratives.",
+      "impactExample": "Caused: Meta efficiency and capex resets drove large 2023-2024 single-stock and ad-tech moves.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.nasdaq.com/market-activity/earnings",
+          "label": "Nasdaq earnings calendar"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Quarterly",
+      "bestMonitor": "IR calendars, earnings transcripts",
+      "queries": "mega cap earnings cloud capex AI guide margin",
+      "limitations": "Read-throughs can conflict by subsector."
+    },
+    {
+      "rank": 8,
+      "name": "Short-seller report publication",
+      "category": "Single-stock / forensic",
+      "marketArea": "Stocks, credit, governance",
+      "tickers": "Small/mid caps, fraud-risk names",
+      "why": "Can surface accounting, governance, or disclosure risks quickly.",
+      "impactExample": "Caused: Hindenburg Adani and Nikola reports caused large equity drawdowns and regulatory scrutiny.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://hindenburgresearch.com/",
+          "label": "Hindenburg"
+        },
+        {
+          "url": "https://www.muddywatersresearch.com/",
+          "label": "Muddy Waters"
+        }
+      ],
+      "scores": "Rel 3 / Infl 5",
+      "frequency": "Rare / event",
+      "bestMonitor": "Short-seller sites, X, company responses",
+      "queries": "new short report fraud accounting response 8-K",
+      "limitations": "Claims can be disputed and biased; verify evidence."
+    },
+    {
+      "rank": 9,
+      "name": "Activist 13D, proxy contest, open letter",
+      "category": "Governance / event-driven",
+      "marketArea": "Stocks, M&A",
+      "tickers": "Underperforming large/mid caps",
+      "why": "Can catalyze buybacks, divestitures, CEO change, margin targets, sale process.",
+      "impactExample": "Caused: Elliott CRM stake and Starboard VRT stake triggered positive target moves.",
+      "impactDirection": "positive",
+      "links": [
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "SEC EDGAR"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly / event",
+      "bestMonitor": "SEC 13D/A, PRNewswire, campaign sites",
+      "queries": "13D activist letter proxy fight board seat margin",
+      "limitations": "Not every campaign wins; avoid assuming full activist plan."
+    },
+    {
+      "rank": 10,
+      "name": "M&A announcement, antitrust milestone, shareholder vote",
+      "category": "Special situation",
+      "marketArea": "Stocks, credit",
+      "tickers": "Deal targets/acquirers, sector peers",
+      "why": "Deal probability, spread, financing, and remedies can move both parties and peers.",
+      "impactExample": "Caused: FTC/DOJ challenges and court rulings have moved deal spreads and sector multiples.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.ftc.gov/news-events/news/press-releases",
+          "label": "FTC"
+        },
+        {
+          "url": "https://www.justice.gov/atr/press-room",
+          "label": "DOJ ATR"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly / event",
+      "bestMonitor": "8-Ks, merger proxy, court docket, regulators",
+      "queries": "merger vote HSR second request injunction remedy",
+      "limitations": "Regulatory and financing paths are path-dependent."
+    },
+    {
+      "rank": 11,
+      "name": "S&P, Russell, MSCI index rebalance / inclusion",
+      "category": "Technical / passive flow",
+      "marketArea": "Equities, ETFs",
+      "tickers": "SPX, Russell 2000, MSCI EM/DM",
+      "why": "Forces passive flows and pre-positioning around additions/deletions.",
+      "impactExample": "Caused: S&P 500 inclusions often cause sharp announcement-date rallies.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.spglobal.com/spdji/en/index-announcements/",
+          "label": "S&P DJI"
+        },
+        {
+          "url": "https://www.lseg.com/en/ftse-russell/resources/index-resources",
+          "label": "FTSE Russell"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Quarterly / annual",
+      "bestMonitor": "Index provider notices, ETF holdings",
+      "queries": "S&P inclusion Russell reconstitution MSCI rebalance flow ADV",
+      "limitations": "Magnitude depends on float, liquidity, and arbitrage crowding."
+    },
+    {
+      "rank": 12,
+      "name": "U.S. Treasury refunding and major auctions",
+      "category": "Rates / supply",
+      "marketArea": "Bonds, equities, FX",
+      "tickers": "UST curve, banks, housing, long-duration growth",
+      "why": "Coupon sizes and auction tails affect term premium and equity duration.",
+      "impactExample": "Caused: Refunding surprises and weak long-bond auctions have moved yields and equity factors.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding",
+          "label": "Treasury refunding"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly / quarterly",
+      "bestMonitor": "Treasury calendar, auction results",
+      "queries": "Treasury refunding TBAC coupon sizes auction tail bid cover",
+      "limitations": "Curve impact depends on positioning and Fed balance sheet policy."
+    },
+    {
+      "rank": 13,
+      "name": "Jackson Hole Economic Symposium",
+      "category": "Macro conference",
+      "marketArea": "Rates, equities, FX",
+      "tickers": "Broad markets",
+      "why": "Central bankers can use it to reset reaction functions.",
+      "impactExample": "Caused: Powell's Aug. 26, 2022 speech hit equities and risk assets.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.kansascityfed.org/research/jackson-hole-economic-symposium/",
+          "label": "Kansas City Fed"
+        },
+        {
+          "url": "https://www.axios.com/2022/08/26/fed-powell-speech-jackson-hole-inflation",
+          "label": "impact report"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Annual",
+      "bestMonitor": "Kansas City Fed agenda, speech text",
+      "queries": "Jackson Hole Powell speech monetary policy",
+      "limitations": "Some years are academic and low-signal."
+    },
+    {
+      "rank": 14,
+      "name": "ECB, BOJ, PBOC policy meetings",
+      "category": "Global macro",
+      "marketArea": "Rates, FX, equities",
+      "tickers": "EUR, JPY, CNH, global cyclicals",
+      "why": "Non-U.S. policy surprises spill into dollar, commodities, and global duration.",
+      "impactExample": "Caused: BOJ Dec. 2022 YCC surprise jolted yen and bonds.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html",
+          "label": "ECB"
+        },
+        {
+          "url": "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm",
+          "label": "BOJ"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Monthly",
+      "bestMonitor": "Central bank calendars, speeches",
+      "queries": "BOJ YCC ECB wages PBOC RRR stimulus",
+      "limitations": "Cross-market impact can be nonlinear."
+    },
+    {
+      "rank": 15,
+      "name": "Apple product launches / WWDC",
+      "category": "Product / technology",
+      "marketArea": "Stocks, suppliers",
+      "tickers": "AAPL, semis, hardware suppliers",
+      "why": "Can reset product-cycle, AI, services, and supplier expectations.",
+      "impactExample": "Caused: iPhone and AI feature launches move supplier and mega-cap tech narratives.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.apple.com/apple-events/",
+          "label": "Apple events"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Annual / seasonal",
+      "bestMonitor": "Apple events, developer docs, supplier reports",
+      "queries": "Apple event iPhone AI WWDC supplier shipment",
+      "limitations": "Launch buzz does not always convert to upgrade demand."
+    },
+    {
+      "rank": 16,
+      "name": "Investor days and long-term target updates",
+      "category": "Issuer event",
+      "marketArea": "Stocks, sectors",
+      "tickers": "All sectors",
+      "why": "New TAM, margin, capex, capital-return targets can change valuation framework.",
+      "impactExample": "Caused: Positive margin targets often re-rate industrial/software names; disappointments trigger de-rating.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "SEC 8-Ks"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "IR calendars, presentation 8-Ks",
+      "queries": "investor day long term targets margin CAGR buyback",
+      "limitations": "Management incentives can make targets promotional."
+    },
+    {
+      "rank": 17,
+      "name": "Clinical trial topline and medical conference data",
+      "category": "Healthcare / clinical",
+      "marketArea": "Biotech, pharma",
+      "tickers": "XBI, oncology, obesity, rare disease",
+      "why": "Endpoint, safety, durability, and competitive data can change probability of approval and peak sales.",
+      "impactExample": "Caused: ASCO/AACR/ESMO abstracts and readouts often move oncology and biotech names sharply.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://clinicaltrials.gov/",
+          "label": "ClinicalTrials.gov"
+        },
+        {
+          "url": "https://www.asco.org/meetings-education",
+          "label": "ASCO"
+        }
+      ],
+      "scores": "Rel 4 / Infl 5",
+      "frequency": "Weekly / seasonal",
+      "bestMonitor": "ClinicalTrials.gov, conference abstracts, company PR",
+      "queries": "topline data phase 2 phase 3 hazard ratio p-value safety",
+      "limitations": "Abstracts can omit key safety and subgroup details."
+    },
+    {
+      "rank": 18,
+      "name": "CMS reimbursement, Medicare rate, and coverage decisions",
+      "category": "Healthcare policy",
+      "marketArea": "Healthcare stocks",
+      "tickers": "UNH, HUM, hospitals, medtech, dialysis",
+      "why": "Reimbursement and coverage updates change revenue/margin assumptions.",
+      "impactExample": "Caused: Medicare Advantage rate notices and dialysis/medtech policy updates move affected healthcare names.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.cms.gov/newsroom",
+          "label": "CMS newsroom"
+        },
+        {
+          "url": "https://www.cms.gov/medicare-coverage-database/",
+          "label": "coverage database"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Monthly / annual",
+      "bestMonitor": "CMS, Federal Register",
+      "queries": "CMS rate notice Medicare Advantage final rule reimbursement",
+      "limitations": "Technical details require policy expertise."
+    },
+    {
+      "rank": 19,
+      "name": "Weekly EIA petroleum and natural gas storage",
+      "category": "Commodity data",
+      "marketArea": "Oil, gas, energy equities",
+      "tickers": "WTI, Henry Hub, refiners, E&Ps",
+      "why": "Inventory surprises move futures and energy equities.",
+      "impactExample": "Caused: Large gas storage surprises frequently move natgas futures several percent.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.eia.gov/petroleum/supply/weekly/",
+          "label": "petroleum"
+        },
+        {
+          "url": "https://www.eia.gov/naturalgas/storage/",
+          "label": "gas storage"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Weekly",
+      "bestMonitor": "EIA, API preview",
+      "queries": "EIA crude build draw natural gas storage surprise",
+      "limitations": "Weather and export outages can dominate weekly noise."
+    },
+    {
+      "rank": 20,
+      "name": "SEC crypto ETF, enforcement, and rule decisions",
+      "category": "Regulatory / crypto",
+      "marketArea": "Crypto, fintech, miners",
+      "tickers": "BTC, ETH, COIN, miners, HOOD",
+      "why": "Approvals and enforcement change access, liquidity, and compliance costs.",
+      "impactExample": "Caused: Spot crypto ETF decision windows moved BTC and crypto equities.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.sec.gov/newsroom/press-releases",
+          "label": "SEC press"
+        },
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "EDGAR"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "SEC, court dockets, ETF filings",
+      "queries": "SEC spot ETF approval enforcement Coinbase staking",
+      "limitations": "Rumors spread quickly; rely on filing/order text."
+    },
+    {
+      "rank": 21,
+      "name": "Bank earnings and stress-test results",
+      "category": "Earnings / regulator",
+      "marketArea": "Financials, credit",
+      "tickers": "JPM, BAC, C, WFC, KRE, XLF",
+      "why": "NII, credit losses, deposits, capital returns, and CRE exposure drive financial-sector risk.",
+      "impactExample": "Caused: SVB and regional-bank deposit/liquidity disclosures in 2023 triggered severe bank equity moves.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.federalreserve.gov/supervisionreg/stress-tests-capital-planning.htm",
+          "label": "Fed stress tests"
+        },
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "10-Qs"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Quarterly / annual",
+      "bestMonitor": "Earnings calls, Fed CCAR, FDIC data",
+      "queries": "bank NII deposit beta CRE losses CET1 buyback",
+      "limitations": "Accounting marks and held-to-maturity details need careful reading."
+    },
+    {
+      "rank": 22,
+      "name": "Retail sales, PCE inflation, ISM, JOLTS, GDP",
+      "category": "Macro data",
+      "marketArea": "Rates, equities, FX",
+      "tickers": "Consumer, industrials, bonds",
+      "why": "Second-tier macro can confirm or challenge CPI/jobs message.",
+      "impactExample": "Caused: ISM and retail-sales surprises move yields and cyclicals when growth path is uncertain.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.bea.gov/news/schedule",
+          "label": "BEA"
+        },
+        {
+          "url": "https://www.census.gov/economic-indicators/",
+          "label": "Census"
+        },
+        {
+          "url": "https://www.ismworld.org/supply-management-news-and-reports/reports/ism-report-on-business/",
+          "label": "ISM"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Monthly / quarterly",
+      "bestMonitor": "Official release calendars",
+      "queries": "PCE supercore retail sales control group ISM prices paid",
+      "limitations": "Often matters through Fed reaction function, not standalone."
+    },
+    {
+      "rank": 23,
+      "name": "Geopolitical sanctions, wars, and shipping disruptions",
+      "category": "Geopolitical / policy",
+      "marketArea": "Commodities, defense, shipping, FX",
+      "tickers": "Oil, LNG, defense, shipping, wheat",
+      "why": "Sanctions and conflict can alter supply chains, energy flows, and defense spending.",
+      "impactExample": "Caused: Russia-Ukraine invasion repriced energy, wheat, defense, and European assets.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://ofac.treasury.gov/recent-actions",
+          "label": "OFAC"
+        },
+        {
+          "url": "https://www.marinetraffic.com/",
+          "label": "MarineTraffic"
+        }
+      ],
+      "scores": "Rel 3 / Infl 5",
+      "frequency": "Event-driven",
+      "bestMonitor": "OFAC, maritime data, official defense releases",
+      "queries": "sanctions tanker Red Sea Strait Hormuz LNG export",
+      "limitations": "Information quality varies during conflict."
+    },
+    {
+      "rank": 24,
+      "name": "Debt ceiling, government shutdown, fiscal deadline",
+      "category": "Policy / macro",
+      "marketArea": "Rates, equities, USD, contractors",
+      "tickers": "T-bills, defense, healthcare, federal contractors",
+      "why": "Can stress front-end bills, ratings, and federal spending timing.",
+      "impactExample": "Caused: Debt-ceiling standoffs have moved T-bill yields and risk sentiment.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://home.treasury.gov/news/press-releases",
+          "label": "Treasury releases"
+        },
+        {
+          "url": "https://www.congress.gov/",
+          "label": "Congress"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "Treasury cash balance, Congress calendar",
+      "queries": "debt ceiling X-date Treasury cash balance shutdown",
+      "limitations": "Political headlines can reverse intraday."
+    },
+    {
+      "rank": 25,
+      "name": "Defense budget, NDAA, major contract awards",
+      "category": "Government spending",
+      "marketArea": "Defense stocks, industrials",
+      "tickers": "LMT, RTX, NOC, GD, HII, PLTR",
+      "why": "Authorization, appropriations, and contract awards shape backlog and program risk.",
+      "impactExample": "Caused: Large contract awards and budget changes can move primes and suppliers.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.defense.gov/News/Contracts/",
+          "label": "DoD contracts"
+        },
+        {
+          "url": "https://www.congress.gov/",
+          "label": "Congress"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Daily / annual",
+      "bestMonitor": "DoD contracts, NDAA text, earnings",
+      "queries": "DoD contract hypersonic missile NDAA procurement",
+      "limitations": "Contract headline value can span many years."
+    },
+    {
+      "rank": 26,
+      "name": "IPO lockup expirations, follow-ons, ATM, convertibles",
+      "category": "Capital markets / technical",
+      "marketArea": "Single stocks, credit",
+      "tickers": "Recent IPOs, biotech, growth stocks",
+      "why": "Float increases and financing can pressure shares or solve runway risk.",
+      "impactExample": "Caused: Biotech and growth secondaries often gap stocks down on dilution, while runway relief can reverse.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "SEC filings"
+        },
+        {
+          "url": "https://www.nasdaq.com/market-activity/ipos",
+          "label": "Nasdaq IPOs"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Weekly",
+      "bestMonitor": "S-1, 424B, 8-K, lockup terms",
+      "queries": "lock-up expiration secondary offering ATM convertible pricing",
+      "limitations": "Actual selling pressure depends on holder base and borrow."
+    },
+    {
+      "rank": 27,
+      "name": "Bankruptcy, restructuring, covenant, refinancing deadlines",
+      "category": "Special situations / credit",
+      "marketArea": "Stocks, bonds, suppliers",
+      "tickers": "Distressed retailers, EVs, CRE, cyclicals",
+      "why": "Liquidity events can wipe equity, reprice peers, or trigger M&A.",
+      "impactExample": "Caused: SVB collapse and later distressed filings drove large sector moves and policy response.",
+      "impactDirection": "negative",
+      "links": [
+        {
+          "url": "https://www.courtlistener.com/",
+          "label": "CourtListener"
+        },
+        {
+          "url": "https://www.pacer.gov/",
+          "label": "PACER"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "Court dockets, 8-Ks, bond pricing",
+      "queries": "Chapter 11 restructuring support agreement covenant default",
+      "limitations": "Equity recoveries require capital-structure analysis."
+    },
+    {
+      "rank": 28,
+      "name": "Crypto exchange listings, delistings, hacks, reserve updates",
+      "category": "Crypto / market structure",
+      "marketArea": "Crypto, fintech",
+      "tickers": "BTC, ETH, altcoins, COIN, miners",
+      "why": "Listings affect liquidity; hacks and reserve concerns change counterparty risk.",
+      "impactExample": "Caused: Exchange solvency and legal headlines have caused crypto-wide volatility.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.binance.com/en/support/announcement",
+          "label": "Binance announcements"
+        },
+        {
+          "url": "https://blog.coinbase.com/",
+          "label": "Coinbase blog"
+        }
+      ],
+      "scores": "Rel 3 / Infl 4",
+      "frequency": "Daily / event",
+      "bestMonitor": "Exchange announcements, on-chain monitors",
+      "queries": "exchange hack proof of reserves delisting listing",
+      "limitations": "Social rumors can front-run official statements."
+    },
+    {
+      "rank": 29,
+      "name": "Autos and EV delivery reports",
+      "category": "Company / sector KPI",
+      "marketArea": "Autos, batteries, lithium",
+      "tickers": "TSLA, RIVN, LCID, GM, F, lithium miners",
+      "why": "Monthly/quarterly deliveries, pricing, inventories, and incentives update demand and margin assumptions.",
+      "impactExample": "Caused: Tesla delivery misses and price cuts have moved EV stocks and suppliers.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://ir.tesla.com/",
+          "label": "Tesla IR"
+        },
+        {
+          "url": "https://www.nhtsa.gov/recalls",
+          "label": "NHTSA recalls"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Monthly / quarterly",
+      "bestMonitor": "Company releases, registration data, recalls",
+      "queries": "EV deliveries price cuts inventory incentives recall",
+      "limitations": "Regional registration data is partial and timing-skewed."
+    },
+    {
+      "rank": 30,
+      "name": "Retail traffic, credit-card, and holiday-sales data",
+      "category": "Consumer / alt data",
+      "marketArea": "Consumer stocks",
+      "tickers": "WMT, TGT, COST, AMZN, apparel, restaurants",
+      "why": "Early spending signals can anticipate earnings and guidance risk.",
+      "impactExample": "Anticipated: Weak traffic or card data often precedes retail earnings misses.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.census.gov/retail/index.html",
+          "label": "Census retail"
+        },
+        {
+          "url": "https://www.redbookresearch.com/",
+          "label": "Redbook"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Weekly / monthly",
+      "bestMonitor": "Census, Redbook, card-data providers",
+      "queries": "retail sales traffic markdowns credit card data holiday",
+      "limitations": "Alternative data coverage and mix can be biased."
+    },
+    {
+      "rank": 31,
+      "name": "Real estate rate cases, CRE delinquencies, REIT updates",
+      "category": "Real estate / credit",
+      "marketArea": "REITs, banks, CMBS",
+      "tickers": "VNQ, office REITs, KRE, CMBS",
+      "why": "Occupancy, cap rates, refinancing, and credit stress affect REITs and lenders.",
+      "impactExample": "Anticipated: CRE stress headlines have pressured regional banks and office REITs.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.reit.com/data-research",
+          "label": "Nareit"
+        },
+        {
+          "url": "https://www.trepp.com/",
+          "label": "Trepp"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Monthly / quarterly",
+      "bestMonitor": "REIT reports, CMBS data, bank filings",
+      "queries": "CRE delinquency office refinance cap rate maturity wall",
+      "limitations": "Private-market marks lag public securities."
+    },
+    {
+      "rank": 32,
+      "name": "Semiconductor trade controls and CHIPS grants",
+      "category": "Policy / semis",
+      "marketArea": "Semiconductors, AI, China",
+      "tickers": "NVDA, AMD, ASML, TSM, INTC, SMH",
+      "why": "Export restrictions and subsidies change TAM, capex, and China exposure.",
+      "impactExample": "Caused: U.S. export-control updates have moved AI chip and equipment stocks.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.bis.gov/press-release",
+          "label": "BIS releases"
+        },
+        {
+          "url": "https://www.nist.gov/chips",
+          "label": "CHIPS program"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "BIS, Federal Register, company 8-Ks",
+      "queries": "BIS export control AI chip China license HBM",
+      "limitations": "Rules require detailed product-level interpretation."
+    },
+    {
+      "rank": 33,
+      "name": "Shipping, freight, and port disruption events",
+      "category": "Commodity / logistics",
+      "marketArea": "Shipping, retail, inflation",
+      "tickers": "ZIM, Maersk, airlines, retailers",
+      "why": "Freight rates and chokepoints affect margins, delivery timing, and goods inflation.",
+      "impactExample": "Caused: Red Sea disruptions and pandemic port congestion repriced shipping rates and retailers.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://fbx.freightos.com/",
+          "label": "Freightos Baltic Index"
+        },
+        {
+          "url": "https://www.marinetraffic.com/",
+          "label": "MarineTraffic"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Weekly / event",
+      "bestMonitor": "Freightos, MarineTraffic, port authorities",
+      "queries": "Red Sea container rates port strike Panama Canal drought",
+      "limitations": "Spot freight impact varies by contract exposure."
+    },
+    {
+      "rank": 34,
+      "name": "Election, tariff, tax, and regulatory hearings",
+      "category": "Policy / politics",
+      "marketArea": "Equities, FX, sectors",
+      "tickers": "Healthcare, energy, banks, China-sensitive",
+      "why": "Policy probability changes can alter sector multiples and earnings power.",
+      "impactExample": "Caused: Tariff and healthcare-policy headlines have driven sector rotations.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.congress.gov/",
+          "label": "Congress"
+        },
+        {
+          "url": "https://www.federalregister.gov/",
+          "label": "Federal Register"
+        }
+      ],
+      "scores": "Rel 3 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "Congress calendars, agencies, polls",
+      "queries": "tariff hearing drug pricing tax bill regulation final rule",
+      "limitations": "Campaign promises often fail to become policy."
+    },
+    {
+      "rank": 35,
+      "name": "Major industry conferences",
+      "category": "Conference / sector",
+      "marketArea": "Sector stocks",
+      "tickers": "JPM Healthcare, CES, Computex, GTC, CERAWeek, Dreamforce",
+      "why": "Management meetings, product demos, and data presentations create clustered sector catalysts.",
+      "impactExample": "Caused: Healthcare and semiconductor conference disclosures often move small and large-cap names.",
+      "impactDirection": "mixed",
+      "links": [
+        {
+          "url": "https://www.jpmorgan.com/insights/events-conferences/health-care-conference",
+          "label": "JPM HC"
+        },
+        {
+          "url": "https://www.ces.tech/",
+          "label": "CES"
+        },
+        {
+          "url": "https://www.nvidia.com/gtc/",
+          "label": "GTC"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Seasonal",
+      "bestMonitor": "Conference agendas, company IR webcasts",
+      "queries": "conference presentation webcast fireside guidance data",
+      "limitations": "Many appearances are low-content; prioritize prepared remarks and slides."
+    }
+  ],
+  "sources": [
+    {
+      "rank": 1,
+      "name": "SEC EDGAR",
+      "category": "Filing source",
+      "marketArea": "Stocks, credit, activism, M&A",
+      "tickers": "All U.S. issuers",
+      "why": "Primary source for 8-K, 10-Q, 13D, 13F, S-1, proxy, merger, offering filings.",
+      "impactExample": "Activist 13D, guidance 8-K, secondary filings can move stocks immediately.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.sec.gov/edgar/search/",
+          "label": "EDGAR search"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Real time",
+      "bestMonitor": "Company/CIK alerts, RSS, API",
+      "queries": "form 8-K Item 2.02 13D 424B5 S-4 DEF14A",
+      "limitations": "Requires parsing; filing volume is noisy."
+    },
+    {
+      "rank": 2,
+      "name": "Company investor relations pages",
+      "category": "Primary company source",
+      "marketArea": "Stocks, credit",
+      "tickers": "All public issuers",
+      "why": "Best source for event dates, decks, earnings materials, investor days, webcasts.",
+      "impactExample": "Guidance and investor-day targets frequently move shares 5-20%.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.nasdaq.com/market-activity/earnings",
+          "label": "calendar starting point"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Daily / quarterly",
+      "bestMonitor": "IR email alerts, RSS, Quartr",
+      "queries": "site:investors.* earnings presentation investor day guidance",
+      "limitations": "Company framing is promotional."
+    },
+    {
+      "rank": 3,
+      "name": "Federal Reserve FOMC pages",
+      "category": "Central bank source",
+      "marketArea": "Rates, equities, FX",
+      "tickers": "Broad macro assets",
+      "why": "Official schedule, statements, minutes, projections, transcripts.",
+      "impactExample": "FOMC communications are among the highest-impact recurring macro catalysts.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+          "label": "FOMC"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Monthly",
+      "bestMonitor": "RSS, calendar, statement diff",
+      "queries": "FOMC minutes projections implementation note",
+      "limitations": "Need compare with market pricing."
+    },
+    {
+      "rank": 4,
+      "name": "BLS release calendar and data",
+      "category": "Government macro data",
+      "marketArea": "Rates, equities, FX",
+      "tickers": "CPI, jobs, wages",
+      "why": "Official CPI, payrolls, wages, PPI, JOLTS release schedules and data.",
+      "impactExample": "CPI/jobs surprises can move index futures and yields instantly.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.bls.gov/schedule/news_release/",
+          "label": "BLS schedule"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Monthly",
+      "bestMonitor": "BLS calendar ICS, API",
+      "queries": "CPI Employment Situation JOLTS PPI release",
+      "limitations": "Revisions and seasonal adjustment matter."
+    },
+    {
+      "rank": 5,
+      "name": "Reuters Markets",
+      "category": "Financial news",
+      "marketArea": "Global stocks, macro, commodities",
+      "tickers": "Broad",
+      "why": "Fast, credible market-moving reporting with global coverage.",
+      "impactExample": "Often first reliable non-primary writeup for OPEC, central bank, M&A, policy.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.reuters.com/markets/",
+          "label": "Reuters Markets"
+        }
+      ],
+      "scores": "Rel 4 / Infl 5",
+      "frequency": "Real time",
+      "bestMonitor": "RSS, alerts, terminal feed",
+      "queries": "site:reuters.com/markets ticker shares jump plunge",
+      "limitations": "Some articles behind distribution limits."
+    },
+    {
+      "rank": 6,
+      "name": "Bloomberg",
+      "category": "Financial news / data",
+      "marketArea": "Global markets",
+      "tickers": "Broad",
+      "why": "High-speed scoops on M&A, policy, central banks, credit, commodities.",
+      "impactExample": "Bloomberg headlines can move futures, deal spreads, and single names before full stories.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.bloomberg.com/markets",
+          "label": "Bloomberg Markets"
+        }
+      ],
+      "scores": "Rel 4 / Infl 5",
+      "frequency": "Real time",
+      "bestMonitor": "Terminal/news alerts",
+      "queries": "Bloomberg scoop merger stake policy sources",
+      "limitations": "Often paywalled; source-based stories need confirmation."
+    },
+    {
+      "rank": 7,
+      "name": "Wall Street Journal",
+      "category": "Financial news",
+      "marketArea": "Stocks, Fed, M&A, policy",
+      "tickers": "Broad",
+      "why": "Influential reporting on Fed, M&A, corporate strategy, investigations.",
+      "impactExample": "Fed previews and M&A scoops can move market-implied odds and single stocks.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.wsj.com/news/markets",
+          "label": "WSJ Markets"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Daily",
+      "bestMonitor": "Alerts, author feeds",
+      "queries": "WSJ Fed preview merger talks activist",
+      "limitations": "Paywalled; not a primary source."
+    },
+    {
+      "rank": 8,
+      "name": "Financial Times",
+      "category": "Global financial news",
+      "marketArea": "Global equities, credit, macro",
+      "tickers": "Europe, China, commodities, finance",
+      "why": "Strong for cross-border policy, banking, commodities, and corporate finance.",
+      "impactExample": "FT investigations and scoops often catalyze regulatory or investor scrutiny.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.ft.com/markets",
+          "label": "FT Markets"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Daily",
+      "bestMonitor": "Alerts, RSS",
+      "queries": "FT investigation short seller deal talks bank stress",
+      "limitations": "Paywalled; slower than terminal headlines."
+    },
+    {
+      "rank": 9,
+      "name": "FDA advisory committee calendar",
+      "category": "Regulatory source",
+      "marketArea": "Biotech, pharma",
+      "tickers": "XBI, IBB, single-name biotechs",
+      "why": "Official meeting notices and briefing-document path for drug/device decisions.",
+      "impactExample": "Adcom votes and briefing docs can move biotech stocks dramatically.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.fda.gov/advisory-committees/advisory-committee-calendar",
+          "label": "FDA adcom calendar"
+        }
+      ],
+      "scores": "Rel 5 / Infl 5",
+      "frequency": "Weekly",
+      "bestMonitor": "FDA page, RSS, company filings",
+      "queries": "FDA advisory committee briefing document PDUFA",
+      "limitations": "Not all PDUFA dates have adcoms."
+    },
+    {
+      "rank": 10,
+      "name": "ClinicalTrials.gov",
+      "category": "Clinical database",
+      "marketArea": "Biotech, pharma",
+      "tickers": "Drug developers, medtech",
+      "why": "Trial status, endpoints, enrollment, completion dates, sponsor updates.",
+      "impactExample": "Enrollment or completion changes can flag upcoming readouts.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://clinicaltrials.gov/",
+          "label": "ClinicalTrials.gov"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Daily updates",
+      "bestMonitor": "Saved trial alerts",
+      "queries": "NCT ticker phase 3 primary completion update",
+      "limitations": "Completion dates are often stale or administrative."
+    },
+    {
+      "rank": 11,
+      "name": "CourtListener / RECAP",
+      "category": "Court filing source",
+      "marketArea": "Legal, M&A, IP, antitrust",
+      "tickers": "Tech, pharma, special situations",
+      "why": "Free docket monitoring for opinions, injunctions, complaints, and briefs.",
+      "impactExample": "Court rulings can move deal spreads, patent stocks, and regulated sectors.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.courtlistener.com/",
+          "label": "CourtListener"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Daily",
+      "bestMonitor": "Docket alerts",
+      "queries": "ticker injunction antitrust patent opinion docket",
+      "limitations": "PACER coverage may be incomplete."
+    },
+    {
+      "rank": 12,
+      "name": "PACER",
+      "category": "Court filing source",
+      "marketArea": "Legal, bankruptcy, antitrust",
+      "tickers": "Distressed, M&A, pharma, tech",
+      "why": "Primary federal docket source for litigation and bankruptcy filings.",
+      "impactExample": "Chapter 11 and injunction filings can move equity and credit immediately.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.pacer.gov/",
+          "label": "PACER"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Real time / daily",
+      "bestMonitor": "Docket alerts",
+      "queries": "Chapter 11 RSA complaint preliminary injunction",
+      "limitations": "Paid access and cumbersome search."
+    },
+    {
+      "rank": 13,
+      "name": "FTC press releases",
+      "category": "Regulatory source",
+      "marketArea": "M&A, consumer, tech, healthcare",
+      "tickers": "Deal targets, large platforms",
+      "why": "Official merger challenges, enforcement, consent decrees, rulemaking.",
+      "impactExample": "Merger challenge announcements move deal spreads.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.ftc.gov/news-events/news/press-releases",
+          "label": "FTC releases"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly",
+      "bestMonitor": "Email alerts, RSS",
+      "queries": "FTC sues block merger consent order",
+      "limitations": "Legal process continues after announcement."
+    },
+    {
+      "rank": 14,
+      "name": "DOJ Antitrust Division",
+      "category": "Regulatory source",
+      "marketArea": "M&A, tech, healthcare",
+      "tickers": "Large-cap tech, pharma deals",
+      "why": "Official antitrust complaints, remedies, speeches, settlements.",
+      "impactExample": "Complaint filings can reprice M&A probability and sector regulation risk.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.justice.gov/atr/press-room",
+          "label": "DOJ ATR"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly",
+      "bestMonitor": "Press alerts, court dockets",
+      "queries": "DOJ antitrust complaint merger trial remedy",
+      "limitations": "Outcome depends on court."
+    },
+    {
+      "rank": 15,
+      "name": "Federal Register",
+      "category": "Official policy source",
+      "marketArea": "Regulatory, tariffs, healthcare, energy",
+      "tickers": "All regulated sectors",
+      "why": "Rules, notices, executive orders, agency deadlines.",
+      "impactExample": "Final rules and tariff notices can change sector earnings power.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.federalregister.gov/",
+          "label": "Federal Register"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Daily",
+      "bestMonitor": "Keyword subscriptions",
+      "queries": "tariff final rule proposed rule comment deadline ticker",
+      "limitations": "Dense legal text; market impact may be indirect."
+    },
+    {
+      "rank": 16,
+      "name": "U.S. Treasury news and auction data",
+      "category": "Government source",
+      "marketArea": "Rates, FX, sanctions",
+      "tickers": "USTs, banks, commodities",
+      "why": "Refunding, auctions, sanctions, debt ceiling, financial stability.",
+      "impactExample": "Auction tails and refunding changes move yields.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://home.treasury.gov/news/press-releases",
+          "label": "Treasury releases"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Daily / weekly",
+      "bestMonitor": "Press, auction calendar",
+      "queries": "Treasury refunding sanctions auction TBAC",
+      "limitations": "Requires curve context."
+    },
+    {
+      "rank": 17,
+      "name": "OFAC recent actions",
+      "category": "Sanctions source",
+      "marketArea": "Commodities, shipping, FX, defense",
+      "tickers": "Oil, tankers, Russia/China exposure",
+      "why": "Official sanctions designations and general licenses.",
+      "impactExample": "Sanctions headlines can move oil, shipping, defense, and exposed equities.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://ofac.treasury.gov/recent-actions",
+          "label": "OFAC"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "Email/RSS alerts",
+      "queries": "OFAC sanctions tanker oil Russia China entity",
+      "limitations": "Need map entities to issuer exposure."
+    },
+    {
+      "rank": 18,
+      "name": "EIA",
+      "category": "Energy data",
+      "marketArea": "Commodities, energy equities",
+      "tickers": "Oil, gas, refiners, E&Ps",
+      "why": "Weekly inventories, storage, production, monthly outlook.",
+      "impactExample": "Inventory surprises move oil/gas futures and energy equities.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.eia.gov/",
+          "label": "EIA"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly / monthly",
+      "bestMonitor": "Release calendar, API",
+      "queries": "EIA crude inventory natural gas storage STEO",
+      "limitations": "Weekly noise and revisions."
+    },
+    {
+      "rank": 19,
+      "name": "OPEC",
+      "category": "Commodity source",
+      "marketArea": "Oil, inflation, FX",
+      "tickers": "WTI, Brent, XLE",
+      "why": "Official communiques, monthly oil market report, meeting schedule.",
+      "impactExample": "Output-cut decisions can move crude several percent.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.opec.org/opec_web/en/",
+          "label": "OPEC"
+        }
+      ],
+      "scores": "Rel 4 / Infl 5",
+      "frequency": "Monthly / event",
+      "bestMonitor": "Press releases, MOMR",
+      "queries": "OPEC+ quota cut JMMC MOMR demand",
+      "limitations": "Compliance and non-OPEC supply matter."
+    },
+    {
+      "rank": 20,
+      "name": "IEA Oil Market Report",
+      "category": "Commodity research",
+      "marketArea": "Oil, energy equities",
+      "tickers": "WTI, Brent, producers, refiners",
+      "why": "Demand/supply balances and inventory forecasts.",
+      "impactExample": "Demand revisions shape oil narrative around OPEC decisions.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.iea.org/reports/oil-market-report",
+          "label": "IEA OMR"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Monthly",
+      "bestMonitor": "Report alerts",
+      "queries": "IEA oil demand supply revision inventory",
+      "limitations": "Forecasts differ from OPEC/EIA."
+    },
+    {
+      "rank": 21,
+      "name": "S&P Dow Jones index announcements",
+      "category": "Index source",
+      "marketArea": "Equities, ETFs",
+      "tickers": "SPX, sector indexes",
+      "why": "Official additions, deletions, methodology, corporate action treatment.",
+      "impactExample": "S&P 500 inclusion announcements can move target stocks sharply.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.spglobal.com/spdji/en/index-announcements/",
+          "label": "S&P DJI announcements"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Event / quarterly",
+      "bestMonitor": "Announcements RSS",
+      "queries": "S&P 500 addition deletion index announcement",
+      "limitations": "Flow estimates need ETF ownership."
+    },
+    {
+      "rank": 22,
+      "name": "FTSE Russell",
+      "category": "Index source",
+      "marketArea": "Equities, ETFs",
+      "tickers": "Russell 1000/2000/3000",
+      "why": "Annual reconstitution, preliminary lists, methodology.",
+      "impactExample": "Russell reconstitution causes high-volume trading in small/mid caps.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.lseg.com/en/ftse-russell/resources/index-resources",
+          "label": "FTSE Russell resources"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Annual / quarterly",
+      "bestMonitor": "Index notices",
+      "queries": "Russell reconstitution preliminary additions deletions",
+      "limitations": "Flows are predictable and crowded."
+    },
+    {
+      "rank": 23,
+      "name": "MSCI index announcements",
+      "category": "Index source",
+      "marketArea": "Global equities, ETFs",
+      "tickers": "EM/DM, country ETFs",
+      "why": "Official index reviews, country classification, additions/deletions.",
+      "impactExample": "MSCI inclusion changes can move EM single names and country ETFs.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.msci.com/index-review",
+          "label": "MSCI index review"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Quarterly",
+      "bestMonitor": "MSCI review calendar",
+      "queries": "MSCI quarterly review inclusion deletion country classification",
+      "limitations": "Some details behind client access."
+    },
+    {
+      "rank": 24,
+      "name": "Nasdaq and NYSE notices",
+      "category": "Exchange source",
+      "marketArea": "Equities, market structure",
+      "tickers": "Listings, halts, IPOs",
+      "why": "Trading halts, listing compliance, IPO calendars, corporate actions.",
+      "impactExample": "Halt/resumption notices can precede gap moves.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.nasdaqtrader.com/Trader.aspx?id=TradeHalts",
+          "label": "Nasdaq halts"
+        },
+        {
+          "url": "https://www.nyse.com/markets/nyse/trading-info",
+          "label": "NYSE info"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Real time",
+      "bestMonitor": "Exchange alerts",
+      "queries": "trading halt news pending delisting compliance IPO",
+      "limitations": "Does not explain fundamental reason."
+    },
+    {
+      "rank": 25,
+      "name": "Quartr",
+      "category": "Transcripts / IR platform",
+      "marketArea": "Stocks",
+      "tickers": "Global public companies",
+      "why": "Earnings calls, transcripts, presentations, events in one workflow.",
+      "impactExample": "Fast call transcript analysis helps catch guidance nuance.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://quartr.com/",
+          "label": "Quartr"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Daily / quarterly",
+      "bestMonitor": "App alerts, event calendar",
+      "queries": "earnings call transcript guidance capex margin",
+      "limitations": "Coverage/entitlements vary."
+    },
+    {
+      "rank": 26,
+      "name": "AlphaSense",
+      "category": "Research / transcript search",
+      "marketArea": "Stocks, sectors",
+      "tickers": "Global issuers",
+      "why": "Searches filings, transcripts, broker/public documents, expert call material depending on access.",
+      "impactExample": "Useful to detect wording changes and peer read-throughs.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.alpha-sense.com/",
+          "label": "AlphaSense"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Daily",
+      "bestMonitor": "Saved searches",
+      "queries": "guidance withdrawn pricing pressure customer inventory",
+      "limitations": "Entitlement and source provenance matter."
+    },
+    {
+      "rank": 27,
+      "name": "Koyfin / FactSet / LSEG / Bloomberg screens",
+      "category": "Market data platforms",
+      "marketArea": "Stocks, rates, commodities",
+      "tickers": "Broad",
+      "why": "Consensus, estimates, price moves, ownership, comps, event calendars.",
+      "impactExample": "Estimate revisions and abnormal moves help prioritize catalyst investigation.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.koyfin.com/",
+          "label": "Koyfin"
+        },
+        {
+          "url": "https://www.lseg.com/",
+          "label": "LSEG"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Real time",
+      "bestMonitor": "Watchlists, screens",
+      "queries": "estimate revision abnormal volume short interest",
+      "limitations": "Paid data and consensus timestamps vary."
+    },
+    {
+      "rank": 28,
+      "name": "CNBC",
+      "category": "Financial news / TV",
+      "marketArea": "Stocks, macro",
+      "tickers": "Broad",
+      "why": "Fast market coverage, interviews with CEOs, investors, policymakers.",
+      "impactExample": "Live comments can move stocks before transcripts circulate.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.cnbc.com/markets/",
+          "label": "CNBC Markets"
+        }
+      ],
+      "scores": "Rel 3 / Infl 4",
+      "frequency": "Real time",
+      "bestMonitor": "TV, alerts, clips",
+      "queries": "CEO interview guidance CNBC activist",
+      "limitations": "TV framing can overemphasize narrative."
+    },
+    {
+      "rank": 29,
+      "name": "MarketWatch",
+      "category": "Financial news",
+      "marketArea": "Stocks, macro, retail flow",
+      "tickers": "Broad",
+      "why": "Accessible market reaction writeups and live blogs.",
+      "impactExample": "Useful for fast post-event magnitude checks like meme-stock moves.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.marketwatch.com/markets",
+          "label": "MarketWatch"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "Alerts, live blogs",
+      "queries": "shares surge plunge after tweet earnings",
+      "limitations": "Use primary source for decisions."
+    },
+    {
+      "rank": 30,
+      "name": "Investopedia market news",
+      "category": "Financial explainer / news",
+      "marketArea": "Stocks, macro",
+      "tickers": "Broad",
+      "why": "Clear summaries of market-moving events and approximate moves.",
+      "impactExample": "Useful secondary documentation for OPEC and earnings impact examples.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.investopedia.com/markets-news-4427704",
+          "label": "Investopedia markets"
+        }
+      ],
+      "scores": "Rel 3 / Infl 2",
+      "frequency": "Daily",
+      "bestMonitor": "News feed",
+      "queries": "Investopedia shares jump after guidance",
+      "limitations": "Usually not first source."
+    },
+    {
+      "rank": 31,
+      "name": "STAT",
+      "category": "Healthcare news",
+      "marketArea": "Biotech, pharma, healthcare policy",
+      "tickers": "Biotech, managed care, pharma",
+      "why": "Strong reporting on FDA, clinical data, biotech management, policy.",
+      "impactExample": "Early biotech scoops can move small caps and sector sentiment.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.statnews.com/",
+          "label": "STAT"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "Alerts, newsletters",
+      "queries": "STAT FDA trial data biotech scoop",
+      "limitations": "Paywalled; verify with FDA/company."
+    },
+    {
+      "rank": 32,
+      "name": "Endpoints News",
+      "category": "Biotech news",
+      "marketArea": "Biotech, pharma",
+      "tickers": "XBI, pharma, private/public biotech",
+      "why": "Fast biotech, trial, deal, regulatory, and management coverage.",
+      "impactExample": "Can flag readouts, layoffs, financings, and regulatory shifts early.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://endpts.com/",
+          "label": "Endpoints"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "Newsletter, alerts",
+      "queries": "Endpoints PDUFA readout biotech financing",
+      "limitations": "May require subscription."
+    },
+    {
+      "rank": 33,
+      "name": "Fierce Biotech",
+      "category": "Healthcare trade press",
+      "marketArea": "Biotech, pharma",
+      "tickers": "Biotech, medtech",
+      "why": "Covers clinical failures, FDA, M&A, layoffs, partnerships.",
+      "impactExample": "Trial failure and partnership headlines often affect small-cap biotech.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.fiercebiotech.com/",
+          "label": "Fierce Biotech"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "Newsletter",
+      "queries": "Fierce Biotech trial fails FDA approval layoffs",
+      "limitations": "Use company press release for exact data."
+    },
+    {
+      "rank": 34,
+      "name": "BioPharma Dive",
+      "category": "Healthcare trade press",
+      "marketArea": "Biotech, pharma",
+      "tickers": "Pharma, biotech, M&A",
+      "why": "Accessible coverage of drug approvals, trials, pricing, M&A.",
+      "impactExample": "Good for context around FDA and clinical catalysts.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.biopharmadive.com/",
+          "label": "BioPharma Dive"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "Newsletter",
+      "queries": "BioPharma Dive FDA approval trial data deal",
+      "limitations": "Not a primary regulatory source."
+    },
+    {
+      "rank": 35,
+      "name": "BioPharmCatalyst",
+      "category": "Biotech calendar",
+      "marketArea": "Biotech",
+      "tickers": "Small/mid-cap biotech",
+      "why": "Tracks PDUFA dates, trial catalysts, FDA events, biotech calendars.",
+      "impactExample": "Useful watchlist builder for binary biotech events.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.biopharmcatalyst.com/",
+          "label": "BioPharmCatalyst"
+        }
+      ],
+      "scores": "Rel 3 / Infl 4",
+      "frequency": "Daily",
+      "bestMonitor": "Calendar alerts",
+      "queries": "ticker PDUFA catalyst phase readout",
+      "limitations": "Aggregator; confirm via company/FDA."
+    },
+    {
+      "rank": 36,
+      "name": "CMS newsroom and Medicare coverage database",
+      "category": "Regulatory source",
+      "marketArea": "Healthcare",
+      "tickers": "Managed care, providers, medtech",
+      "why": "Rate notices, coverage decisions, reimbursement rules.",
+      "impactExample": "Medicare rate and coverage updates move healthcare subsectors.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.cms.gov/newsroom",
+          "label": "CMS newsroom"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Weekly / annual",
+      "bestMonitor": "CMS alerts, Federal Register",
+      "queries": "CMS final rule rate notice coverage determination",
+      "limitations": "Technical and actuarial details matter."
+    },
+    {
+      "rank": 37,
+      "name": "SemiAnalysis",
+      "category": "Industry research",
+      "marketArea": "AI, semiconductors, data centers",
+      "tickers": "NVDA, AMD, TSM, AVGO, hyperscalers",
+      "why": "Deep supply-chain and AI infrastructure analysis watched by investors.",
+      "impactExample": "Can influence AI capex and GPU supply narratives.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.semianalysis.com/",
+          "label": "SemiAnalysis"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Weekly",
+      "bestMonitor": "Newsletter",
+      "queries": "SemiAnalysis GPU cluster HBM capex ASIC",
+      "limitations": "Some analysis is proprietary and model-based."
+    },
+    {
+      "rank": 38,
+      "name": "DigiTimes",
+      "category": "Asia supply-chain press",
+      "marketArea": "Semis, hardware",
+      "tickers": "AAPL suppliers, TSM, PC, handset",
+      "why": "Supplier checks and Taiwan hardware supply-chain reporting.",
+      "impactExample": "Can flag order cuts or ramps before earnings.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.digitimes.com/",
+          "label": "DigiTimes"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "Alerts, RSS",
+      "queries": "DigiTimes order cut iPhone TSMC AI server",
+      "limitations": "Supply-chain checks are noisy and sometimes early."
+    },
+    {
+      "rank": 39,
+      "name": "TrendForce",
+      "category": "Industry data",
+      "marketArea": "Semis, memory, displays, solar",
+      "tickers": "MU, Samsung, Hynix, panel names",
+      "why": "Pricing, supply/demand, shipment forecasts for components.",
+      "impactExample": "Memory price forecasts help anticipate earnings revisions.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.trendforce.com/",
+          "label": "TrendForce"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Weekly / monthly",
+      "bestMonitor": "Research alerts",
+      "queries": "DRAM NAND pricing HBM supply demand",
+      "limitations": "Some data is paywalled and estimated."
+    },
+    {
+      "rank": 40,
+      "name": "BIS export controls",
+      "category": "Regulatory source",
+      "marketArea": "Semiconductors, China, AI",
+      "tickers": "NVDA, AMD, ASML, equipment",
+      "why": "Official export-control rules and entity-list updates.",
+      "impactExample": "AI chip restrictions have moved semis and China-exposed equipment stocks.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.bis.gov/press-release",
+          "label": "BIS releases"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Event-driven",
+      "bestMonitor": "BIS, Federal Register",
+      "queries": "BIS entity list export control AI chip China",
+      "limitations": "Technical thresholds require product expertise."
+    },
+    {
+      "rank": 41,
+      "name": "DoD contract announcements",
+      "category": "Government source",
+      "marketArea": "Defense, aerospace",
+      "tickers": "LMT, RTX, NOC, GD, HII, PLTR",
+      "why": "Daily prime/subcontract awards and program timing.",
+      "impactExample": "Large awards can move defense names or validate backlog assumptions.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.defense.gov/News/Contracts/",
+          "label": "DoD contracts"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "DoD page alerts",
+      "queries": "contract award missile drone hypersonic classified",
+      "limitations": "Headline amount may not equal near-term revenue."
+    },
+    {
+      "rank": 42,
+      "name": "NHTSA recalls",
+      "category": "Regulatory source",
+      "marketArea": "Autos, EVs",
+      "tickers": "TSLA, GM, F, RIVN, suppliers",
+      "why": "Recall notices, investigations, safety campaigns.",
+      "impactExample": "Major recalls can pressure automakers and suppliers.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.nhtsa.gov/recalls",
+          "label": "NHTSA recalls"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "NHTSA search, RSS",
+      "queries": "NHTSA recall investigation defect ticker",
+      "limitations": "Software recalls may have limited economic cost."
+    },
+    {
+      "rank": 43,
+      "name": "FAA / NTSB",
+      "category": "Regulatory source",
+      "marketArea": "Aerospace, airlines",
+      "tickers": "BA, RTX, airlines, suppliers",
+      "why": "Airworthiness directives, investigations, safety actions.",
+      "impactExample": "Groundings and safety findings can move aerospace and airline stocks.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.faa.gov/newsroom",
+          "label": "FAA newsroom"
+        },
+        {
+          "url": "https://www.ntsb.gov/news/press-releases/Pages/default.aspx",
+          "label": "NTSB"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Event-driven",
+      "bestMonitor": "Agency alerts",
+      "queries": "FAA grounding airworthiness directive NTSB investigation",
+      "limitations": "Operational impact must be mapped to fleet exposure."
+    },
+    {
+      "rank": 44,
+      "name": "FERC",
+      "category": "Regulatory source",
+      "marketArea": "Utilities, pipelines, LNG, power",
+      "tickers": "Utilities, midstream, LNG, renewables",
+      "why": "Permits, rate cases, transmission, pipeline and LNG decisions.",
+      "impactExample": "Approvals and delays can move regulated utilities and energy infrastructure.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.ferc.gov/news-events/news",
+          "label": "FERC news"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Weekly",
+      "bestMonitor": "FERC eLibrary, news",
+      "queries": "FERC order pipeline LNG transmission rate case",
+      "limitations": "Proceedings are technical and long-lived."
+    },
+    {
+      "rank": 45,
+      "name": "MarineTraffic / AIS sources",
+      "category": "Shipping data",
+      "marketArea": "Commodities, shipping, logistics",
+      "tickers": "Tankers, container lines, LNG",
+      "why": "Vessel movement, port congestion, route disruption.",
+      "impactExample": "Useful for sanctions, Red Sea, LNG, and oil-flow monitoring.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.marinetraffic.com/",
+          "label": "MarineTraffic"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Real time",
+      "bestMonitor": "AIS alerts",
+      "queries": "tanker destination spoofing port congestion Red Sea",
+      "limitations": "AIS gaps and spoofing risk."
+    },
+    {
+      "rank": 46,
+      "name": "FreightWaves / SONAR",
+      "category": "Logistics news/data",
+      "marketArea": "Transport, retail, inflation",
+      "tickers": "Truckers, rails, retailers",
+      "why": "Freight rates, trucking demand, port/logistics updates.",
+      "impactExample": "Freight downturns and spikes can foreshadow transport earnings.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.freightwaves.com/",
+          "label": "FreightWaves"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "News, SONAR data",
+      "queries": "freight rates tender rejection port strike trucking demand",
+      "limitations": "Translate data to company exposure carefully."
+    },
+    {
+      "rank": 47,
+      "name": "CoinDesk",
+      "category": "Crypto news",
+      "marketArea": "Crypto, fintech",
+      "tickers": "BTC, ETH, COIN, miners",
+      "why": "Crypto market, exchange, legal, ETF, and protocol news.",
+      "impactExample": "Crypto exchange and ETF headlines often move tokens and crypto equities.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.coindesk.com/",
+          "label": "CoinDesk"
+        }
+      ],
+      "scores": "Rel 3 / Infl 4",
+      "frequency": "Real time",
+      "bestMonitor": "Alerts, RSS",
+      "queries": "CoinDesk ETF SEC exchange outflows hack",
+      "limitations": "Verify with filings/on-chain for trade decisions."
+    },
+    {
+      "rank": 48,
+      "name": "The Block",
+      "category": "Crypto news/data",
+      "marketArea": "Crypto, fintech",
+      "tickers": "Tokens, exchanges, miners",
+      "why": "Crypto policy, flows, exchange, DeFi, venture and market structure coverage.",
+      "impactExample": "Useful for early crypto legal and exchange catalyst monitoring.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.theblock.co/",
+          "label": "The Block"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Daily",
+      "bestMonitor": "Alerts, newsletters",
+      "queries": "The Block SEC ETF Binance Coinbase flows",
+      "limitations": "Some content paid; crypto rumors move fast."
+    },
+    {
+      "rank": 49,
+      "name": "Glassnode",
+      "category": "On-chain data",
+      "marketArea": "Crypto",
+      "tickers": "BTC, ETH",
+      "why": "Exchange balances, realized price, holder behavior, flows.",
+      "impactExample": "Can detect stress or accumulation before price narratives catch up.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://glassnode.com/",
+          "label": "Glassnode"
+        }
+      ],
+      "scores": "Rel 3 / Infl 3",
+      "frequency": "Daily / real time",
+      "bestMonitor": "Dashboards, alerts",
+      "queries": "exchange balance realized cap long term holder",
+      "limitations": "On-chain indicators can be overfit."
+    },
+    {
+      "rank": 50,
+      "name": "Etherscan / block explorers",
+      "category": "On-chain source",
+      "marketArea": "Crypto",
+      "tickers": "ETH, DeFi, stablecoins",
+      "why": "Primary transaction, wallet, contract and token movement data.",
+      "impactExample": "Whale transfers, bridge hacks, and protocol events can move tokens.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://etherscan.io/",
+          "label": "Etherscan"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Real time",
+      "bestMonitor": "Wallet alerts, token trackers",
+      "queries": "whale transfer exchange deposit exploit contract",
+      "limitations": "Wallet attribution can be wrong."
+    },
+    {
+      "rank": 51,
+      "name": "Whale Alert",
+      "category": "Social/on-chain alert",
+      "marketArea": "Crypto",
+      "tickers": "BTC, ETH, stablecoins",
+      "why": "Fast alerts for large token transfers and exchange flows.",
+      "impactExample": "Large transfers can trigger short-lived crypto volatility.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://x.com/whale_alert",
+          "label": "X"
+        }
+      ],
+      "scores": "Rel 2 / Infl 3",
+      "frequency": "Real time",
+      "bestMonitor": "X, API",
+      "queries": "whale_alert exchange transfer stablecoin mint",
+      "limitations": "Transfer intent is unknown."
+    },
+    {
+      "rank": 52,
+      "name": "Reddit r/wallstreetbets",
+      "category": "Social source",
+      "marketArea": "Retail equities, options",
+      "tickers": "Meme stocks, high short interest",
+      "why": "Can detect crowd formation, retail campaigns, and options gamma setups.",
+      "impactExample": "GameStop squeeze showed social coordination can move stocks massively.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.reddit.com/r/wallstreetbets/",
+          "label": "r/wallstreetbets"
+        }
+      ],
+      "scores": "Rel 1 / Infl 4",
+      "frequency": "Daily",
+      "bestMonitor": "Keyword/velocity monitor",
+      "queries": "site:reddit.com/r/wallstreetbets DD YOLO ticker short interest",
+      "limitations": "Extremely high noise and manipulation risk."
+    },
+    {
+      "rank": 53,
+      "name": "X/Twitter curated market lists",
+      "category": "Social/news source",
+      "marketArea": "Broad",
+      "tickers": "All liquid markets",
+      "why": "Fastest public surface for CEO posts, journalist scoops, policy headlines, short reports.",
+      "impactExample": "Elon Musk and Roaring Kitty posts have directly moved TSLA/GME.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://x.com/",
+          "label": "X"
+        }
+      ],
+      "scores": "Rel 1 / Infl 4",
+      "frequency": "Real time",
+      "bestMonitor": "Curated lists, keyword alerts",
+      "queries": "from:CEO ticker guidance acquisition FDA",
+      "limitations": "Requires verification; screenshots and fake accounts are common."
+    },
+    {
+      "rank": 54,
+      "name": "Hindenburg Research archive",
+      "category": "Short research source",
+      "marketArea": "Single stocks",
+      "tickers": "Fraud/governance targets",
+      "why": "Historical and new short reports with evidence exhibits.",
+      "impactExample": "Adani and Nikola reports are high-impact examples.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://hindenburgresearch.com/",
+          "label": "Hindenburg"
+        }
+      ],
+      "scores": "Rel 4 / Infl 5",
+      "frequency": "Rare",
+      "bestMonitor": "Website, X",
+      "queries": "Hindenburg new report response SEC investigation",
+      "limitations": "Short bias and legal risk."
+    },
+    {
+      "rank": 55,
+      "name": "Muddy Waters archive",
+      "category": "Short research source",
+      "marketArea": "Single stocks",
+      "tickers": "China ADRs, accounting risk",
+      "why": "Forensic reports and follow-ups on suspected frauds.",
+      "impactExample": "Luckin allegations preceded severe stock collapse after company admission.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.muddywatersresearch.com/research/",
+          "label": "Muddy Waters research"
+        }
+      ],
+      "scores": "Rel 4 / Infl 4",
+      "frequency": "Rare",
+      "bestMonitor": "Website, X",
+      "queries": "Muddy Waters report response auditor resignation",
+      "limitations": "Claims may be contested."
+    },
+    {
+      "rank": 56,
+      "name": "Fuzzy Panda Research / other specialist shorts",
+      "category": "Short research source",
+      "marketArea": "Single stocks",
+      "tickers": "Small/mid caps, SPACs, biotech",
+      "why": "Niche short reports can hit less-covered names with high downside.",
+      "impactExample": "Specialist short campaigns can trigger immediate declines in thinly covered stocks.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://fuzzypandaresearch.com/",
+          "label": "Fuzzy Panda"
+        }
+      ],
+      "scores": "Rel 2 / Infl 3",
+      "frequency": "Rare",
+      "bestMonitor": "Website, X",
+      "queries": "Fuzzy Panda short report ticker response",
+      "limitations": "Smaller firms vary in rigor."
+    },
+    {
+      "rank": 57,
+      "name": "Nareit / REIT.com",
+      "category": "Industry source",
+      "marketArea": "Real estate equities",
+      "tickers": "REITs, VNQ",
+      "why": "REIT data, conferences, sector research, operating metrics.",
+      "impactExample": "REIT sector data helps anticipate earnings, cap-rate and refinancing risk.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.reit.com/data-research",
+          "label": "Nareit data"
+        }
+      ],
+      "scores": "Rel 4 / Infl 2",
+      "frequency": "Monthly / event",
+      "bestMonitor": "Reports, conferences",
+      "queries": "REIT occupancy FFO cap rate refinance",
+      "limitations": "Industry association lens; use filings too."
+    },
+    {
+      "rank": 58,
+      "name": "Trepp",
+      "category": "CRE credit data",
+      "marketArea": "Real estate, banks, CMBS",
+      "tickers": "CRE lenders, office REITs, CMBS",
+      "why": "CMBS delinquency, loan, maturity, and property data.",
+      "impactExample": "CRE stress data can flag regional-bank and REIT risk.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.trepp.com/",
+          "label": "Trepp"
+        }
+      ],
+      "scores": "Rel 4 / Infl 3",
+      "frequency": "Monthly",
+      "bestMonitor": "Reports, alerts",
+      "queries": "CMBS delinquency office maturity special servicing",
+      "limitations": "Often subscription; mapping to banks takes work."
+    },
+    {
+      "rank": 59,
+      "name": "Congress.gov",
+      "category": "Legislative source",
+      "marketArea": "Policy-sensitive equities",
+      "tickers": "Healthcare, defense, energy, tax",
+      "why": "Bills, hearings, amendments, votes, committee actions.",
+      "impactExample": "Drug pricing, defense, tax, and tariff policy milestones move sectors.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.congress.gov/",
+          "label": "Congress.gov"
+        }
+      ],
+      "scores": "Rel 5 / Infl 3",
+      "frequency": "Daily / session",
+      "bestMonitor": "Bill alerts, committee calendars",
+      "queries": "hearing markup bill text vote drug pricing defense tax",
+      "limitations": "Many bills never pass."
+    },
+    {
+      "rank": 60,
+      "name": "Supreme Court opinions and orders",
+      "category": "Court source",
+      "marketArea": "Regulated sectors",
+      "tickers": "Tech, pharma, energy, finance",
+      "why": "Official opinions, orders, grants, emergency applications.",
+      "impactExample": "Administrative-law and sector-specific rulings can change regulatory power and company economics.",
+      "impactDirection": null,
+      "links": [
+        {
+          "url": "https://www.supremecourt.gov/opinions/slipopinion/25",
+          "label": "SCOTUS opinions"
+        }
+      ],
+      "scores": "Rel 5 / Infl 4",
+      "frequency": "Term-driven",
+      "bestMonitor": "Opinion days, orders list",
+      "queries": "Supreme Court opinion EPA FTC SEC Chevron patent",
+      "limitations": "Legal interpretation needed for market impact."
+    }
+  ],
+  "priorityAlertNote": "Priority alert design: combine a primary-source trigger with a market reaction filter. Example: SEC 8-K Item 2.02 OR 7.01 plus abnormal premarket volume, or FDA briefing document plus biotech watchlist ticker.",
+  "monitoringQueries": [
+    {
+      "category": "Macro and Rates",
+      "queries": [
+        "FOMC statement minutes projections Powell press conference \"longer run\"",
+        "BLS CPI core services shelter supercore surprise revision",
+        "Employment Situation average hourly earnings unemployment participation revision",
+        "Treasury refunding TBAC coupon sizes auction tail bid-to-cover",
+        "BOJ yield curve control JGB purchase operation yen intervention"
+      ]
+    },
+    {
+      "category": "Company-Specific Equity Catalysts",
+      "queries": [
+        "site:sec.gov/Archives 8-K Item 2.02 guidance preliminary results",
+        "site:sec.gov/Archives 13D activist letter board seats strategic alternatives",
+        "investor day long term target margin CAGR capital allocation buyback",
+        "secondary offering ATM convertible lock-up expiration 424B5",
+        "short report fraud accounting auditor resignation delayed filing"
+      ]
+    },
+    {
+      "category": "Technology, AI, And Semiconductors",
+      "queries": [
+        "Nvidia data center guide Blackwell Rubin HBM supply GTC keynote",
+        "Microsoft Azure AI capex Copilot inference capacity",
+        "TSMC monthly revenue capex utilization AI demand",
+        "ASML bookings EUV China export control backlog",
+        "BIS export control AI chip HBM China entity list"
+      ]
+    },
+    {
+      "category": "Healthcare And Biotech",
+      "queries": [
+        "FDA PDUFA advisory committee briefing document CRL approval label",
+        "ClinicalTrials.gov primary completion phase 2 phase 3 topline",
+        "ASCO AACR ESMO abstract late breaker hazard ratio safety",
+        "CMS final rule rate notice coverage determination reimbursement",
+        "biotech financing runway going concern strategic review"
+      ]
+    },
+    {
+      "category": "Energy, Commodities, And Shipping",
+      "queries": [
+        "OPEC+ quota voluntary cut compliance JMMC communique",
+        "EIA crude draw build gasoline distillate natural gas storage surprise",
+        "OFAC sanctions tanker oil Russia Iran China general license",
+        "Red Sea Strait Hormuz LNG export terminal outage",
+        "container freight rates port strike Panama Canal drought"
+      ]
+    },
+    {
+      "category": "Crypto And Social Flow",
+      "queries": [
+        "SEC spot ETF approval delay enforcement staking exchange",
+        "exchange reserves outflow hack delisting listing proof of reserves",
+        "whale transfer exchange deposit stablecoin mint burn",
+        "site:reddit.com/r/wallstreetbets ticker DD YOLO short interest gamma",
+        "from:CEO ticker acquisition guidance partnership FDA"
+      ]
+    }
+  ],
+  "playbookNote": "Use the universe as a catalyst radar, not a buy/sell list. Every alert should be classified as primary fact, credible secondary report, social/rumor, or PM judgment before it enters a thesis or risk decision.",
+  "guidance": [
+    "Start with primary sources. For companies use IR, EDGAR, exchange notices, and court/regulator filings. For macro use Fed, BLS, BEA, Treasury, EIA, ECB/BOJ/PBOC, OPEC, and official calendars.",
+    "Score every hit. Assign impact 1-5, confidence high/medium/low, and actionability. Upgrade low-confidence/high-impact items for human review rather than trading them automatically.",
+    "Separate cause from prediction. A short report, FDA decision, or FOMC statement may cause a move. A strategist, analyst, or newsletter may only anticipate one. Treat these differently in backtests.",
+    "Use cross-source confirmation. Pair social or press alerts with filings, official statements, on-chain data, price/volume, options, borrow, and peer read-throughs.",
+    "Build watchlists by exposure. Map each catalyst to tickers, ETFs, suppliers, customers, peers, debt, commodities, and currencies. Many catalysts first appear in one venue and move another asset.",
+    "Track false positives. Store alerts that did not move markets, activist campaigns that failed, product launches that were priced in, and rumors that were denied. This improves future reliability scores.",
+    "Refresh time-sensitive dates. Earnings, PDUFA, court hearings, index events, merger votes, lockups, macro releases, and conferences can change. Never convert an inferred window into a hard date.",
+    "Turn high-impact events into work items. For each top catalyst, define the model line affected, confirm/disconfirm signal, prep owner, post-event update, and add/hold/trim/exit or hedge implication."
+  ]
+}
