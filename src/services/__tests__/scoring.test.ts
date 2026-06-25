@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   catalystScore,
   combineStockScore,
+  DEFAULT_STOCK_WEIGHTS,
   momentumScore,
   riskScore,
   scoreStock,
@@ -149,6 +150,39 @@ describe("scoreStock end-to-end", () => {
     const result = scoreStock({ indicators: null, drawdown: null, catalysts: [] });
     expect(result.confidence).toBe("low");
     expect(result.overallScore).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("scoreStock — missing catalysts don't drag the score", () => {
+  // Strong uptrend, modest discount: good momentum/valuation/risk, no catalysts.
+  const bars = barsFromCloses(trendCloses(100, 150, 260));
+  const ind = computeIndicators(bars);
+  const dd = computeDrawdown(bars, 130); // ~14% off the high
+
+  it("excludes catalyst & sentiment from the blend when there are none", () => {
+    const r = scoreStock({ indicators: ind, drawdown: dd, catalysts: [] });
+    expect(r.weightsUsed.catalyst).toBe(0);
+    expect(r.weightsUsed.sentiment).toBe(0);
+    // The overall score is the blend over the weights actually used.
+    expect(r.overallScore).toBe(combineStockScore(r.components, r.weightsUsed));
+    expect(r.reasoning.catalyst[0]).toMatch(/excluded/i);
+  });
+
+  it("scores higher than the old behavior that averaged in the neutral catalyst/sentiment", () => {
+    const r = scoreStock({ indicators: ind, drawdown: dd, catalysts: [] });
+    const draggedBlend = combineStockScore(r.components); // full weights incl. neutral 5 / 5.5
+    expect(r.overallScore).toBeGreaterThan(draggedBlend);
+  });
+
+  it("keeps full catalyst & sentiment weight when catalysts are present", () => {
+    const r = scoreStock({
+      indicators: ind,
+      drawdown: dd,
+      catalysts: [{ impactScore: 3, confidence: "high", status: "upcoming" }],
+    });
+    expect(r.weightsUsed.catalyst).toBe(DEFAULT_STOCK_WEIGHTS.catalyst);
+    expect(r.weightsUsed.sentiment).toBe(DEFAULT_STOCK_WEIGHTS.sentiment);
+    expect(r.overallScore).toBe(combineStockScore(r.components, DEFAULT_STOCK_WEIGHTS));
   });
 });
 

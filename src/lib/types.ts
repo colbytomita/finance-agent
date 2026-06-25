@@ -53,7 +53,8 @@ export type CatalystType =
   | "ai_technology"
   | "ma"
   | "dividend_buyback"
-  | "insider_trading";
+  | "insider_trading"
+  | "entity_mention";
 
 export type SetupType =
   | "pullback_to_support"

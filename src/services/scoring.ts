@@ -252,6 +252,9 @@ export interface StockScoreResult {
   recommendation: StockRecommendationLabel;
   confidence: Confidence;
   reasoning: Record<string, string[]>;
+  /** Effective weights actually used in the blend (catalyst/sentiment are 0 when
+   *  there are no current catalysts so missing data doesn't drag the score). */
+  weightsUsed: StockScoreWeights;
 }
 
 export function scoreStock(input: {
@@ -273,7 +276,17 @@ export function scoreStock(input: {
     riskScore: r.score,
     sentimentScore: s.score,
   };
-  const overall = combineStockScore(components, input.weights);
+
+  // Catalyst and sentiment are derived only from catalysts. With none, they're
+  // pure no-data neutrals — and at 35% of the default weight they'd drag a strong
+  // stock toward the middle. Drop them from the blend (weight 0) so the score
+  // reflects the signals we actually have; `confidence` already flags the gap.
+  const baseWeights = input.weights ?? DEFAULT_STOCK_WEIGHTS;
+  const hasCatalysts = input.catalysts.length > 0;
+  const weightsUsed: StockScoreWeights = hasCatalysts
+    ? baseWeights
+    : { ...baseWeights, catalyst: 0, sentiment: 0 };
+  const overall = combineStockScore(components, weightsUsed);
 
   // Confidence reflects data completeness, never certainty about outcomes.
   const dataPoints = [
@@ -292,9 +305,14 @@ export function scoreStock(input: {
     reasoning: {
       momentum: m.reasons,
       valuation: v.reasons,
-      catalyst: c.reasons,
+      catalyst: hasCatalysts
+        ? c.reasons
+        : ["No current catalysts — excluded from the blend (score uses valuation, momentum, risk)."],
       risk: r.reasons,
-      sentiment: s.reasons,
+      sentiment: hasCatalysts
+        ? s.reasons
+        : ["No current catalysts — sentiment excluded from the blend."],
     },
+    weightsUsed,
   };
 }

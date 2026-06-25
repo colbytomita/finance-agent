@@ -1,5 +1,6 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { loadConfig } from "@/lib/config";
 import type { CatalystType, Confidence, ImpactDirection } from "@/lib/types";
 
 // Source-agnostic catalyst ingestion + keyword classification.
@@ -149,18 +150,54 @@ export function addCatalyst(input: NewCatalyst): number {
 }
 
 /** Mark past-dated "upcoming" catalysts as occurred. */
+/**
+ * When a catalyst's event effectively happened: its event date if known,
+ * otherwise when we discovered it. Used to decide whether it's still "current".
+ */
+export function catalystEffectiveTime(c: {
+  eventDate: string | null;
+  discoveredAt: string;
+}): number {
+  const t = c.eventDate ? new Date(c.eventDate).getTime() : NaN;
+  return Number.isFinite(t) ? t : new Date(c.discoveredAt).getTime();
+}
+
+/**
+ * A catalyst is stale once its event is more than `freshnessDays` in the past —
+ * e.g. a 2-year-old entity mention should not be presented as a current risk or
+ * keep moving the score. Future-dated (upcoming) catalysts are never stale.
+ */
+export function isCatalystStale(
+  c: { eventDate: string | null; discoveredAt: string },
+  freshnessDays: number,
+  now: number = Date.now(),
+): boolean {
+  return catalystEffectiveTime(c) < now - freshnessDays * 86400000;
+}
+
 export function rollCatalystStatuses(): void {
   const db = getDb();
-  const upcoming = db
+  const freshnessDays = loadConfig().catalystFreshnessDays;
+  const now = Date.now();
+  // Walk every non-expired catalyst: promote upcoming events whose date has
+  // passed, then age out anything whose event is well in the past so stale items
+  // drop out of current views and stop influencing scores.
+  const rows = db
     .select()
     .from(schema.catalysts)
-    .where(eq(schema.catalysts.status, "upcoming"))
+    .where(ne(schema.catalysts.status, "expired"))
     .all();
-  const now = Date.now();
-  for (const c of upcoming) {
-    if (c.eventDate && new Date(c.eventDate).getTime() < now) {
+  for (const c of rows) {
+    let status = c.status;
+    if (status === "upcoming" && c.eventDate && new Date(c.eventDate).getTime() < now) {
+      status = "occurred";
+    }
+    if (status !== "upcoming" && isCatalystStale(c, freshnessDays, now)) {
+      status = "expired";
+    }
+    if (status !== c.status) {
       db.update(schema.catalysts)
-        .set({ status: "occurred" })
+        .set({ status })
         .where(eq(schema.catalysts.id, c.id))
         .run();
     }

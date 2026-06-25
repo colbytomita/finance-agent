@@ -247,4 +247,14 @@ describe("evaluateTrade end-to-end", () => {
     expect(result.confidence).toBe("low");
     expect(result.tradeScore).toBeGreaterThanOrEqual(1);
   });
+
+  it("excludes the catalyst component when there are no catalysts so it isn't dragged", () => {
+    const closes = trendCloses(80, 106, 260).map((c, i) => c + (i % 2 === 0 ? 0.9 : -0.9));
+    const bars = barsFromCloses(closes);
+    const result = evaluateTrade({ trade: baseTrade, indicators: computeIndicators(bars), catalysts: [] });
+    expect(result.weightsUsed.catalyst).toBe(0);
+    expect(result.tradeScore).toBe(combineTradeScore(result.components, result.weightsUsed));
+    // Dropping the neutral no-data catalyst doesn't lower the score.
+    expect(result.tradeScore).toBeGreaterThanOrEqual(combineTradeScore(result.components));
+  });
 });

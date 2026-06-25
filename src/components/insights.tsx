@@ -85,12 +85,16 @@ export function StockScoreInsight({
 }) {
   if (!score) return <ScoreBadge score={null} />;
   const reasoning = parseReasoning(score.reasoningJson);
+  // Prefer the effective weights actually used for this score (catalyst/sentiment
+  // are 0 when there were no current catalysts) so the breakdown matches the blend.
+  const w =
+    ((reasoning as Record<string, unknown>).weightsUsed as StockWeights | undefined) ?? weights;
   const rows = [
-    { label: "Valuation", value: score.valuationScore, weight: weights.valuation, key: "valuation" },
-    { label: "Momentum", value: score.momentumScore, weight: weights.momentum, key: "momentum" },
-    { label: "Catalysts", value: score.catalystScore, weight: weights.catalyst, key: "catalyst" },
-    { label: "Risk", value: score.riskScore, weight: weights.risk, key: "risk" },
-    { label: "Sentiment", value: score.sentimentScore, weight: weights.sentiment, key: "sentiment" },
+    { label: "Valuation", value: score.valuationScore, weight: w.valuation, key: "valuation" },
+    { label: "Momentum", value: score.momentumScore, weight: w.momentum, key: "momentum" },
+    { label: "Catalysts", value: score.catalystScore, weight: w.catalyst, key: "catalyst" },
+    { label: "Risk", value: score.riskScore, weight: w.risk, key: "risk" },
+    { label: "Sentiment", value: score.sentimentScore, weight: w.sentiment, key: "sentiment" },
   ];
   const weightSum = rows.reduce((a, r) => a + r.weight, 0) || 1;
   const panel = (

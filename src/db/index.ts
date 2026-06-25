@@ -120,7 +120,9 @@ CREATE TABLE IF NOT EXISTS active_trades (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   closed_at TEXT,
-  exit_price REAL
+  exit_price REAL,
+  broker TEXT,
+  broker_order_id TEXT
 );
 CREATE TABLE IF NOT EXISTS trade_setups (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,6 +195,19 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS entity_mentions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  claim TEXT,
+  direction TEXT NOT NULL DEFAULT 'unknown',
+  event_date TEXT NOT NULL,
+  source_name TEXT,
+  source_url TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_entity_mentions_entity ON entity_mentions (entity);
+CREATE INDEX IF NOT EXISTS idx_entity_mentions_ticker_date ON entity_mentions (ticker, event_date);
 CREATE TABLE IF NOT EXISTS score_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ticker TEXT NOT NULL,
@@ -238,10 +253,16 @@ export function getDb(): BetterSQLite3Database<typeof schema> {
   sqlite.exec(DDL);
   // Additive migrations for existing databases (the DDL above only creates
   // missing tables, never alters existing ones).
-  try {
-    sqlite.exec("ALTER TABLE active_trades ADD COLUMN reasoning_json TEXT");
-  } catch {
-    // Column already present — ignore.
+  for (const stmt of [
+    "ALTER TABLE active_trades ADD COLUMN reasoning_json TEXT",
+    "ALTER TABLE active_trades ADD COLUMN broker TEXT",
+    "ALTER TABLE active_trades ADD COLUMN broker_order_id TEXT",
+  ]) {
+    try {
+      sqlite.exec(stmt);
+    } catch {
+      // Column already present — ignore.
+    }
   }
   _db = drizzle(sqlite, { schema });
   return _db;

@@ -1,7 +1,10 @@
 import type { Bar } from "@/lib/types";
 
-// Alpaca REST client. Read-only usage: account, positions, market data.
-// This app NEVER places orders. Credentials come from env vars only.
+// Alpaca REST client. Mostly read-only (account, positions, market data), plus a
+// single, explicitly user-initiated order entry point (`placeOrder`). The app
+// never trades autonomously — orders are only sent when the user submits the
+// trade dialog and confirms, and default to the paper environment. Credentials
+// come from env vars only.
 
 export interface AlpacaConfig {
   apiKey: string;
@@ -52,6 +55,32 @@ export interface AlpacaClock {
   timestamp: string | null;
 }
 
+export interface AlpacaOrderRequest {
+  symbol: string;
+  qty: number;
+  side: "buy" | "sell";
+  type: "market" | "limit";
+  timeInForce: "day" | "gtc";
+  limitPrice?: number | null;
+  /** Optional protective stop (creates a bracket/OTO order when set). */
+  stopLoss?: number | null;
+  /** Optional take-profit target (creates a bracket/OTO order when set). */
+  takeProfit?: number | null;
+}
+
+export interface AlpacaOrder {
+  id: string;
+  symbol: string;
+  qty: number | null;
+  side: string;
+  type: string;
+  orderClass: string | null;
+  status: string;
+  limitPrice: number | null;
+  filledAvgPrice: number | null;
+  submittedAt: string | null;
+}
+
 export class AlpacaError extends Error {
   constructor(
     message: string,
@@ -86,6 +115,10 @@ export class AlpacaService {
     if (!apiKey || !apiSecret) return null;
     const mode = process.env.ALPACA_MODE === "live" ? "live" : "paper";
     return new AlpacaService({ apiKey, apiSecret, mode, fetchFn });
+  }
+
+  get mode(): "paper" | "live" {
+    return this.config.mode;
   }
 
   private async request<T>(base: string, path: string): Promise<T> {
@@ -133,25 +166,6 @@ export class AlpacaService {
       unrealizedPlPercent:
         num(p.unrealized_plpc) != null ? (num(p.unrealized_plpc) as number) * 100 : null,
     }));
-  }
-
-  async getWatchlists(): Promise<{ name: string; tickers: string[] }[]> {
-    const lists = await this.request<Record<string, unknown>[]>(
-      this.tradingBase,
-      "/v2/watchlists",
-    );
-    const result: { name: string; tickers: string[] }[] = [];
-    for (const l of lists) {
-      const detail = await this.request<{ assets?: { symbol: string }[]; name?: string }>(
-        this.tradingBase,
-        `/v2/watchlists/${l.id}`,
-      );
-      result.push({
-        name: String(detail.name ?? l.name ?? "watchlist"),
-        tickers: (detail.assets ?? []).map((a) => a.symbol),
-      });
-    }
-    return result;
   }
 
   async getLatestQuote(ticker: string): Promise<AlpacaQuote> {
@@ -227,6 +241,84 @@ export class AlpacaService {
       nextOpen: c.next_open ?? null,
       nextClose: c.next_close ?? null,
       timestamp: c.timestamp ?? null,
+    };
+  }
+
+  private async post<T>(base: string, path: string, body: unknown): Promise<T> {
+    const res = await this.fetchFn(`${base}${path}`, {
+      method: "POST",
+      headers: {
+        "APCA-API-KEY-ID": this.config.apiKey,
+        "APCA-API-SECRET-KEY": this.config.apiSecret,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      // Alpaca returns a JSON {message} on errors; surface it so the UI can show why.
+      let msg = text.slice(0, 300);
+      try {
+        const j = JSON.parse(text) as { message?: string };
+        if (j.message) msg = j.message;
+      } catch {
+        /* not JSON — keep raw text */
+      }
+      throw new AlpacaError(`Alpaca ${path} failed: ${res.status} ${msg}`, res.status);
+    }
+    return (await res.json()) as T;
+  }
+
+  /**
+   * Build the Alpaca order payload for a trade request. Pure (no IO) so it can be
+   * unit-tested. A stop+target becomes a bracket; a single protective leg becomes
+   * an OTO; neither yields a plain order.
+   */
+  buildOrderPayload(req: AlpacaOrderRequest): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      symbol: req.symbol.toUpperCase(),
+      qty: String(req.qty),
+      side: req.side,
+      type: req.type,
+      time_in_force: req.timeInForce,
+    };
+    if (req.type === "limit") {
+      if (req.limitPrice == null) throw new AlpacaError("limit order requires a limit price");
+      body.limit_price = String(req.limitPrice);
+    }
+    const hasStop = req.stopLoss != null;
+    const hasTarget = req.takeProfit != null;
+    if (hasStop && hasTarget) {
+      body.order_class = "bracket";
+      body.take_profit = { limit_price: String(req.takeProfit) };
+      body.stop_loss = { stop_price: String(req.stopLoss) };
+    } else if (hasStop || hasTarget) {
+      body.order_class = "oto";
+      if (hasTarget) body.take_profit = { limit_price: String(req.takeProfit) };
+      if (hasStop) body.stop_loss = { stop_price: String(req.stopLoss) };
+    }
+    return body;
+  }
+
+  /** Submit an order to Alpaca (paper or live per config.mode). */
+  async placeOrder(req: AlpacaOrderRequest): Promise<AlpacaOrder> {
+    const o = await this.post<Record<string, unknown>>(
+      this.tradingBase,
+      "/v2/orders",
+      this.buildOrderPayload(req),
+    );
+    return {
+      id: String(o.id ?? ""),
+      symbol: String(o.symbol ?? req.symbol),
+      qty: num(o.qty),
+      side: String(o.side ?? req.side),
+      type: String(o.type ?? req.type),
+      orderClass: (o.order_class as string) ?? null,
+      status: String(o.status ?? "unknown"),
+      limitPrice: num(o.limit_price),
+      filledAvgPrice: num(o.filled_avg_price),
+      submittedAt: (o.submitted_at as string) ?? null,
     };
   }
 }

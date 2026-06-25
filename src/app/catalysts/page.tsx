@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { allCatalysts } from "@/lib/queries";
+import { loadConfig } from "@/lib/config";
+import { isCatalystStale, catalystEffectiveTime } from "@/services/catalysts";
 import { fmtDate } from "@/lib/format";
 import { AddCatalystForm, DeleteButton } from "@/components/forms";
 
@@ -65,9 +67,11 @@ function CatalystTable({ rows, title }: { rows: CatalystRow[]; title: string }) 
                   )}
                 </td>
                 <td className="text-xs text-zinc-400">{c.catalystType.replace(/_/g, " ")}</td>
-                <td className="max-w-md text-xs text-zinc-200">
-                  {c.title}
-                  {c.summary && <span className="muted"> — {c.summary}</span>}
+                <td className="wrap text-xs text-zinc-200">
+                  <div className="max-w-md">
+                    {c.title}
+                    {c.summary && <span className="muted"> — {c.summary}</span>}
+                  </div>
                 </td>
                 <td><ImpactBadge score={c.impactScore} direction={c.impactDirection} /></td>
                 <td className="text-xs text-zinc-500">{c.confidence}</td>
@@ -94,21 +98,35 @@ function CatalystTable({ rows, title }: { rows: CatalystRow[]; title: string }) 
 }
 
 export default function CatalystsPage() {
+  const cfg = loadConfig();
+  const now = Date.now();
   const catalysts = allCatalysts();
   const upcoming = catalysts
     .filter((c) => c.status === "upcoming")
     .sort((a, b) => (a.eventDate ?? "9999").localeCompare(b.eventDate ?? "9999"));
-  const recent = catalysts.filter((c) => c.status !== "upcoming").slice(0, 50);
+  // "Recent" = genuinely recent, non-expired events, newest event first. Stale
+  // catalysts (e.g. an entity mention from years ago) are dropped so the feed
+  // reflects what's actually current.
+  const recent = catalysts
+    .filter(
+      (c) =>
+        c.status !== "upcoming" &&
+        c.status !== "expired" &&
+        !isCatalystStale(c, cfg.catalystFreshnessDays, now),
+    )
+    .sort((a, b) => catalystEffectiveTime(b) - catalystEffectiveTime(a))
+    .slice(0, 50);
 
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-bold">Catalyst Calendar</h1>
       <AddCatalystForm />
       <CatalystTable rows={upcoming} title="Upcoming" />
-      <CatalystTable rows={recent} title="Recent / occurred" />
+      <CatalystTable rows={recent} title={`Recent / occurred (last ${cfg.catalystFreshnessDays} days)`} />
       <p className="text-[11px] text-zinc-600">
         Impact scores and classifications are keyword/model heuristics with stated confidence — verify with
-        the linked source before acting.
+        the linked source before acting. Events older than {cfg.catalystFreshnessDays} days are hidden here and
+        no longer counted as current drivers.
       </p>
     </div>
   );
