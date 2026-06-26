@@ -37,9 +37,50 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
   { key: "eventMinConfidence", label: "Event min confidence", type: "select", options: ["low", "medium", "high"], hint: "Drop extracted events below this confidence before storing." },
 ];
 
+interface IrFeedSetting {
+  ticker: string;
+  url: string;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+}
+
+function irFeedList(value: unknown): IrFeedSetting[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (v): v is IrFeedSetting =>
+      Boolean(v) &&
+      typeof v === "object" &&
+      typeof (v as IrFeedSetting).ticker === "string" &&
+      typeof (v as IrFeedSetting).url === "string",
+  );
+}
+
+function parseLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function parseIrFeeds(text: string): IrFeedSetting[] {
+  return parseLines(text)
+    .map((line) => {
+      const [ticker, ...rest] = line.split(",");
+      return {
+        ticker: (ticker ?? "").trim().toUpperCase(),
+        url: rest.join(",").trim(),
+      };
+    })
+    .filter((feed) => feed.ticker && feed.url);
+}
+
 export default function SettingsPage() {
   const [data, setData] = useState<SettingsResponse | null>(null);
   const [form, setForm] = useState<Record<string, unknown>>({});
+  const [gdeltText, setGdeltText] = useState("");
+  const [irFeedsText, setIrFeedsText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -49,6 +90,8 @@ export default function SettingsPage() {
       .then((d: SettingsResponse) => {
         setData(d);
         setForm(d.config);
+        setGdeltText(stringList(d.config.gdeltQueries).join("\n"));
+        setIrFeedsText(irFeedList(d.config.irFeeds).map((f) => `${f.ticker}, ${f.url}`).join("\n"));
       })
       .catch(() => setMsg("Failed to load settings"));
   }, []);
@@ -60,9 +103,15 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          gdeltQueries: parseLines(gdeltText),
+          irFeeds: parseIrFeeds(irFeedsText),
+        }),
       });
-      if (!res.ok) throw new Error("validation failed");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ? "validation failed — check source list formatting" : "validation failed");
+      if (data?.config) setForm(data.config);
       setMsg("Saved");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "save failed");
@@ -136,6 +185,43 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3 pt-2">
           <button className="btn btn-primary" onClick={save} disabled={busy}>
             {busy ? "Saving…" : "Save settings"}
+          </button>
+          {msg && <span className="text-xs text-zinc-400">{msg}</span>}
+        </div>
+      </section>
+
+      <section className="card space-y-3">
+        <h2 className="card-title">Catalyst Edge source lists</h2>
+        <div className="space-y-1">
+          <label className="block">GDELT queries</label>
+          <textarea
+            className="min-h-28 w-full font-mono text-xs"
+            value={gdeltText}
+            onChange={(e) => setGdeltText(e.target.value)}
+            placeholder={"Powell inflation rate cuts\nFDA approval biotech\nactivist investor 13D"}
+          />
+          <p className="text-[10px] text-zinc-600">
+            One search query per line. Used only when the GDELT source is enabled.
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <label className="block">Company IR RSS feeds</label>
+          <textarea
+            className="min-h-28 w-full font-mono text-xs"
+            value={irFeedsText}
+            onChange={(e) => setIrFeedsText(e.target.value)}
+            placeholder={"NVDA, https://investor.nvidia.com/rss/news-releases.xml\nAAPL, https://example.com/rss"}
+          />
+          <p className="text-[10px] text-zinc-600">
+            One feed per line as <span className="text-zinc-400">TICKER, URL</span>. Used only when
+            the IR RSS source is enabled.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 pt-2">
+          <button className="btn btn-primary" onClick={save} disabled={busy}>
+            {busy ? "Saving…" : "Save source lists"}
           </button>
           {msg && <span className="text-xs text-zinc-400">{msg}</span>}
         </div>

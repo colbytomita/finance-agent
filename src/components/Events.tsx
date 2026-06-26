@@ -22,39 +22,86 @@ function formValues(e: FormEvent<HTMLFormElement>): Record<string, unknown> {
 
 const field = "flex flex-col gap-0.5";
 
+interface IngestResult {
+  fetched: number;
+  extracted: number;
+  persisted: number;
+  catalystsAdded: number;
+  skipped: number;
+  bySource: Record<string, number>;
+  errors: string[];
+  generatedBy: "llm" | "rules" | "mixed" | "none";
+}
+
 export function IngestButton() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [result, setResult] = useState<IngestResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function ingest() {
     setBusy(true);
-    setMsg(null);
+    setResult(null);
+    setError(null);
     try {
       const res = await fetch("/api/events/ingest", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "ingestion failed");
-      setMsg(
-        `Fetched ${data.fetched}, extracted ${data.extracted}, added ${data.persisted} mention(s)` +
-          (data.skipped ? `, skipped ${data.skipped}` : "") +
-          (data.generatedBy && data.generatedBy !== "none" ? ` · ${data.generatedBy}` : "") +
-          (data.errors?.length ? ` — ${data.errors.length} source error(s)` : ""),
-      );
+      setResult(data as IngestResult);
       router.refresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "ingestion failed");
+      setError(e instanceof Error ? e.message : "ingestion failed");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <span className="inline-flex items-center gap-2">
-      <button className="btn" onClick={ingest} disabled={busy} title="Pull real-world events from enabled sources and extract mentions">
+    <div className="flex max-w-xl flex-col items-end gap-1">
+      <button
+        className="btn"
+        onClick={ingest}
+        disabled={busy}
+        title="Pull real-world events from enabled sources and extract mentions"
+      >
         {busy ? "Ingesting…" : "Run ingestion"}
       </button>
-      {msg && <span className="text-xs text-zinc-500">{msg}</span>}
-    </span>
+      {error && <span className="text-xs text-red-400">{error}</span>}
+      {result && (
+        <div className="w-full rounded border border-zinc-800 bg-zinc-950/80 p-2 text-left text-[11px] text-zinc-500">
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            <span>Fetched <span className="text-zinc-300">{result.fetched}</span></span>
+            <span>Extracted <span className="text-zinc-300">{result.extracted}</span></span>
+            <span>Added <span className="text-zinc-300">{result.persisted}</span></span>
+            <span>Skipped <span className="text-zinc-300">{result.skipped}</span></span>
+            <span>Mode <span className="text-zinc-300">{result.generatedBy}</span></span>
+            {result.catalystsAdded > 0 && (
+              <span>Catalysts <span className="text-zinc-300">{result.catalystsAdded}</span></span>
+            )}
+          </div>
+          {Object.keys(result.bySource).length > 0 && (
+            <div className="mt-1">
+              <span className="text-zinc-400">Sources:</span>{" "}
+              {Object.entries(result.bySource)
+                .map(([source, count]) => `${source} ${count}`)
+                .join(" · ")}
+            </div>
+          )}
+          {result.errors.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-amber-400/90">
+                {result.errors.length} source/extraction error{result.errors.length === 1 ? "" : "s"}
+              </summary>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-amber-300/80">
+                {result.errors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

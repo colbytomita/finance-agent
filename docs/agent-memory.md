@@ -36,6 +36,12 @@ the configured `catalystFreshnessDays` window. Historical analysis remains
 available on `/events`, but old mentions should not reappear as current scoring
 signals or Agent Picks rationale.
 
+Later on 2026-06-26, the Catalyst Edge source configuration was made editable in
+Settings: `gdeltQueries` are edited one query per line, and `irFeeds` are edited
+as `TICKER, URL` lines. The `/events` ingestion button now shows a richer run
+summary with source counts, extraction mode, skipped count, catalyst writes, and
+source/extraction errors.
+
 ## Important Constraints
 
 - This is real-data-first. Do not seed demo data or fabricate rows.
@@ -51,10 +57,9 @@ signals or Agent Picks rationale.
 
 ## Likely Next Work
 
-- Add editable `gdeltQueries` and `irFeeds` controls to Settings. They exist in
-  config but are currently advanced/config-only fields.
-- Improve ingestion observability: show source errors and skipped reasons in the
-  UI instead of only a compact button message.
+- Consider adding per-item skipped reasons to ingestion results. The UI now shows
+  aggregate skipped counts and source/extraction errors, but the service does not
+  yet return one reason per skipped item.
 - Add stronger duplicate controls for manually added mentions if duplicate
   entries become noisy.
 - Consider filtering or labeling stale catalysts on stock detail timelines, not

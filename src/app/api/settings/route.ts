@@ -26,6 +26,15 @@ const settingsSchema = z
     eventSourceIrEnabled: z.coerce.boolean(),
     eventIngestionMaxItems: z.coerce.number().int().min(1).max(200),
     eventMinConfidence: z.enum(["low", "medium", "high"]),
+    gdeltQueries: z.array(z.string().trim().min(1).max(300)).max(50),
+    irFeeds: z
+      .array(
+        z.object({
+          ticker: z.string().trim().min(1).max(10).transform((s) => s.toUpperCase()),
+          url: z.string().url(),
+        }),
+      )
+      .max(50),
   })
   .partial();
 
