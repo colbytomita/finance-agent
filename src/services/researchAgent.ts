@@ -131,7 +131,10 @@ function ruleBasedBrief(ticker: string): ResearchBrief {
     keyCatalysts: positives.slice(0, 3).map((c) => c.title),
     keyRisks: negatives.slice(0, 3).map((c) => c.title),
     scoreExplanation: Object.entries(reasoning)
-      .map(([k, v]) => `${k}: ${(v as string[]).join(" ")}`)
+      // reasoningJson also carries a non-array `weightsUsed` object — only the
+      // per-component reason arrays belong in the explanation.
+      .filter((e): e is [string, string[]] => Array.isArray(e[1]))
+      .map(([k, v]) => `${k}: ${v.join(" ")}`)
       .join(" | "),
     recommendedAction: trade?.recommendation ?? score?.recommendation ?? "Insufficient data",
     confidence: score?.confidence ?? "low",
