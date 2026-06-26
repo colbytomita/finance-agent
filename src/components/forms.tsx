@@ -256,6 +256,91 @@ export function AddCatalystForm() {
   );
 }
 
+export function AddEarningsForm({ ticker }: { ticker: string }) {
+  const { submit, busy, error } = useSubmit("/api/earnings");
+  return (
+    <Collapsible label="Log earnings result">
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          const form = e.currentTarget;
+          submit({ ...formValues(e), ticker }, () => form.reset());
+        }}
+      >
+        <div className={field}>
+          <label>Report date *</label>
+          <input name="reportDate" type="date" required />
+        </div>
+        <div className={field}>
+          <label>Period</label>
+          <input name="fiscalPeriod" className="w-28" placeholder="Q2 2026" />
+        </div>
+        <div className={field}>
+          <label>EPS estimate</label>
+          <input name="epsEstimate" type="number" step="any" className="w-24" />
+        </div>
+        <div className={field}>
+          <label>EPS actual</label>
+          <input name="epsActual" type="number" step="any" className="w-24" />
+        </div>
+        <div className={field}>
+          <label>Revenue est ($M)</label>
+          <input name="revenueEstimate" type="number" step="any" className="w-28" />
+        </div>
+        <div className={field}>
+          <label>Revenue actual ($M)</label>
+          <input name="revenueActual" type="number" step="any" className="w-28" />
+        </div>
+        <div className={field}>
+          <label>Surprise % (optional)</label>
+          <input name="surprisePercent" type="number" step="any" className="w-24" placeholder="auto from EPS" />
+        </div>
+        <button className="btn btn-primary" disabled={busy}>
+          {busy ? "Saving…" : "Save"}
+        </button>
+        {error && <span className="text-xs text-red-400">{error}</span>}
+      </form>
+    </Collapsible>
+  );
+}
+
+export function FetchEarningsButton({ ticker }: { ticker: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function go() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/earnings/fetch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ticker }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "fetch failed");
+      setMsg(
+        data.saved > 0
+          ? `Saved ${data.saved} quarter(s) from Yahoo`
+          : "No earnings found (Yahoo may be unavailable — try manual entry)",
+      );
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "fetch failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button className="btn" onClick={go} disabled={busy} title="Auto-fetch quarterly earnings from Yahoo Finance">
+        {busy ? "Fetching…" : "Fetch from Yahoo"}
+      </button>
+      {msg && <span className="text-xs text-zinc-500">{msg}</span>}
+    </span>
+  );
+}
+
 export function DeleteButton({ url, label = "✕" }: { url: string; label?: string }) {
   const { submit, busy } = useSubmit(url, "DELETE");
   return (

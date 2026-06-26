@@ -10,6 +10,7 @@ import {
 } from "@/lib/queries";
 import { getLatestNote } from "@/services/researchAgent";
 import { edgeCatalystsForTicker } from "@/services/catalystEdge";
+import { listEarnings, classifySurprise } from "@/services/earnings";
 import { computeIndicators } from "@/services/indicators";
 import { loadConfig } from "@/lib/config";
 import { fmtDate, fmtMoney, fmtNum, fmtScore } from "@/lib/format";
@@ -17,6 +18,7 @@ import { Freshness, Pct, RecBadge, ScoreBadge } from "@/components/badges";
 import { PriceChart } from "@/components/PriceChart";
 import { GenerateBriefButton } from "@/components/GenerateBriefButton";
 import { RefreshButton } from "@/components/RefreshButton";
+import { AddEarningsForm, FetchEarningsButton, DeleteButton } from "@/components/forms";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,7 @@ export default async function StockDetailPage({
   const ind = bars.length > 0 ? computeIndicators(bars) : null;
   const catalysts = tickerCatalysts(ticker);
   const edges = edgeCatalystsForTicker(ticker);
+  const earnings = listEarnings(ticker, 6);
   const note = getLatestNote(ticker);
   const trade = openTrades().find((t) => t.ticker === ticker) ?? null;
   const reasoning: Record<string, unknown> = score?.reasoningJson
@@ -149,6 +152,58 @@ export default async function StockDetailPage({
                   </li>
                 ))}
               </ul>
+            )}
+          </section>
+
+          {/* Earnings — beat / meet / miss */}
+          <section className="card">
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              <h2 className="card-title mb-0">Earnings — beat / meet / miss</h2>
+              <FetchEarningsButton ticker={ticker} />
+            </div>
+            <AddEarningsForm ticker={ticker} />
+            {earnings.length === 0 ? (
+              <p className="mt-2 text-sm text-zinc-500">
+                No earnings recorded. Log a quarterly result above — a recent beat or miss weighs into the
+                stock score (recency-decayed; ±2% counts as in line).
+              </p>
+            ) : (
+              <div className="mt-2 overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Period</th>
+                      <th>Reported</th>
+                      <th>EPS est</th>
+                      <th>EPS actual</th>
+                      <th>Surprise</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {earnings.map((e) => {
+                      const cls = classifySurprise(e.surprisePercent);
+                      const color = cls === "beat" ? "pos" : cls === "miss" ? "neg" : "text-zinc-400";
+                      return (
+                        <tr key={e.id}>
+                          <td className="text-zinc-300">{e.fiscalPeriod ?? "—"}</td>
+                          <td className="text-xs tabular-nums text-zinc-400">{fmtDate(e.reportDate)}</td>
+                          <td className="tabular-nums">{e.epsEstimate ?? "—"}</td>
+                          <td className="tabular-nums">{e.epsActual ?? "—"}</td>
+                          <td className={`tabular-nums font-semibold ${color}`}>
+                            {e.surprisePercent != null
+                              ? `${e.surprisePercent >= 0 ? "+" : ""}${e.surprisePercent.toFixed(1)}% ${cls}`
+                              : "—"}
+                          </td>
+                          <td>
+                            <DeleteButton url={`/api/earnings/${e.id}`} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
 

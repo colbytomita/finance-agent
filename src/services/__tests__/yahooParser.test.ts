@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseYahooQuoteHtml } from "../yahooFinanceBrowser";
+import { parseYahooQuoteHtml, parseYahooEarnings } from "../yahooFinanceBrowser";
 
 const URL = "https://finance.yahoo.com/quote/AAPL/";
 
@@ -74,5 +74,56 @@ describe("parseYahooQuoteHtml", () => {
     const now = new Date("2026-06-12T08:00:00Z");
     const f = parseYahooQuoteHtml(FULL_HTML, "AAPL", URL, now);
     expect(f.capturedAt).toBe("2026-06-12T08:00:00.000Z");
+  });
+});
+
+// Real shape captured from Yahoo's quoteSummary?modules=earningsHistory endpoint.
+const EARNINGS_JSON = {
+  quoteSummary: {
+    result: [
+      {
+        earningsHistory: {
+          history: [
+            {
+              epsActual: { raw: 2.84 },
+              epsEstimate: { raw: 2.6708 },
+              surprisePercent: { raw: 0.0634 },
+              quarter: { raw: 1767139200, fmt: "2025-12-31" },
+              period: "-2q",
+            },
+            {
+              epsActual: { raw: 2.01 },
+              epsEstimate: { raw: 1.94275 },
+              surprisePercent: { raw: 0.0346 },
+              quarter: { raw: 1774915200, fmt: "2026-03-31" },
+              period: "-1q",
+            },
+          ],
+        },
+      },
+    ],
+    error: null,
+  },
+};
+
+describe("parseYahooEarnings", () => {
+  it("maps quoteSummary earningsHistory to per-quarter estimate/actual", () => {
+    const rows = parseYahooEarnings(EARNINGS_JSON);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({
+      quarterEnd: "2026-03-31",
+      fiscalPeriod: "Q1 2026",
+      epsEstimate: 1.94275,
+      epsActual: 2.01,
+    });
+    // Report date is the quarter end nudged ~1 month forward (typical reporting lag).
+    expect(rows[1].reportDate > rows[1].quarterEnd).toBe(true);
+    expect(rows[0].fiscalPeriod).toBe("Q4 2025");
+  });
+
+  it("returns [] for malformed / empty payloads", () => {
+    expect(parseYahooEarnings(null)).toEqual([]);
+    expect(parseYahooEarnings({})).toEqual([]);
+    expect(parseYahooEarnings({ quoteSummary: { result: [] } })).toEqual([]);
   });
 });

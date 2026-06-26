@@ -217,6 +217,21 @@ CREATE TABLE IF NOT EXISTS score_history (
   change_reason TEXT,
   recorded_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS earnings_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticker TEXT NOT NULL,
+  fiscal_period TEXT,
+  report_date TEXT NOT NULL,
+  eps_estimate REAL,
+  eps_actual REAL,
+  revenue_estimate REAL,
+  revenue_actual REAL,
+  surprise_percent REAL,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL,
+  UNIQUE (ticker, report_date)
+);
+CREATE INDEX IF NOT EXISTS idx_earnings_ticker_date ON earnings_reports (ticker, report_date DESC);
 CREATE TABLE IF NOT EXISTS agent_candidates (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ticker TEXT NOT NULL UNIQUE,

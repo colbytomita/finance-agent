@@ -18,6 +18,7 @@ import { AlpacaService } from "@/services/alpaca";
 import { runDiscoveryScan } from "@/services/discoveryAgent";
 import { runEventIngestion } from "@/services/eventIngestion";
 import { applyEntityEdge } from "@/services/catalystEdge";
+import { fetchEarningsForTickers } from "@/services/earnings";
 
 const log = (msg: string) => console.log(`[jobs ${new Date().toISOString()}] ${msg}`);
 
@@ -109,6 +110,28 @@ async function dailyMaintenance(): Promise<void> {
       return null;
     });
     if (picks) log(`discovery scan: ${picks.proposed} new pick(s) from ${picks.scanned} scanned`);
+
+    // Auto-fetch quarterly earnings (estimate vs actual) for tracked tickers, then
+    // recompute so a fresh beat/miss weighs into scores. Browser-based, best effort.
+    if (cfg.yahooBrowserEnabled) {
+      const earn = await fetchEarningsForTickers(getTrackedTickers()).catch((e) => {
+        log(`earnings fetch failed: ${e instanceof Error ? e.message : e}`);
+        return null;
+      });
+      if (earn) {
+        log(
+          `earnings: saved ${earn.saved} quarter(s) across ${earn.tickers} ticker(s)` +
+            (earn.errors.length ? `, ${earn.errors.length} error(s)` : ""),
+        );
+        for (const t of getTrackedTickers()) {
+          try {
+            recomputeStockAnalysis(t);
+          } catch {
+            /* best effort */
+          }
+        }
+      }
+    }
     if (cfg.eventIngestionEnabled) {
       const ing = await runEventIngestion().catch((e) => {
         log(`event ingestion failed: ${e instanceof Error ? e.message : e}`);

@@ -257,11 +257,19 @@ export interface StockScoreResult {
   weightsUsed: StockScoreWeights;
 }
 
+// Earnings surprise is applied as a bounded nudge on top of the blended score
+// (rather than a catalyst input) so it's monotonic — a beat only ever helps, a
+// miss only ever hurts — and a weak/old surprise can't dilute strong technicals.
+const EARNINGS_SCALE = 0.25; // score points per impact point
+const MAX_EARNINGS_ADJ = 1.2; // cap the nudge either way
+
 export function scoreStock(input: {
   indicators: IndicatorSnapshot | null;
   drawdown: DrawdownReport | null;
   catalysts: CatalystInput[];
   weights?: StockScoreWeights;
+  /** Latest earnings surprise as a -5..+5 impact plus a human reason. */
+  earnings?: { impact: number; reason: string } | null;
 }): StockScoreResult {
   const m = momentumScore(input.indicators);
   const v = valuationScore(input.drawdown);
@@ -286,7 +294,20 @@ export function scoreStock(input: {
   const weightsUsed: StockScoreWeights = hasCatalysts
     ? baseWeights
     : { ...baseWeights, catalyst: 0, sentiment: 0 };
-  const overall = combineStockScore(components, weightsUsed);
+  const blended = combineStockScore(components, weightsUsed);
+
+  // Apply the earnings-surprise nudge on top of the blend (bounded, monotonic).
+  const earnAdj =
+    input.earnings && input.earnings.impact !== 0
+      ? Math.max(-MAX_EARNINGS_ADJ, Math.min(MAX_EARNINGS_ADJ, Math.round(input.earnings.impact * EARNINGS_SCALE * 10) / 10))
+      : 0;
+  const overall = clampScore(Math.round((blended + earnAdj) * 10) / 10);
+  const earningsReasons =
+    input.earnings && earnAdj !== 0
+      ? [`${input.earnings.reason} → ${earnAdj > 0 ? "+" : ""}${earnAdj} to the score.`]
+      : input.earnings
+        ? [`${input.earnings.reason} (negligible effect on the score).`]
+        : [];
 
   // Confidence reflects data completeness, never certainty about outcomes.
   const dataPoints = [
@@ -312,6 +333,7 @@ export function scoreStock(input: {
       sentiment: hasCatalysts
         ? s.reasons
         : ["No current catalysts — sentiment excluded from the blend."],
+      ...(earningsReasons.length > 0 ? { earnings: earningsReasons } : {}),
     },
     weightsUsed,
   };

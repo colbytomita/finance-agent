@@ -186,6 +186,42 @@ describe("scoreStock — missing catalysts don't drag the score", () => {
   });
 });
 
+describe("scoreStock — earnings surprise nudge (monotonic, bounded)", () => {
+  const bars = barsFromCloses(trendCloses(100, 150, 260));
+  const ind = computeIndicators(bars);
+  const dd = computeDrawdown(bars, 130);
+  const at = (impact: number | null) =>
+    scoreStock({
+      indicators: ind,
+      drawdown: dd,
+      catalysts: [],
+      earnings: impact == null ? null : { impact, reason: "Q earnings" },
+    }).overallScore;
+  const base = at(null);
+
+  it("a beat only ever helps and a miss only ever hurts", () => {
+    expect(at(3)).toBeGreaterThan(base);
+    expect(at(-3)).toBeLessThan(base);
+    expect(at(0)).toBe(base); // in-line / no signal leaves the score unchanged
+  });
+
+  it("is monotonic with surprise size and capped", () => {
+    expect(at(5)).toBeGreaterThanOrEqual(at(1));
+    expect(at(5) - base).toBeLessThanOrEqual(1.2 + 1e-9); // nudge is bounded
+    expect(base - at(-5)).toBeLessThanOrEqual(1.2 + 1e-9);
+  });
+
+  it("explains the nudge in the reasoning", () => {
+    const r = scoreStock({
+      indicators: ind,
+      drawdown: dd,
+      catalysts: [],
+      earnings: { impact: 4, reason: "Q2 2026 earnings beat estimates (+20%)" },
+    });
+    expect(r.reasoning.earnings?.[0]).toMatch(/beat estimates/);
+  });
+});
+
 describe("valuationScore + sentimentScore", () => {
   it("treats moderate drawdowns as better value than near-highs", () => {
     const bars = barsFromCloses(trendCloses(100, 200, 260));

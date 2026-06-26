@@ -10,6 +10,7 @@ import { scoreStock, type CatalystInput } from "./scoring";
 import { evaluateTrade } from "./tradeScoring";
 import { detectSetups } from "./setupDetection";
 import { isCatalystStale } from "./catalysts";
+import { earningsSignalForTicker } from "./earnings";
 
 // Orchestrates: fetch prices/bars -> persist snapshots -> recompute
 // drawdowns, stock scores, trade scores, setups. All steps tolerate partial
@@ -416,6 +417,9 @@ export function recomputeStockAnalysis(ticker: string): TickerAnalysis {
         )
       : null;
 
+  const earningsSig = earningsSignalForTicker(ticker, {
+    freshnessDays: cfg.catalystFreshnessDays,
+  });
   const stockScore = scoreStock({
     indicators,
     drawdown,
@@ -427,6 +431,9 @@ export function recomputeStockAnalysis(ticker: string): TickerAnalysis {
       risk: cfg.stockScoreWeights.risk,
       sentiment: cfg.stockScoreWeights.sentiment,
     },
+    earnings: earningsSig
+      ? { impact: earningsSig.impactScore, reason: earningsSig.title ?? "Earnings surprise" }
+      : null,
   });
 
   // Persist drawdown metrics.

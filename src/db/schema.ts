@@ -260,3 +260,19 @@ export const scoreHistory = sqliteTable("score_history", {
   changeReason: text("change_reason"),
   recordedAt: text("recorded_at").notNull(),
 });
+
+// Quarterly earnings results: actual vs. analyst estimate (the "beat / meet / miss").
+// Feeds the scoring engine as a recency-decayed earnings-surprise signal.
+export const earningsReports = sqliteTable("earnings_reports", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticker: text("ticker").notNull(),
+  fiscalPeriod: text("fiscal_period"), // e.g. "Q2 2026"
+  reportDate: text("report_date").notNull(), // ISO date the results were reported
+  epsEstimate: real("eps_estimate"),
+  epsActual: real("eps_actual"),
+  revenueEstimate: real("revenue_estimate"),
+  revenueActual: real("revenue_actual"),
+  surprisePercent: real("surprise_percent"), // EPS surprise %, + = beat / − = miss
+  source: text("source").notNull().default("manual"), // manual | yahoo
+  createdAt: text("created_at").notNull(),
+});

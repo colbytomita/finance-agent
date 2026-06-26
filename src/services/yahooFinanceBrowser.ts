@@ -153,6 +153,62 @@ export function parseYahooQuoteHtml(
   return fields;
 }
 
+// --- Earnings (beat/meet/miss) from Yahoo's quoteSummary API ----------------
+
+export interface ParsedYahooEarnings {
+  reportDate: string; // approx announcement date (fiscal quarter end + ~32d), ISO
+  fiscalPeriod: string; // e.g. "Q2 2025"
+  quarterEnd: string; // fiscal quarter end (ISO), as reported by Yahoo
+  epsEstimate: number | null;
+  epsActual: number | null;
+}
+
+/** Companies typically report ~3–5 weeks after the fiscal quarter ends. */
+function approxReportDate(quarterEnd: string): string {
+  const t = Date.parse(quarterEnd);
+  if (!Number.isFinite(t)) return quarterEnd.slice(0, 10);
+  return new Date(t + 32 * 86400000).toISOString().slice(0, 10);
+}
+
+function fiscalPeriodFromQuarterEnd(quarterEnd: string): string {
+  const d = new Date(quarterEnd);
+  if (Number.isNaN(d.getTime())) return "";
+  return `Q${Math.ceil((d.getUTCMonth() + 1) / 3)} ${d.getUTCFullYear()}`;
+}
+
+/**
+ * Parse Yahoo's quoteSummary `earningsHistory` payload into per-quarter EPS
+ * estimate vs actual. Pure (no IO) so it's unit-tested against a fixture. The
+ * surprise % is derived later by addEarningsReport, consistent with manual entry.
+ */
+export function parseYahooEarnings(json: unknown): ParsedYahooEarnings[] {
+  type Raw = { raw?: number; fmt?: string };
+  type Hist = { epsActual?: Raw; epsEstimate?: Raw; quarter?: Raw };
+  const result = (json as { quoteSummary?: { result?: Array<{ earningsHistory?: { history?: Hist[] } }> } })
+    ?.quoteSummary?.result?.[0];
+  const history = result?.earningsHistory?.history;
+  if (!Array.isArray(history)) return [];
+
+  const out: ParsedYahooEarnings[] = [];
+  for (const h of history) {
+    const quarterEnd = h?.quarter?.fmt;
+    if (!quarterEnd) continue;
+    const rawNum = (v: number | undefined): number | null =>
+      typeof v === "number" && Number.isFinite(v) ? v : null;
+    const epsEstimate = rawNum(h?.epsEstimate?.raw);
+    const epsActual = rawNum(h?.epsActual?.raw);
+    if (epsEstimate == null && epsActual == null) continue;
+    out.push({
+      quarterEnd: quarterEnd.slice(0, 10),
+      reportDate: approxReportDate(quarterEnd),
+      fiscalPeriod: fiscalPeriodFromQuarterEnd(quarterEnd),
+      epsEstimate,
+      epsActual,
+    });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 
 type PlaywrightBrowser = import("playwright").Browser;
@@ -209,6 +265,49 @@ export class YahooFinanceBrowserService {
     } catch (e) {
       console.error(`[yahoo-browser] ${ticker} extraction failed:`, e instanceof Error ? e.message : e);
       return null;
+    } finally {
+      await context.close().catch(() => {});
+    }
+  }
+
+  /**
+   * Fetch quarterly earnings (estimate vs actual) for a ticker. Yahoo's
+   * quoteSummary endpoint needs a crumb + cookies, so we load a quote page in the
+   * browser (to establish the session) and fetch the API from the page context.
+   * Returns [] on any failure.
+   */
+  async getEarnings(ticker: string): Promise<ParsedYahooEarnings[]> {
+    const browser = await this.getBrowser();
+    if (!browser) return [];
+    const context = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto(`https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}/`, {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      });
+      const crumb = await page.evaluate(() =>
+        fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", { credentials: "include" })
+          .then((r) => r.text())
+          .catch(() => ""),
+      );
+      if (!crumb || crumb.length > 40) return []; // missing/invalid crumb (e.g. consent wall)
+      const json = await page.evaluate(
+        (args: { t: string; c: string }) => {
+          const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${args.t}?modules=earningsHistory&crumb=${encodeURIComponent(args.c)}`;
+          return fetch(url, { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null);
+        },
+        { t: ticker.toUpperCase(), c: crumb },
+      );
+      return parseYahooEarnings(json);
+    } catch (e) {
+      console.error(`[yahoo-earnings] ${ticker}:`, e instanceof Error ? e.message : e);
+      return [];
     } finally {
       await context.close().catch(() => {});
     }
