@@ -46,8 +46,13 @@ function finStreamerValue(html: string, field: string, ticker?: string): number 
       const symMatch = tag.match(/data-symbol="([^"]+)"/i);
       if (symMatch && symMatch[1].toUpperCase() !== ticker.toUpperCase()) continue;
     }
-    const dataValue = tag.match(/data-value="([^"]+)"/i);
-    const value = num(dataValue?.[1]) ?? num(match[1]);
+    // Yahoo renders the price in `data-value`, a bare `value` attribute (newer
+    // layout), or the inner text — read whichever is present. The data-symbol
+    // filter above ensures we only take this ticker's value, not a sidebar
+    // widget's (e.g. "trending tickers"), which otherwise poisons the price.
+    const valAttr =
+      tag.match(/\bdata-value="([^"]+)"/i)?.[1] ?? tag.match(/\bvalue="([^"]+)"/i)?.[1];
+    const value = num(valAttr) ?? num(match[1]);
     if (value != null) return value;
   }
   return null;
@@ -106,11 +111,10 @@ export function parseYahooQuoteHtml(
     }
   };
 
-  const regularPrice = safe(
-    "regularPrice",
-    () => finStreamerValue(html, "regularMarketPrice", ticker) ?? extractRangeValue(html, "regularMarketPrice"),
-    null,
-  );
+  // Use ONLY the symbol-filtered streamer for prices. The JSON range fallback
+  // grabs the first "regularMarketPrice" on the page — usually a sidebar widget's
+  // — which silently mis-prices the stock; better to return null than a wrong price.
+  const regularPrice = safe("regularPrice", () => finStreamerValue(html, "regularMarketPrice", ticker), null);
   const fields: YahooSummaryFields = {
     ticker: ticker.toUpperCase(),
     companyName: safe("companyName", () => extractCompanyName(html, ticker), null),
@@ -120,21 +124,13 @@ export function parseYahooQuoteHtml(
       () => finStreamerValue(html, "regularMarketChangePercent", ticker),
       null,
     ),
-    preMarketPrice: safe(
-      "preMarketPrice",
-      () => finStreamerValue(html, "preMarketPrice", ticker) ?? extractRangeValue(html, "preMarketPrice"),
-      null,
-    ),
+    preMarketPrice: safe("preMarketPrice", () => finStreamerValue(html, "preMarketPrice", ticker), null),
     preMarketChangePercent: safe(
       "preMarketChangePercent",
       () => finStreamerValue(html, "preMarketChangePercent", ticker),
       null,
     ),
-    afterHoursPrice: safe(
-      "afterHoursPrice",
-      () => finStreamerValue(html, "postMarketPrice", ticker) ?? extractRangeValue(html, "postMarketPrice"),
-      null,
-    ),
+    afterHoursPrice: safe("afterHoursPrice", () => finStreamerValue(html, "postMarketPrice", ticker), null),
     afterHoursChangePercent: safe(
       "afterHoursChangePercent",
       () => finStreamerValue(html, "postMarketChangePercent", ticker),
@@ -255,8 +251,14 @@ export class YahooFinanceBrowserService {
       // Block heavy resources for speed; HTML is all we parse.
       await page.route("**/*.{png,jpg,jpeg,gif,webp,woff,woff2,mp4}", (r) => r.abort());
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+      // Wait for THIS ticker's price element, not just any regularMarketPrice
+      // streamer — the page renders sidebar widgets (trending/indices) first, and
+      // grabbing the HTML too early misses the main quote and mis-prices it.
       await page
-        .waitForSelector('fin-streamer[data-field="regularMarketPrice"]', { timeout: 10000 })
+        .waitForSelector(
+          `fin-streamer[data-symbol="${ticker.toUpperCase()}"][data-field="regularMarketPrice"]`,
+          { timeout: 10000 },
+        )
         .catch(() => {
           /* parse whatever is there */
         });

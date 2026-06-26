@@ -127,3 +127,22 @@ describe("parseYahooEarnings", () => {
     expect(parseYahooEarnings({ quoteSummary: { result: [] } })).toEqual([]);
   });
 });
+
+describe("parseYahooQuoteHtml — sidebar widget / wrong-symbol guard", () => {
+  // Real Yahoo pages render a "trending tickers" widget (other symbols) before
+  // the main quote, so the price must be taken from THIS ticker's element only.
+  const WIDGET_HTML = `<html><head><title>Apple Inc. (AAPL)</title></head><body>
+    <fin-streamer data-symbol="ON" data-field="regularMarketPrice" value="91.02" active="true"></fin-streamer>
+    <fin-streamer data-symbol="MRNA" data-field="regularMarketPrice" value="65.79" active="true"></fin-streamer>
+    <fin-streamer key="price" class="last-price" data-symbol="AAPL" data-field="regularMarketPrice" data-value="281.44" active="">281.44</fin-streamer>
+  </body></html>`;
+
+  it("uses the page's own symbol, not a sidebar widget's price", () => {
+    expect(parseYahooQuoteHtml(WIDGET_HTML, "AAPL", URL).regularPrice).toBe(281.44);
+  });
+
+  it("returns null (not a wrong symbol's price) when this ticker's element is absent", () => {
+    const noAapl = `<html><body><fin-streamer data-symbol="ON" data-field="regularMarketPrice" value="91.02"></fin-streamer></body></html>`;
+    expect(parseYahooQuoteHtml(noAapl, "AAPL", URL).regularPrice).toBeNull();
+  });
+});
