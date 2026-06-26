@@ -26,6 +26,17 @@ const filingItem: RawEventItem = {
   tickerHint: "AAPL",
 };
 
+// A filer resolved via SEC's CIK map to a ticker OUTSIDE the curated universe.
+const cikFilingItem: RawEventItem = {
+  source: "sec-edgar",
+  title: "8-K - VERISIGN INC/CA (0001014473) (Filer)",
+  text: "8-K - VERISIGN INC/CA (0001014473) (Filer)",
+  url: "https://sec.gov/vrsn",
+  publishedAt: "2026-06-03",
+  tickerHint: "VRSN",
+  cik: "0001014473",
+};
+
 describe("normalizers", () => {
   it("normalizeDirection maps synonyms", () => {
     expect(normalizeDirection("Bullish")).toBe("bullish");
@@ -64,6 +75,13 @@ describe("parseExtractionResponse", () => {
     expect(out![1].entity).toBe("Apple");
   });
 
+  it("trusts an authoritative tickerHint outside the curated universe (CIK-resolved)", () => {
+    const raw = `[{"index":0,"entity":"VeriSign Inc","company":"VeriSign Inc","ticker":"","claim":"files 8-K","direction":"neutral","confidence":"medium"}]`;
+    const out = parseExtractionResponse(raw, [cikFilingItem]);
+    expect(out![0].ticker).toBe("VRSN"); // would be null via the name-universe path
+    expect(out![0].entity).toBe("VeriSign Inc");
+  });
+
   it("skips items flagged relevant:false", () => {
     const raw = `[{"index":0,"entity":"x","company":"Nvidia","relevant":false}]`;
     expect(parseExtractionResponse(raw, [newsItem])).toEqual([]);
@@ -81,6 +99,12 @@ describe("fallbackExtract", () => {
     expect(ev!.entity).toBe("Apple");
     expect(ev!.ticker).toBe("AAPL");
     expect(ev!.generatedBy).toBe("rules");
+  });
+
+  it("uses a CIK-resolved tickerHint outside the universe (rule-based path)", () => {
+    const ev = fallbackExtract(cikFilingItem, []);
+    expect(ev).not.toBeNull();
+    expect(ev!.ticker).toBe("VRSN");
   });
 
   it("matches a known entity in news text and resolves the company", () => {

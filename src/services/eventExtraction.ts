@@ -115,10 +115,13 @@ export function parseExtractionResponse(
     const item = items[idx];
     if (!item) continue;
 
+    // An item's tickerHint is authoritative (IR feed ticker, or a filer resolved
+    // via SEC's CIK map) — trust it directly. Otherwise fall back to resolving the
+    // LLM's ticker/company against the known name universe.
     const ticker =
+      item.tickerHint ??
       resolveTicker(el.ticker) ??
-      resolveTicker(el.company) ??
-      (item.tickerHint ? resolveTicker(item.tickerHint) : null);
+      resolveTicker(el.company);
 
     const companyName =
       (el.company && el.company.trim()) || (ticker ? companyDisplayName(ticker) : null);
@@ -148,7 +151,7 @@ export function fallbackExtract(
   item: RawEventItem,
   knownEntities: string[],
 ): ExtractedEvent | null {
-  const ticker = item.tickerHint ? resolveTicker(item.tickerHint) : findKnownTicker(item.text);
+  const ticker = item.tickerHint ?? findKnownTicker(item.text);
   if (!ticker) return null;
 
   let entity: string | null;

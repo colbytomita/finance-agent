@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { parseRssItems, parseAtomEntries, parseFeed, decodeEntities, stripTags } from "../sources/parse";
-import { parseEdgarCompany, edgarItemsFromAtom } from "../sources/secEdgar";
+import { parseEdgarCompany, parseEdgarCik, edgarItemsFromAtom } from "../sources/secEdgar";
 import { parseGdelt } from "../sources/gdelt";
 import { irItemsFromFeed } from "../sources/irRss";
+import { normalizeCik, parseCikTickers } from "../sources/cikMap";
 
 const ATOM = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -72,6 +73,38 @@ describe("secEdgar", () => {
     expect(items[0].tickerHint).toBe("AAPL");
     expect(items[1].tickerHint).toBe("NVDA");
     expect(items[0].url).toBe("https://www.sec.gov/x/apple.htm");
+  });
+
+  it("parses the filer CIK (zero-padded) from the title and attaches it to items", () => {
+    expect(parseEdgarCik("8-K - Apple Inc. (0000320193) (Filer)")).toBe("0000320193");
+    expect(parseEdgarCik("8-K - VERISIGN INC/CA (0001014473) (Filer)")).toBe("0001014473");
+    expect(parseEdgarCik("no cik here")).toBeNull();
+    expect(edgarItemsFromAtom(ATOM)[0].cik).toBe("0000320193");
+  });
+});
+
+describe("cikMap", () => {
+  it("normalizes CIKs to 10 digits", () => {
+    expect(normalizeCik(320193)).toBe("0000320193");
+    expect(normalizeCik("1014473")).toBe("0001014473");
+    expect(normalizeCik("0000320193")).toBe("0000320193");
+  });
+
+  it("parses SEC company_tickers.json into a CIK->ticker map", () => {
+    const json = {
+      "0": { cik_str: 320193, ticker: "aapl", title: "Apple Inc." },
+      "1": { cik_str: 1014473, ticker: "VRSN", title: "VERISIGN INC/CA" },
+      "2": { cik_str: 0, ticker: "", title: "junk" }, // dropped (no ticker)
+    };
+    const map = parseCikTickers(json);
+    expect(map.get("0000320193")).toBe("AAPL"); // upper-cased
+    expect(map.get("0001014473")).toBe("VRSN"); // outside the curated universe
+    expect(map.size).toBe(2);
+  });
+
+  it("tolerates malformed input", () => {
+    expect(parseCikTickers(null).size).toBe(0);
+    expect(parseCikTickers("nope").size).toBe(0);
   });
 });
 

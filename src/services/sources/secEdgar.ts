@@ -1,6 +1,7 @@
 import type { RawEventItem } from "./types";
 import { parseAtomEntries } from "./parse";
 import { resolveTicker } from "./tickerMap";
+import { getCikTickerMap, normalizeCik } from "./cikMap";
 
 // SEC EDGAR connector — the "latest filings" Atom feed is free, official, and
 // keyless. We pull recent filings of a given form type (8-K by default: material
@@ -23,6 +24,12 @@ export function parseEdgarCompany(title: string): string | null {
   return m ? m[1].trim() : null;
 }
 
+/** Pull the filer CIK out of an EDGAR entry title, e.g. "...(0000320193) (Filer)". */
+export function parseEdgarCik(title: string): string | null {
+  const m = /\((\d{6,10})\)/.exec(title);
+  return m ? normalizeCik(m[1]) : null;
+}
+
 /** Map an EDGAR Atom payload to RawEventItems (pure; no network). */
 export function edgarItemsFromAtom(xml: string): RawEventItem[] {
   return parseAtomEntries(xml)
@@ -36,8 +43,11 @@ export function edgarItemsFromAtom(xml: string): RawEventItem[] {
         url: e.link,
         publishedAt: e.date,
         // Resolve the filer to a known ticker up front when possible — for a
-        // company's own filing the entity IS the company.
+        // company's own filing the entity IS the company. The CIK (resolved in
+        // fetchEdgarFilings against SEC's official map) is preferred over the
+        // name-based universe lookup.
         tickerHint: company ? resolveTicker(company) : null,
+        cik: parseEdgarCik(e.title),
       };
     });
 }
@@ -58,5 +68,20 @@ export async function fetchEdgarFilings(opts: {
   });
   if (!res.ok) throw new Error(`EDGAR ${res.status}`);
   const xml = await res.text();
-  return edgarItemsFromAtom(xml).slice(0, opts.max ?? 40);
+  const items = edgarItemsFromAtom(xml).slice(0, opts.max ?? 40);
+
+  // Upgrade each item's tickerHint via the filer's CIK using SEC's official
+  // CIK->ticker map, so filings from companies outside the curated name universe
+  // still resolve to a real symbol. Best effort: if the map is unavailable the
+  // name-based tickerHint stands.
+  const cikMap = await getCikTickerMap({ fetchFn, userAgent: userAgent() });
+  if (cikMap.size > 0) {
+    for (const it of items) {
+      if (it.cik) {
+        const ticker = cikMap.get(normalizeCik(it.cik));
+        if (ticker) it.tickerHint = ticker;
+      }
+    }
+  }
+  return items;
 }

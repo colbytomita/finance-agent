@@ -7,5 +7,6 @@ export interface RawEventItem {
   text: string; // text used for extraction (title + any summary)
   url: string;
   publishedAt: string | null; // ISO date when known, else null
-  tickerHint?: string | null; // set by single-company feeds (e.g. IR RSS)
+  tickerHint?: string | null; // authoritative ticker when known (IR feed, or SEC CIK lookup)
+  cik?: string | null; // SEC Central Index Key (filings only), used to resolve the ticker
 }
