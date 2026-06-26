@@ -14,7 +14,7 @@ const placeSchema = z.object({
   shares: z.coerce.number().positive(),
   orderType: z.enum(["market", "limit"]).default("limit"),
   limitPrice: z.coerce.number().positive().nullish(),
-  timeInForce: z.enum(["day", "gtc"]).default("day"),
+  timeInForce: z.enum(["day", "gtc"]).default("gtc"),
   // A reference price for logging the entry when no fill price is available yet
   // (e.g. a market order, or a resting limit). Usually the setup mid / last price.
   referencePrice: z.coerce.number().positive(),

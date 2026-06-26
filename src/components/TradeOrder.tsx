@@ -43,7 +43,7 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
   const [shares, setShares] = useState(props.suggestedShares ? String(props.suggestedShares) : "");
   const [orderType, setOrderType] = useState<"market" | "limit">("limit");
   const [limitPrice, setLimitPrice] = useState(n2(props.entryPrice));
-  const [timeInForce, setTimeInForce] = useState<"day" | "gtc">("day");
+  const [timeInForce, setTimeInForce] = useState<"day" | "gtc">("gtc"); // swing trades are multi-day
   const [attachBracket, setAttachBracket] = useState(true);
   const [stopLoss, setStopLoss] = useState(n2(props.stopLoss));
   const [targetPrice1, setTargetPrice1] = useState(n2(props.targetPrice1));
@@ -212,8 +212,8 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
                   <div className={fieldCls}>
                     <label>Time in force</label>
                     <select value={timeInForce} onChange={(e) => setTimeInForce(e.target.value as "day" | "gtc")}>
-                      <option value="day">Day</option>
                       <option value="gtc">GTC</option>
+                      <option value="day">Day</option>
                     </select>
                   </div>
                 </div>
