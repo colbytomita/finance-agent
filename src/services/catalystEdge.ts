@@ -1,6 +1,8 @@
-import { and, eq, like } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { loadConfig } from "@/lib/config";
 import type { Confidence, ImpactDirection } from "@/lib/types";
+import { isCatalystStale } from "./catalysts";
 import { analyzeEntity, distinctEntities, type MentionDirection } from "./entityMentions";
 import type { EntityEdgeSummary, EventWindowKey } from "./eventStudy";
 import { getTrackedTickers, recomputeStockAnalysis } from "./marketData";
@@ -97,13 +99,27 @@ function edgeTags(entity: string): string {
   return `${EDGE_SOURCE},win:${PRIMARY_WINDOW},entity:${entity}`;
 }
 
-/** All persisted edge catalysts for a ticker (for stock page / agent rationale). */
+/** Is this mention recent enough to become a current scoring catalyst? */
+export function isFreshEdgeMention(
+  eventDate: string,
+  freshnessDays: number,
+  now: number = Date.now(),
+): boolean {
+  return !isCatalystStale({ eventDate, discoveredAt: eventDate }, freshnessDays, now);
+}
+
+/** Current persisted edge catalysts for a ticker (for stock page / agent rationale). */
 export function edgeCatalystsForTicker(ticker: string) {
+  const cfg = loadConfig();
+  const now = Date.now();
   return getDb()
     .select()
     .from(schema.catalysts)
     .where(and(eq(schema.catalysts.ticker, ticker.toUpperCase()), eq(schema.catalysts.sourceName, EDGE_SOURCE)))
-    .all();
+    .orderBy(desc(schema.catalysts.discoveredAt))
+    .limit(20)
+    .all()
+    .filter((c) => c.status !== "expired" && !isCatalystStale(c, cfg.catalystFreshnessDays, now));
 }
 
 function deleteEdgeCatalystsForEntity(entity: string): void {
@@ -169,6 +185,8 @@ export async function applyEntityEdge(
   opts: { entity?: string; minSamples?: number; recompute?: boolean } = {},
 ): Promise<ApplyEdgeResult> {
   const entities = opts.entity ? [opts.entity] : distinctEntities().map((e) => e.entity);
+  const cfg = loadConfig();
+  const now = Date.now();
   const result: ApplyEdgeResult = {
     entitiesProcessed: 0,
     catalystsWritten: 0,
@@ -194,6 +212,10 @@ export async function applyEntityEdge(
     deleteEdgeCatalystsForEntity(entity);
 
     for (const [ticker, ev] of latestByTicker) {
+      if (!isFreshEdgeMention(ev.eventDate, cfg.catalystFreshnessDays, now)) {
+        result.skipped++;
+        continue;
+      }
       const edge = edgeImpact(analysis.summary, ev.direction as MentionDirection, {
         minSamples: opts.minSamples,
       });

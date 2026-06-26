@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeImpact, describeEdge } from "../catalystEdge";
+import { edgeImpact, describeEdge, isFreshEdgeMention } from "../catalystEdge";
 import { aggregateEventStudies, EVENT_WINDOWS, type EventStudyResult, type EventWindowKey, type WindowReturn } from "../eventStudy";
 
 // Build an EntityEdgeSummary whose post5 window pools the given abnormal returns.
@@ -69,5 +69,13 @@ describe("describeEdge", () => {
     expect(title).toContain("NVDA");
     expect(summary).toContain("n=4");
     expect(summary.toLowerCase()).toContain("not advice");
+  });
+});
+
+describe("isFreshEdgeMention", () => {
+  it("keeps old mentions out of current catalyst scoring surfaces", () => {
+    const now = Date.parse("2026-06-26T12:00:00Z");
+    expect(isFreshEdgeMention("2026-06-01", 90, now)).toBe(true);
+    expect(isFreshEdgeMention("2025-12-01", 90, now)).toBe(false);
   });
 });
