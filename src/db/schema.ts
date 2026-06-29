@@ -261,6 +261,51 @@ export const scoreHistory = sqliteTable("score_history", {
   recordedAt: text("recorded_at").notNull(),
 });
 
+// Sector Scout: on-demand, industry-targeted discovery. The user types an
+// industry/theme ("space", "energy", "nuclear fusion"); we expand it into real
+// tickers, score each with the normal engine, and write a full research brief
+// for the ones that clear the score test. `sectorScans` is the per-run log;
+// `sectorScoutPicks` holds the surfaced picks (one row per industry+ticker).
+export const sectorScans = sqliteTable("sector_scans", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  industry: text("industry").notNull(), // normalized label the user searched
+  considered: integer("considered").notNull().default(0), // tickers the expander proposed
+  scanned: integer("scanned").notNull().default(0), // tickers with real data that got scored
+  proposed: integer("proposed").notNull().default(0), // picks that cleared the score test
+  minScore: real("min_score").notNull(), // threshold used for this run
+  expandedBy: text("expanded_by").notNull().default("rules"), // llm | rules (how tickers were sourced)
+  ranAt: text("ran_at").notNull(),
+});
+
+export const sectorScoutPicks = sqliteTable("sector_scout_picks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  industry: text("industry").notNull(),
+  ticker: text("ticker").notNull(),
+  companyName: text("company_name"),
+  price: real("price"),
+  overallScore: real("overall_score").notNull(),
+  valuationScore: real("valuation_score"),
+  momentumScore: real("momentum_score"),
+  catalystScore: real("catalyst_score"),
+  riskScore: real("risk_score"),
+  sentimentScore: real("sentiment_score"),
+  recommendation: text("recommendation"),
+  confidence: text("confidence").notNull().default("low"),
+  drawdownPercent: real("drawdown_percent"),
+  suggestedBuyLow: real("suggested_buy_low"),
+  suggestedBuyHigh: real("suggested_buy_high"),
+  // Full research brief fields (bull/bear/risk), generated per pick.
+  summary: text("summary"),
+  bullCase: text("bull_case"),
+  bearCase: text("bear_case"),
+  keyCatalysts: text("key_catalysts"), // JSON array of strings
+  keyRisks: text("key_risks"), // JSON array of strings
+  recommendedAction: text("recommended_action"),
+  briefGeneratedBy: text("brief_generated_by").notNull().default("rules"), // llm | rules
+  status: text("status").notNull().default("new"), // new | added | dismissed
+  scannedAt: text("scanned_at").notNull(),
+});
+
 // Quarterly earnings results: actual vs. analyst estimate (the "beat / meet / miss").
 // Feeds the scoring engine as a recency-decayed earnings-surprise signal.
 export const earningsReports = sqliteTable("earnings_reports", {

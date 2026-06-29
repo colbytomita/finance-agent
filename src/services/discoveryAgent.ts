@@ -90,7 +90,7 @@ export function passesTest(a: CandidateAnalysis, minScore: number): boolean {
 }
 
 /** Fetch bars + latest price for one ticker and score it, all in memory. */
-async function analyzeTicker(
+export async function analyzeTicker(
   ticker: string,
   alpaca: AlpacaService | null,
   cfg = loadConfig(),
