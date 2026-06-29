@@ -70,25 +70,32 @@ describe("AlpacaService", () => {
     expect(snap.dailyChangePercent).toBeCloseTo(5);
   });
 
-  it("maps historical bars to the Bar shape and sends a start date", async () => {
+  it("maps historical bars to the Bar shape, requests newest-first, and returns ascending", async () => {
+    // Alpaca returns newest-first (sort=desc); getHistoricalBars must reverse to
+    // ascending so a large limit still includes today's bar.
     const fetchFn = mockFetch({
       "/bars": {
-        bars: [{ t: "2026-06-10T04:00:00Z", o: 1, h: 2, l: 0.5, c: 1.5, v: 1000 }],
+        bars: [
+          { t: "2026-06-12T04:00:00Z", o: 3, h: 4, l: 2.5, c: 3.5, v: 1200 },
+          { t: "2026-06-11T04:00:00Z", o: 2, h: 3, l: 1.5, c: 2.5, v: 1100 },
+          { t: "2026-06-10T04:00:00Z", o: 1, h: 2, l: 0.5, c: 1.5, v: 1000 },
+        ],
       },
     });
     const svc = new AlpacaService({ ...cfg, fetchFn });
     const bars = await svc.getHistoricalBars("MSFT");
-    expect(bars[0]).toEqual({
-      date: "2026-06-10T04:00:00Z",
-      open: 1,
-      high: 2,
-      low: 0.5,
-      close: 1.5,
-      volume: 1000,
-    });
-    // Alpaca returns only the latest bar unless `start` is supplied (regression guard).
+    // Returned ascending (oldest first) regardless of Alpaca's desc response.
+    expect(bars.map((b) => b.date)).toEqual([
+      "2026-06-10T04:00:00Z",
+      "2026-06-11T04:00:00Z",
+      "2026-06-12T04:00:00Z",
+    ]);
+    expect(bars[0]).toEqual({ date: "2026-06-10T04:00:00Z", open: 1, high: 2, low: 0.5, close: 1.5, volume: 1000 });
     const url = String((fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    // Alpaca returns only the latest bar unless `start` is supplied (regression guard),
+    // and we must sort desc so a large limit reaches today (the stale-bars fix).
     expect(url).toMatch(/[?&]start=\d{4}-\d{2}-\d{2}/);
+    expect(url).toMatch(/[?&]sort=desc/);
   });
 
   it("throws AlpacaError with status on API failure", async () => {
