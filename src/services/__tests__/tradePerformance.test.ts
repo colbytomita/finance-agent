@@ -18,10 +18,11 @@ const C: ClosedTradeInput = {
   entryDate: "2026-01-01", closedAt: "2026-01-11", unrealizedGainLoss: 100, unrealizedGainLossPercent: 10,
 };
 
+// thesisPlayedOut is a real boolean (Drizzle boolean mode), not 1/0.
 const journal: JournalInput[] = [
-  { tradeId: 1, profitLossPercent: 10, holdingPeriodDays: 5, thesisPlayedOut: 1 },
-  { tradeId: 2, profitLossPercent: -10, holdingPeriodDays: 3, thesisPlayedOut: 0 },
-  { tradeId: 3, profitLossPercent: 10, holdingPeriodDays: 10, thesisPlayedOut: 1 },
+  { tradeId: 1, profitLossPercent: 10, holdingPeriodDays: 5, thesisPlayedOut: true },
+  { tradeId: 2, profitLossPercent: -10, holdingPeriodDays: 3, thesisPlayedOut: false },
+  { tradeId: 3, profitLossPercent: 10, holdingPeriodDays: 10, thesisPlayedOut: true },
 ];
 
 describe("tradePerformance.summarizeClosedTrades", () => {

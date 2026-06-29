@@ -21,7 +21,9 @@ export interface JournalInput {
   tradeId: number | null;
   profitLossPercent: number | null;
   holdingPeriodDays: number | null;
-  thesisPlayedOut: number | null; // 1 | 0 | null
+  // Stored with Drizzle boolean mode (integer 0/1 → boolean), so this reads back
+  // as a real boolean, never the number 1 — compare against `true`, not `1`.
+  thesisPlayedOut: boolean | null;
 }
 
 export interface TradeStats {
@@ -137,7 +139,7 @@ export function summarizeClosedTrades(
 
     if (j?.thesisPlayedOut != null) {
       thesisTotal++;
-      if (j.thesisPlayedOut === 1) thesisTrue++;
+      if (j.thesisPlayedOut === true) thesisTrue++;
     }
   }
 
