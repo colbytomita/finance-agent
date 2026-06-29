@@ -117,7 +117,7 @@ function backfillLimit(eventDate: string): number {
 }
 
 /** Return bars for `ticker` that cover the event window, backfilling if needed. */
-async function ensureBarsCover(
+export async function ensureBarsCover(
   ticker: string,
   eventDate: string,
   alpaca: AlpacaService | null,
