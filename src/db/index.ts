@@ -254,6 +254,46 @@ CREATE TABLE IF NOT EXISTS agent_candidates (
   proposed_at TEXT NOT NULL,
   decided_at TEXT
 );
+CREATE TABLE IF NOT EXISTS sector_scans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  industry TEXT NOT NULL,
+  considered INTEGER NOT NULL DEFAULT 0,
+  scanned INTEGER NOT NULL DEFAULT 0,
+  proposed INTEGER NOT NULL DEFAULT 0,
+  min_score REAL NOT NULL,
+  expanded_by TEXT NOT NULL DEFAULT 'rules',
+  ran_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sector_scans_industry_time ON sector_scans (industry, ran_at DESC);
+CREATE TABLE IF NOT EXISTS sector_scout_picks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  industry TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  company_name TEXT,
+  price REAL,
+  overall_score REAL NOT NULL,
+  valuation_score REAL,
+  momentum_score REAL,
+  catalyst_score REAL,
+  risk_score REAL,
+  sentiment_score REAL,
+  recommendation TEXT,
+  confidence TEXT NOT NULL DEFAULT 'low',
+  drawdown_percent REAL,
+  suggested_buy_low REAL,
+  suggested_buy_high REAL,
+  summary TEXT,
+  bull_case TEXT,
+  bear_case TEXT,
+  key_catalysts TEXT,
+  key_risks TEXT,
+  recommended_action TEXT,
+  brief_generated_by TEXT NOT NULL DEFAULT 'rules',
+  status TEXT NOT NULL DEFAULT 'new',
+  scanned_at TEXT NOT NULL,
+  UNIQUE (industry, ticker)
+);
+CREATE INDEX IF NOT EXISTS idx_sector_picks_industry ON sector_scout_picks (industry, overall_score DESC);
 `;
 
 let _db: BetterSQLite3Database<typeof schema> | null = null;

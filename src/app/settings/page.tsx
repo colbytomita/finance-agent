@@ -27,8 +27,9 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
   { key: "refreshIntervalExtendedHoursSec", label: "Refresh interval, pre/after hours (sec)", type: "number" },
   { key: "refreshIntervalClosedSec", label: "Refresh interval, closed (sec)", type: "number" },
   { key: "yahooBrowserEnabled", label: "Yahoo Finance browser connector", type: "checkbox" },
-  { key: "agentMinScore", label: "Agent pick min score (1–10)", type: "number", hint: "Discovery agent proposes stocks scoring at or above this. Higher = stricter, fewer picks." },
+  { key: "agentMinScore", label: "Agent pick min score (1–10)", type: "number", hint: "Discovery agent proposes stocks scoring at or above this. Higher = stricter, fewer picks. Also the default min for Sector Scout." },
   { key: "portfolioWatchlistRecLimit", label: "Portfolio→watchlist suggestions shown", type: "number", hint: "How many of your holdings that aren't on the watchlist to suggest adding (Watchlist page). 0 hides them." },
+  { key: "sectorScoutScanEnabled", label: "Sector Scout auto-scan (scheduled)", type: "checkbox", hint: "Re-scan each favorite industry below on the daily schedule. Manual scans on the Sector Scout page work regardless." },
   { key: "eventIngestionEnabled", label: "Event ingestion (scheduled)", type: "checkbox", hint: "Catalyst Edge: pull real-world events on the daily schedule. Manual 'Run ingestion' works regardless." },
   { key: "eventSourceSecEnabled", label: "Source: SEC EDGAR 8-K", type: "checkbox", hint: "Official, free filing feed of material corporate events." },
   { key: "eventSourceGdeltEnabled", label: "Source: GDELT news", type: "checkbox", hint: "News coverage of public-figure statements (requires gdeltQueries in config)." },
@@ -81,6 +82,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [gdeltText, setGdeltText] = useState("");
   const [irFeedsText, setIrFeedsText] = useState("");
+  const [sectorText, setSectorText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -92,6 +94,7 @@ export default function SettingsPage() {
         setForm(d.config);
         setGdeltText(stringList(d.config.gdeltQueries).join("\n"));
         setIrFeedsText(irFeedList(d.config.irFeeds).map((f) => `${f.ticker}, ${f.url}`).join("\n"));
+        setSectorText(stringList(d.config.sectorScoutIndustries).join("\n"));
       })
       .catch(() => setMsg("Failed to load settings"));
   }, []);
@@ -107,6 +110,7 @@ export default function SettingsPage() {
           ...form,
           gdeltQueries: parseLines(gdeltText),
           irFeeds: parseIrFeeds(irFeedsText),
+          sectorScoutIndustries: parseLines(sectorText),
         }),
       });
       const data = await res.json().catch(() => null);
@@ -222,6 +226,32 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3 pt-2">
           <button className="btn btn-primary" onClick={save} disabled={busy}>
             {busy ? "Saving…" : "Save source lists"}
+          </button>
+          {msg && <span className="text-xs text-zinc-400">{msg}</span>}
+        </div>
+      </section>
+
+      <section className="card space-y-3">
+        <h2 className="card-title">Sector Scout favorite industries</h2>
+        <div className="space-y-1">
+          <label className="block">Favorite industries / themes</label>
+          <textarea
+            className="min-h-28 w-full font-mono text-xs"
+            value={sectorText}
+            onChange={(e) => setSectorText(e.target.value)}
+            placeholder={"space\nenergy\nnuclear fusion\ncybersecurity"}
+          />
+          <p className="text-[10px] text-zinc-600">
+            One industry or theme per line. When <span className="text-zinc-400">Sector Scout auto-scan</span>{" "}
+            (above) is on, daily maintenance re-scans each of these and refreshes its picks. You can always
+            scan any industry on demand from the{" "}
+            <a href="/sector-scout" className="text-sky-300 hover:underline">Sector Scout</a> page.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 pt-2">
+          <button className="btn btn-primary" onClick={save} disabled={busy}>
+            {busy ? "Saving…" : "Save industries"}
           </button>
           {msg && <span className="text-xs text-zinc-400">{msg}</span>}
         </div>
