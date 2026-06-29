@@ -190,23 +190,30 @@ export class AlpacaService {
   ): Promise<Bar[]> {
     // Alpaca returns only the most recent bar when `start` is omitted, so derive
     // a start date from the requested limit (~1.5 calendar days per trading day
-    // to cover weekends/holidays).
+    // to cover weekends/holidays). We request newest-first (`sort=desc`): Alpaca
+    // caps the response at `limit` rows from `start`, so the default ascending
+    // order fills that quota with OLD bars and stops ~`limit×0.04` trading days
+    // short of today (a large limit could miss the last couple of weeks). Sorting
+    // desc returns the most-recent `limit` bars; we reverse back to ascending —
+    // the order every caller (indicators, event study, getBars) expects.
     const startMs = Date.now() - Math.ceil(limit * 1.5) * 86400000;
     const start = new Date(startMs).toISOString().slice(0, 10);
     const data = await this.request<{
       bars?: { t: string; o: number; h: number; l: number; c: number; v: number }[];
     }>(
       this.dataBase,
-      `/v2/stocks/${encodeURIComponent(ticker)}/bars?timeframe=${timeframe}&limit=${limit}&adjustment=split&feed=iex&start=${start}`,
+      `/v2/stocks/${encodeURIComponent(ticker)}/bars?timeframe=${timeframe}&limit=${limit}&adjustment=split&feed=iex&sort=desc&start=${start}`,
     );
-    return (data.bars ?? []).map((b) => ({
-      date: b.t,
-      open: b.o,
-      high: b.h,
-      low: b.l,
-      close: b.c,
-      volume: b.v,
-    }));
+    return (data.bars ?? [])
+      .map((b) => ({
+        date: b.t,
+        open: b.o,
+        high: b.h,
+        low: b.l,
+        close: b.c,
+        volume: b.v,
+      }))
+      .reverse();
   }
 
   async getSnapshot(ticker: string): Promise<AlpacaSnapshot> {
