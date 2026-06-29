@@ -14,18 +14,19 @@ import {
 import { stockRecommendationLabel } from "./scoring";
 import type { StockRecommendationLabel } from "@/lib/types";
 
-// Signal-performance ("does the score actually work?") backtest.
+// Signal-performance ("does any of this actually work?") backtest.
 //
-// The app appends a stock_scores row every time it recomputes a ticker, so we
-// already have a time-series of every score it has ever produced. Here we treat
-// each historical score as an "event" and reuse the Catalyst-Edge event-study
-// engine (forward abnormal return vs SPY over [0,+1]/[0,+5]/[0,+20]) to measure,
-// per recommendation band, what those tickers actually did next. If the score is
-// calibrated, higher bands should show higher forward abnormal returns.
+// The app appends a stock_scores row on every recompute and records every
+// discovery/sector pick, so we already have a time-series of its own calls. We
+// treat each as an "event" and reuse the Catalyst-Edge event-study engine
+// (forward abnormal return vs SPY over [0,+1]/[0,+5]/[0,+20]) to measure what
+// those tickers actually did next — pooled by recommendation band (score
+// calibration) and by source (pick performance). Closed-trade realized stats
+// live in tradePerformance.ts.
 //
-// This is historical correlation across the app's own past calls — not a
-// prediction and not advice. Pure aggregation lives in `bucketAndAggregate`
-// (unit-tested); `runSignalBacktest` adds the DB/network IO.
+// Historical correlation across the app's own past calls — not a prediction and
+// not advice. Pure aggregation (bucketAndAggregate / poolBySource /
+// calibrationVerdict) is unit-tested; the run* functions add the DB/network IO.
 
 /** Recommendation bands, best → worst, with their score ranges (see scoring.ts). */
 export const SCORE_BANDS: { label: StockRecommendationLabel; range: string }[] = [
@@ -36,6 +37,8 @@ export const SCORE_BANDS: { label: StockRecommendationLabel; range: string }[] =
   { label: "Strong Avoid", range: "1–3" },
 ];
 
+export const PICK_SOURCES = ["Agent Picks", "Sector Scout"] as const;
+
 export interface SignalBucketResult {
   bucket: StockRecommendationLabel;
   scoreRange: string;
@@ -43,17 +46,36 @@ export interface SignalBucketResult {
   windows: WindowEdge[];
 }
 
-export interface SignalBacktestSummary {
-  generatedAt: string;
-  totalScoreRows: number; // stock_scores rows read
-  sampledEvents: number; // distinct (ticker, day) scores after de-duplication
-  analyzed: number; // events that resolved to a forward study
-  tickers: number; // distinct tickers analyzed
+export interface PickSourceResult {
+  source: string;
+  totalEvents: number;
+  windows: WindowEdge[];
+}
+
+export interface ScoreCalibration {
+  totalScoreRows: number;
+  sampledEvents: number;
+  analyzed: number;
+  tickers: number;
   spyAvailable: boolean;
-  primaryWindow: EventWindowKey; // the window the calibration verdict uses
-  calibration: "improves" | "mixed" | "inverts" | "n/a"; // do higher bands → higher returns?
+  primaryWindow: EventWindowKey;
+  calibration: "improves" | "mixed" | "inverts" | "n/a";
   buckets: SignalBucketResult[];
   notes: string[];
+}
+
+export interface PickPerformance {
+  sampledEvents: number;
+  analyzed: number;
+  spyAvailable: boolean;
+  sources: PickSourceResult[];
+  notes: string[];
+}
+
+export interface PerformanceReport {
+  generatedAt: string;
+  score: ScoreCalibration;
+  picks: PickPerformance;
 }
 
 /**
@@ -71,6 +93,21 @@ export function bucketAndAggregate(
   });
 }
 
+/**
+ * Pool pick "events" by source (e.g. Agent Picks vs Sector Scout). Pure. Returns
+ * one row per requested source, in order, empty sources reporting n = 0.
+ */
+export function poolBySource(
+  events: { source: string; study: EventStudyResult }[],
+  sources: readonly string[],
+): PickSourceResult[] {
+  return sources.map((source) => {
+    const studies = events.filter((e) => e.source === source).map((e) => e.study);
+    const summary = aggregateEventStudies(studies);
+    return { source, totalEvents: summary.totalEvents, windows: summary.windows };
+  });
+}
+
 /** Mean forward abnormal return for a band's window, or null if no samples. */
 function bandMean(b: SignalBucketResult, window: EventWindowKey): number | null {
   return b.windows.find((w) => w.key === window)?.meanAbnormalReturnPct ?? null;
@@ -85,7 +122,7 @@ function bandMean(b: SignalBucketResult, window: EventWindowKey): number | null 
 export function calibrationVerdict(
   buckets: SignalBucketResult[],
   window: EventWindowKey,
-): SignalBacktestSummary["calibration"] {
+): ScoreCalibration["calibration"] {
   const means = buckets
     .map((b) => bandMean(b, window))
     .filter((v): v is number => v != null && isFinite(v));
@@ -102,9 +139,9 @@ export function calibrationVerdict(
   return "mixed";
 }
 
-const CACHE_KEY = "signal_perf_summary";
+const CACHE_KEY = "performance_report_v2";
 
-export function readCachedBacktest(): SignalBacktestSummary | null {
+export function readCachedReport(): PerformanceReport | null {
   const row = getDb()
     .select()
     .from(schema.appSettings)
@@ -112,18 +149,18 @@ export function readCachedBacktest(): SignalBacktestSummary | null {
     .get();
   if (!row) return null;
   try {
-    return JSON.parse(row.value) as SignalBacktestSummary;
+    return JSON.parse(row.value) as PerformanceReport;
   } catch {
     return null;
   }
 }
 
-function writeCachedBacktest(summary: SignalBacktestSummary): void {
+function writeCachedReport(report: PerformanceReport): void {
   const db = getDb();
-  const value = JSON.stringify(summary);
+  const value = JSON.stringify(report);
   db.insert(schema.appSettings)
-    .values({ key: CACHE_KEY, value, updatedAt: summary.generatedAt })
-    .onConflictDoUpdate({ target: schema.appSettings.key, set: { value, updatedAt: summary.generatedAt } })
+    .values({ key: CACHE_KEY, value, updatedAt: report.generatedAt })
+    .onConflictDoUpdate({ target: schema.appSettings.key, set: { value, updatedAt: report.generatedAt } })
     .run();
 }
 
@@ -154,18 +191,100 @@ async function ensureFreshSpy(earliest: string, alpaca: AlpacaService | null): P
   return bars;
 }
 
+interface SignalEvent {
+  ticker: string;
+  day: string; // YYYY-MM-DD
+  key: string; // band label or pick source — the pooling key
+}
+
+interface StudiedEvents {
+  studies: { key: string; study: EventStudyResult }[];
+  sampledEvents: number;
+  analyzed: number;
+  tickers: number;
+  spyAvailable: boolean;
+  earliest: string | null;
+  latest: string | null;
+  lastBarDay: string | null;
+}
+
 /**
- * Run the backtest over the app's stored stock scores and cache the summary.
- * De-duplicates to one score per (ticker, calendar day) to avoid over-sampling
- * the same day's intraday recomputes (and the overlapping-window noise that
- * causes). Each window reports its own sample size, so the short windows
- * naturally have more samples than +20d.
+ * Shared event-study core: run each (ticker, day) event through the forward
+ * abnormal-return engine vs a freshly-benchmarked SPY, loading/backfilling each
+ * ticker's bars only once. Returns the resolved studies tagged with their
+ * pooling key plus coverage metadata for diagnostics.
  */
-export async function runSignalBacktest(
-  opts: { sinceDays?: number } = {},
-): Promise<SignalBacktestSummary> {
-  const db = getDb();
-  const rows = db
+async function studyEvents(
+  events: SignalEvent[],
+  alpaca: AlpacaService | null,
+): Promise<StudiedEvents> {
+  if (events.length === 0) {
+    return {
+      studies: [],
+      sampledEvents: 0,
+      analyzed: 0,
+      tickers: 0,
+      spyAvailable: false,
+      earliest: null,
+      latest: null,
+      lastBarDay: null,
+    };
+  }
+
+  const earliest = events.reduce((min, e) => (e.day < min ? e.day : min), events[0].day);
+  const latest = events.reduce((max, e) => (e.day > max ? e.day : max), events[0].day);
+  const spyBars = await ensureFreshSpy(earliest, alpaca);
+  const lastBarDay = spyBars.length > 0 ? spyBars[spyBars.length - 1].date.slice(0, 10) : null;
+
+  const byTicker = new Map<string, SignalEvent[]>();
+  for (const e of events) {
+    const list = byTicker.get(e.ticker) ?? [];
+    list.push(e);
+    byTicker.set(e.ticker, list);
+  }
+
+  const studies: { key: string; study: EventStudyResult }[] = [];
+  for (const [ticker, list] of byTicker) {
+    const earliestForTicker = list.reduce((min, e) => (e.day < min ? e.day : min), list[0].day);
+    const bars = await ensureBarsCover(ticker, earliestForTicker, alpaca).catch(() => []);
+    if (bars.length === 0) continue;
+    for (const e of list) {
+      const study = eventStudy(bars, spyBars, e.day);
+      if (study) studies.push({ key: e.key, study });
+    }
+  }
+
+  return {
+    studies,
+    sampledEvents: events.length,
+    analyzed: studies.length,
+    tickers: byTicker.size,
+    spyAvailable: spyBars.length > 0,
+    earliest,
+    latest,
+    lastBarDay,
+  };
+}
+
+/** Maturity/coverage note shared by the score and pick backtests. */
+function coverageNote(s: StudiedEvents, primaryN: number, label: string): string | null {
+  if (s.analyzed === 0) {
+    return s.lastBarDay != null && s.earliest != null && s.lastBarDay < s.earliest
+      ? `No daily bars on/after the earliest ${label} (${s.earliest}); latest bar is ${s.lastBarDay}. Refresh daily bars, then re-run.`
+      : `No ${label}s resolved to a forward window yet.`;
+  }
+  if (primaryN === 0) {
+    return s.lastBarDay != null && s.latest != null && s.lastBarDay < s.latest
+      ? `Latest daily bar (${s.lastBarDay}) predates the newest ${label} (${s.latest}) — +5d/+20d windows can't be measured until daily bars advance (run the daily price refresh / npm run jobs).`
+      : `${label}s are too recent for a matured +5d window — figures populate as history ages.`;
+  }
+  if (primaryN < 20) return "Small sample — treat these figures as indicative only.";
+  return null;
+}
+
+/** Build deduped score events (one per ticker per day, latest score that day). */
+function buildScoreEvents(): { events: SignalEvent[]; totalRows: number } {
+  const rows = getDb()
     .select({
       ticker: schema.stockScores.ticker,
       overallScore: schema.stockScores.overallScore,
@@ -173,100 +292,111 @@ export async function runSignalBacktest(
     })
     .from(schema.stockScores)
     .all();
-
-  // De-duplicate to the latest score per (ticker, day).
-  const cutoffMs = opts.sinceDays ? Date.now() - opts.sinceDays * 86400000 : 0;
-  const byKey = new Map<string, { ticker: string; score: number; day: string; at: string }>();
+  const byKey = new Map<string, { e: SignalEvent; at: string }>();
   for (const r of rows) {
     if (!r.calculatedAt) continue;
-    if (cutoffMs && Date.parse(r.calculatedAt) < cutoffMs) continue;
     const day = r.calculatedAt.slice(0, 10);
-    const key = `${r.ticker}|${day}`;
-    const prev = byKey.get(key);
+    const k = `${r.ticker}|${day}`;
+    const prev = byKey.get(k);
     if (!prev || r.calculatedAt > prev.at) {
-      byKey.set(key, { ticker: r.ticker, score: r.overallScore, day, at: r.calculatedAt });
+      byKey.set(k, { e: { ticker: r.ticker, day, key: stockRecommendationLabel(r.overallScore) }, at: r.calculatedAt });
     }
   }
-  const events = [...byKey.values()];
+  return { events: [...byKey.values()].map((v) => v.e), totalRows: rows.length };
+}
 
-  const summary: SignalBacktestSummary = {
-    generatedAt: new Date().toISOString(),
-    totalScoreRows: rows.length,
-    sampledEvents: events.length,
-    analyzed: 0,
-    tickers: 0,
-    spyAvailable: false,
-    primaryWindow: PRIMARY_WINDOW,
-    calibration: "n/a",
-    buckets: bucketAndAggregate([]),
-    notes: [],
-  };
-
-  if (events.length === 0) {
-    summary.notes.push("No stored stock scores yet — refresh some tracked tickers, then re-run.");
-    writeCachedBacktest(summary);
-    return summary;
-  }
-
-  const alpaca = AlpacaService.fromEnv();
-
-  // SPY benchmark once, covering the earliest event across all tickers and kept
-  // current to today so the forward windows have market data to subtract.
-  const earliest = events.reduce((min, e) => (e.day < min ? e.day : min), events[0].day);
-  const latest = events.reduce((max, e) => (e.day > max ? e.day : max), events[0].day);
-  const spyBars = await ensureFreshSpy(earliest, alpaca);
-  summary.spyAvailable = spyBars.length > 0;
-  summary.notes.push(`Score history spans ${earliest} → ${latest}.`);
-  if (!summary.spyAvailable) {
-    summary.notes.push("SPY benchmark bars unavailable — abnormal returns can't be computed without it.");
-  }
-
-  // Group by ticker so we load/backfill each ticker's bars only once.
-  const byTicker = new Map<string, typeof events>();
-  for (const e of events) {
-    const list = byTicker.get(e.ticker) ?? [];
-    list.push(e);
-    byTicker.set(e.ticker, list);
-  }
-
-  const bucketed: { bucket: StockRecommendationLabel; study: EventStudyResult }[] = [];
-  for (const [ticker, list] of byTicker) {
-    const earliestForTicker = list.reduce((min, e) => (e.day < min ? e.day : min), list[0].day);
-    const bars = await ensureBarsCover(ticker, earliestForTicker, alpaca).catch(() => []);
-    if (bars.length === 0) continue;
-    for (const e of list) {
-      const study = eventStudy(bars, spyBars, e.day);
-      if (study) bucketed.push({ bucket: stockRecommendationLabel(e.score), study });
-    }
-  }
-
-  summary.analyzed = bucketed.length;
-  summary.tickers = byTicker.size;
-  summary.buckets = bucketAndAggregate(bucketed);
-  summary.calibration = calibrationVerdict(summary.buckets, PRIMARY_WINDOW);
-
-  const primaryN = summary.buckets.reduce(
-    (s, b) => s + (b.windows.find((w) => w.key === PRIMARY_WINDOW)?.n ?? 0),
+async function runScoreCalibration(alpaca: AlpacaService | null): Promise<ScoreCalibration> {
+  const { events, totalRows } = buildScoreEvents();
+  const studied = await studyEvents(events, alpaca);
+  const buckets = bucketAndAggregate(
+    studied.studies.map((s) => ({ bucket: s.key as StockRecommendationLabel, study: s.study })),
+  );
+  const calibration = calibrationVerdict(buckets, PRIMARY_WINDOW);
+  const primaryN = buckets.reduce(
+    (n, b) => n + (b.windows.find((w) => w.key === PRIMARY_WINDOW)?.n ?? 0),
     0,
   );
-  const lastBarDay = spyBars.length > 0 ? spyBars[spyBars.length - 1].date.slice(0, 10) : null;
-  const barsLagScores = lastBarDay != null && lastBarDay < latest;
-  if (summary.analyzed === 0) {
-    summary.notes.push(
-      lastBarDay != null && lastBarDay < earliest
-        ? `No daily bars on/after your earliest score (${earliest}); latest bar is ${lastBarDay}. Refresh daily bars, then re-run.`
-        : "No scores resolved to a forward window yet.",
-    );
-  } else if (primaryN === 0) {
-    summary.notes.push(
-      barsLagScores
-        ? `Latest daily bar (${lastBarDay}) predates your newest scores (${latest}) — +5d/+20d windows can't be measured until daily bars advance past the score dates (run the daily price refresh / npm run jobs).`
-        : "Scores are too recent for a matured +5d window — figures populate as the score history ages.",
-    );
-  } else if (primaryN < 20) {
-    summary.notes.push("Small sample — treat the per-band figures as indicative only.");
-  }
+  const notes: string[] = [];
+  if (events.length === 0) notes.push("No stored stock scores yet — refresh some tracked tickers, then re-run.");
+  if (studied.earliest && studied.latest) notes.push(`Score history spans ${studied.earliest} → ${studied.latest}.`);
+  if (events.length > 0 && !studied.spyAvailable) notes.push("SPY benchmark unavailable — abnormal returns can't be computed.");
+  const cn = events.length > 0 ? coverageNote(studied, primaryN, "score") : null;
+  if (cn) notes.push(cn);
 
-  writeCachedBacktest(summary);
-  return summary;
+  return {
+    totalScoreRows: totalRows,
+    sampledEvents: studied.sampledEvents,
+    analyzed: studied.analyzed,
+    tickers: studied.tickers,
+    spyAvailable: studied.spyAvailable,
+    primaryWindow: PRIMARY_WINDOW,
+    calibration,
+    buckets,
+    notes,
+  };
+}
+
+/** Build deduped pick events from Agent Picks + Sector Scout (one per source/ticker/day). */
+function buildPickEvents(): SignalEvent[] {
+  const db = getDb();
+  const out: SignalEvent[] = [];
+  const seen = new Set<string>();
+  const add = (ticker: string | null, at: string | null, source: string) => {
+    if (!ticker || !at) return;
+    const day = at.slice(0, 10);
+    const k = `${source}|${ticker}|${day}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ ticker, day, key: source });
+  };
+  for (const r of db
+    .select({ ticker: schema.agentCandidates.ticker, at: schema.agentCandidates.proposedAt })
+    .from(schema.agentCandidates)
+    .all())
+    add(r.ticker, r.at, "Agent Picks");
+  for (const r of db
+    .select({ ticker: schema.sectorScoutPicks.ticker, at: schema.sectorScoutPicks.scannedAt })
+    .from(schema.sectorScoutPicks)
+    .all())
+    add(r.ticker, r.at, "Sector Scout");
+  return out;
+}
+
+async function runPickPerformance(alpaca: AlpacaService | null): Promise<PickPerformance> {
+  const events = buildPickEvents();
+  const studied = await studyEvents(events, alpaca);
+  const sources = poolBySource(
+    studied.studies.map((s) => ({ source: s.key, study: s.study })),
+    PICK_SOURCES,
+  );
+  const primaryN = sources.reduce(
+    (n, s) => n + (s.windows.find((w) => w.key === PRIMARY_WINDOW)?.n ?? 0),
+    0,
+  );
+  const notes: string[] = [];
+  if (events.length === 0) notes.push("No Agent Picks or Sector Scout picks recorded yet.");
+  const cn = events.length > 0 ? coverageNote(studied, primaryN, "pick") : null;
+  if (cn) notes.push(cn);
+
+  return {
+    sampledEvents: studied.sampledEvents,
+    analyzed: studied.analyzed,
+    spyAvailable: studied.spyAvailable,
+    sources,
+    notes,
+  };
+}
+
+/** Run both backtests (score calibration + pick performance) and cache the report. */
+export async function runPerformanceBacktest(): Promise<PerformanceReport> {
+  const alpaca = AlpacaService.fromEnv();
+  const score = await runScoreCalibration(alpaca);
+  const picks = await runPickPerformance(alpaca);
+  const report: PerformanceReport = {
+    generatedAt: new Date().toISOString(),
+    score,
+    picks,
+  };
+  writeCachedReport(report);
+  return report;
 }

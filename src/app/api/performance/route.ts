@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { readCachedBacktest, runSignalBacktest } from "@/services/signalPerformance";
+import { readCachedReport, runPerformanceBacktest } from "@/services/signalPerformance";
+import { getTradePerformance } from "@/services/tradePerformance";
 
 export const maxDuration = 300;
 
 export async function GET() {
-  return NextResponse.json({ summary: readCachedBacktest() });
+  return NextResponse.json({ report: readCachedReport(), trades: getTradePerformance() });
 }
 
 export async function POST() {
   try {
-    const summary = await runSignalBacktest();
-    return NextResponse.json(summary);
+    const report = await runPerformanceBacktest();
+    return NextResponse.json({ ...report, trades: getTradePerformance() });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },

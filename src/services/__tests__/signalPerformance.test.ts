@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bucketAndAggregate, calibrationVerdict, SCORE_BANDS } from "../signalPerformance";
+import { bucketAndAggregate, calibrationVerdict, poolBySource, SCORE_BANDS } from "../signalPerformance";
 import {
   EVENT_WINDOWS,
   type EventStudyResult,
@@ -24,6 +24,23 @@ function studyWith(abn: Partial<Record<EventWindowKey, number>>): EventStudyResu
 function ev(bucket: StockRecommendationLabel, post5: number) {
   return { bucket, study: studyWith({ post1: post5 / 2, post5, post20: post5 * 2 }) };
 }
+
+describe("signalPerformance.poolBySource", () => {
+  it("pools studies by source, one row per requested source in order", () => {
+    const studies = [
+      { source: "Agent Picks", study: studyWith({ post5: 3 }) },
+      { source: "Agent Picks", study: studyWith({ post5: 1 }) },
+      { source: "Sector Scout", study: studyWith({ post5: -2 }) },
+    ];
+    const res = poolBySource(studies, ["Agent Picks", "Sector Scout", "Empty"]);
+    expect(res.map((r) => r.source)).toEqual(["Agent Picks", "Sector Scout", "Empty"]);
+    const ap = res.find((r) => r.source === "Agent Picks")!;
+    expect(ap.totalEvents).toBe(2);
+    expect(ap.windows.find((w) => w.key === "post5")!.meanAbnormalReturnPct).toBeCloseTo(2);
+    expect(ap.windows.find((w) => w.key === "post5")!.hitRate).toBe(100);
+    expect(res.find((r) => r.source === "Empty")!.totalEvents).toBe(0);
+  });
+});
 
 describe("signalPerformance.bucketAndAggregate", () => {
   it("returns all five bands even when most are empty", () => {
