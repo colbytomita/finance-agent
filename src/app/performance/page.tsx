@@ -1,6 +1,7 @@
-import { readCachedBacktest } from "@/services/signalPerformance";
-import type { EventWindowKey } from "@/services/eventStudy";
-import { fmtDateTime } from "@/lib/format";
+import { readCachedReport } from "@/services/signalPerformance";
+import { getTradePerformance } from "@/services/tradePerformance";
+import type { WindowEdge, EventWindowKey } from "@/services/eventStudy";
+import { fmtDateTime, fmtMoney } from "@/lib/format";
 import { Pct } from "@/components/badges";
 import { RunBacktestButton } from "@/components/SignalPerformance";
 
@@ -19,108 +20,196 @@ const VERDICT: Record<string, { text: string; cls: string }> = {
   "n/a": { text: "Not enough data yet to judge calibration", cls: "text-zinc-500" },
 };
 
+function WindowCells({ windows }: { windows: WindowEdge[] }) {
+  return (
+    <>
+      {WINDOWS.map((w) => {
+        const edge = windows.find((x) => x.key === w.key);
+        return (
+          <td key={w.key} className="text-right">
+            {edge && edge.n > 0 ? (
+              <span>
+                <Pct value={edge.meanAbnormalReturnPct} />
+                <span className="ml-1 text-[10px] text-zinc-600">
+                  hit {edge.hitRate?.toFixed(0)}% · n={edge.n}
+                </span>
+              </span>
+            ) : (
+              <span className="text-zinc-600">—</span>
+            )}
+          </td>
+        );
+      })}
+    </>
+  );
+}
+
+function Notes({ notes }: { notes: string[] }) {
+  if (notes.length === 0) return null;
+  return (
+    <ul className="space-y-1 text-xs text-amber-400/90">
+      {notes.map((n, i) => (
+        <li key={i}>• {n}</li>
+      ))}
+    </ul>
+  );
+}
+
+function Stat({ label, value, cls }: { label: string; value: string; cls?: string }) {
+  return (
+    <div className="rounded border border-zinc-800 px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
+      <div className={`text-sm font-semibold tabular-nums ${cls ?? "text-zinc-200"}`}>{value}</div>
+    </div>
+  );
+}
+
+const pct = (v: number | null, digits = 1) => (v == null ? "—" : `${v >= 0 ? "" : ""}${v.toFixed(digits)}%`);
+
 export default function PerformancePage() {
-  const summary = readCachedBacktest();
+  const report = readCachedReport();
+  const trades = getTradePerformance();
+  const score = report?.score;
+  const picks = report?.picks;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-bold">Signal Performance</h1>
         <div className="ml-auto flex items-center gap-3">
-          {summary && <span className="text-[11px] text-zinc-500">Last run {fmtDateTime(summary.generatedAt)}</span>}
+          {report && <span className="text-[11px] text-zinc-500">Last run {fmtDateTime(report.generatedAt)}</span>}
           <RunBacktestButton />
         </div>
       </div>
 
       <p className="text-xs text-zinc-500">
-        Backtests the app&apos;s own stock scores against what actually happened. Every stored score becomes
-        an event; we measure each ticker&apos;s forward return vs SPY over the next 1 / 5 / 20 trading days and
-        pool the results by recommendation band. If the score is calibrated, the higher bands should show
-        higher forward abnormal returns. This is historical correlation across past calls —{" "}
-        <span className="text-zinc-400">not a prediction and not advice</span>.
+        Does any of this actually work? This backtests the app&apos;s own calls against what happened next —
+        stock scores (by recommendation band) and discovery picks (by source) measured as forward return vs SPY
+        over 1 / 5 / 20 trading days, plus the realized results of your closed trades. Historical correlation
+        across past calls — <span className="text-zinc-400">not a prediction and not advice</span>.
       </p>
 
-      {!summary ? (
-        <p className="py-10 text-center text-sm text-zinc-500">
-          No backtest yet. Click <span className="text-zinc-300">Run backtest</span> to evaluate your stored
-          scores.
-        </p>
-      ) : (
-        <>
-          <div className="card flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
-            <span>
-              Verdict ({WINDOWS.find((w) => w.key === summary.primaryWindow)?.label ?? summary.primaryWindow}):{" "}
-              <span className={VERDICT[summary.calibration]?.cls ?? "text-zinc-400"}>
-                {VERDICT[summary.calibration]?.text ?? summary.calibration}
+      {/* 1. Score calibration */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold text-zinc-200">Score calibration</h2>
+        {!score ? (
+          <p className="py-6 text-center text-sm text-zinc-500">
+            No backtest yet — click <span className="text-zinc-300">Run backtest</span>.
+          </p>
+        ) : (
+          <>
+            <div className="card flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
+              <span>
+                Verdict ({WINDOWS.find((w) => w.key === score.primaryWindow)?.label ?? score.primaryWindow}):{" "}
+                <span className={VERDICT[score.calibration]?.cls ?? "text-zinc-400"}>
+                  {VERDICT[score.calibration]?.text ?? score.calibration}
+                </span>
               </span>
-            </span>
-            <span className="text-zinc-500">
-              {summary.analyzed} analyzed · {summary.sampledEvents} scored days · {summary.tickers} tickers ·{" "}
-              {summary.totalScoreRows} raw score rows
-            </span>
-            {!summary.spyAvailable && <span className="text-amber-400">SPY benchmark missing</span>}
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Recommendation band</th>
-                  <th>Score</th>
-                  {WINDOWS.map((w) => (
-                    <th key={w.key} className="text-right">
-                      Mean abn. return {w.label}
-                    </th>
-                  ))}
-                  <th className="text-right">Samples</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.buckets.map((b) => {
-                  const maxN = Math.max(0, ...b.windows.map((w) => w.n));
-                  return (
+              <span className="text-zinc-500">
+                {score.analyzed} analyzed · {score.sampledEvents} scored days · {score.tickers} tickers ·{" "}
+                {score.totalScoreRows} raw rows
+              </span>
+              {!score.spyAvailable && <span className="text-amber-400">SPY benchmark missing</span>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Recommendation band</th>
+                    <th>Score</th>
+                    {WINDOWS.map((w) => (
+                      <th key={w.key} className="text-right">Mean abn. return {w.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {score.buckets.map((b) => (
                     <tr key={b.bucket}>
                       <td className="font-semibold text-zinc-200">{b.bucket}</td>
                       <td className="tabular-nums text-zinc-500">{b.scoreRange}</td>
-                      {WINDOWS.map((w) => {
-                        const edge = b.windows.find((x) => x.key === w.key);
-                        return (
-                          <td key={w.key} className="text-right">
-                            {edge && edge.n > 0 ? (
-                              <span>
-                                <Pct value={edge.meanAbnormalReturnPct} />
-                                <span className="ml-1 text-[10px] text-zinc-600">
-                                  hit {edge.hitRate?.toFixed(0)}% · n={edge.n}
-                                </span>
-                              </span>
-                            ) : (
-                              <span className="text-zinc-600">—</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="text-right tabular-nums text-zinc-500">{maxN || "—"}</td>
+                      <WindowCells windows={b.windows} />
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Notes notes={score.notes} />
+          </>
+        )}
+      </section>
 
-          {summary.notes.length > 0 && (
-            <ul className="space-y-1 text-xs text-amber-400/90">
-              {summary.notes.map((n, i) => (
-                <li key={i}>• {n}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
+      {/* 2. Pick performance */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold text-zinc-200">Pick performance</h2>
+        <p className="text-[11px] text-zinc-500">
+          How the names surfaced by Agent Picks and Sector Scout actually moved vs SPY after they were proposed.
+        </p>
+        {!picks ? (
+          <p className="py-4 text-center text-sm text-zinc-500">Run the backtest to evaluate picks.</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    {WINDOWS.map((w) => (
+                      <th key={w.key} className="text-right">Mean abn. return {w.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {picks.sources.map((s) => (
+                    <tr key={s.source}>
+                      <td className="font-semibold text-zinc-200">
+                        {s.source} <span className="text-[10px] text-zinc-500">({s.totalEvents})</span>
+                      </td>
+                      <WindowCells windows={s.windows} />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Notes notes={picks.notes} />
+          </>
+        )}
+      </section>
+
+      {/* 3. Realized trades */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold text-zinc-200">Realized trades</h2>
+        {trades.closed === 0 ? (
+          <p className="py-4 text-center text-sm text-zinc-500">
+            No closed trades yet — close a trade to start tracking realized performance.
+          </p>
+        ) : (
+          <>
+            <p className="text-[11px] text-zinc-500">
+              {trades.closed} closed · {trades.wins}W / {trades.losses}L
+              {trades.breakeven ? ` / ${trades.breakeven} BE` : ""}
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              <Stat label="Win rate" value={pct(trades.winRate, 0)} cls={trades.winRate != null && trades.winRate >= 50 ? "pos" : "text-zinc-200"} />
+              <Stat label="Avg return / trade" value={pct(trades.avgReturnPct)} cls={(trades.avgReturnPct ?? 0) > 0 ? "pos" : (trades.avgReturnPct ?? 0) < 0 ? "neg" : "text-zinc-200"} />
+              <Stat label="Avg R multiple" value={trades.avgRMultiple == null ? "—" : `${trades.avgRMultiple.toFixed(2)}R`} cls={(trades.avgRMultiple ?? 0) > 0 ? "pos" : (trades.avgRMultiple ?? 0) < 0 ? "neg" : "text-zinc-200"} />
+              <Stat label="Profit factor" value={trades.profitFactor == null ? "—" : trades.profitFactor.toFixed(2)} />
+              <Stat label="Avg win" value={pct(trades.avgWinPct)} cls="pos" />
+              <Stat label="Avg loss" value={pct(trades.avgLossPct)} cls="neg" />
+              <Stat label="Avg hold" value={trades.avgHoldingDays == null ? "—" : `${trades.avgHoldingDays.toFixed(1)}d`} />
+              <Stat label="Total P/L" value={trades.totalPnl == null ? "—" : fmtMoney(trades.totalPnl)} cls={(trades.totalPnl ?? 0) > 0 ? "pos" : (trades.totalPnl ?? 0) < 0 ? "neg" : "text-zinc-200"} />
+              <Stat label="Best / worst" value={`${pct(trades.bestPct, 0)} / ${pct(trades.worstPct, 0)}`} />
+              {trades.thesisPlayedOutRate != null && (
+                <Stat label="Thesis played out" value={pct(trades.thesisPlayedOutRate, 0)} />
+              )}
+            </div>
+          </>
+        )}
+      </section>
 
       <p className="text-[11px] text-zinc-600">
-        Abnormal return = the ticker&apos;s return minus SPY&apos;s over the same window. Bands are scored from
-        the same engine that drives the dashboard. Overlapping windows and a finite sample mean these figures
-        are a calibration check, not a tradeable backtest — and past behavior never guarantees future results.
+        Abnormal return = the ticker&apos;s return minus SPY&apos;s over the same window. Score/pick figures are a
+        calibration check (overlapping windows, finite samples), not a tradeable backtest. Realized-trade stats
+        cover only trades you closed in the app. Past behavior never guarantees future results.
       </p>
     </div>
   );

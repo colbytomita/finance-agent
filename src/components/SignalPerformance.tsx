@@ -16,7 +16,7 @@ export function RunBacktestButton() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "backtest failed");
       setMsg(
-        `Analyzed ${data.analyzed} of ${data.sampledEvents} scored day(s) across ${data.tickers} ticker(s)`,
+        `Scores: ${data.score?.analyzed ?? 0} analyzed · Picks: ${data.picks?.analyzed ?? 0} · Trades: ${data.trades?.closed ?? 0} closed`,
       );
       router.refresh();
     } catch (e) {
