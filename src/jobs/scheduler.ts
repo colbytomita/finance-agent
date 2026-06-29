@@ -16,6 +16,7 @@ import { generateAlerts } from "@/services/alerts";
 import { rollCatalystStatuses, scanYahooNews } from "@/services/catalysts";
 import { AlpacaService } from "@/services/alpaca";
 import { runDiscoveryScan } from "@/services/discoveryAgent";
+import { runSectorScan } from "@/services/sectorScout";
 import { runEventIngestion } from "@/services/eventIngestion";
 import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers } from "@/services/earnings";
@@ -110,6 +111,20 @@ async function dailyMaintenance(): Promise<void> {
       return null;
     });
     if (picks) log(`discovery scan: ${picks.proposed} new pick(s) from ${picks.scanned} scanned`);
+
+    // Sector Scout: re-scan each favorite industry so its picks stay fresh.
+    if (cfg.sectorScoutScanEnabled && cfg.sectorScoutIndustries.length > 0) {
+      for (const industry of cfg.sectorScoutIndustries) {
+        const res = await runSectorScan({ industry, cfg }).catch((e) => {
+          log(`sector scout "${industry}" failed: ${e instanceof Error ? e.message : e}`);
+          return null;
+        });
+        if (res)
+          log(
+            `sector scout "${res.industry}": ${res.proposed} pick(s) from ${res.scanned} scored (${res.expandedBy})`,
+          );
+      }
+    }
 
     // Auto-fetch quarterly earnings (estimate vs actual) for tracked tickers, then
     // recompute so a fresh beat/miss weighs into scores. Browser-based, best effort.

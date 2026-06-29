@@ -23,6 +23,10 @@ export interface AppConfig {
   yahooBrowserEnabled: boolean;
   agentMinScore: number; // discovery agent proposes candidates scoring >= this (1–10)
   portfolioWatchlistRecLimit: number; // max "add to watchlist" suggestions from holdings shown at once (0 hides)
+  // Sector Scout scheduled auto-scan. When enabled, daily maintenance re-scans
+  // each favorite industry (reusing agentMinScore as the threshold).
+  sectorScoutScanEnabled: boolean;
+  sectorScoutIndustries: string[]; // favorite industries/themes to auto-scan, e.g. ["space","energy"]
   // Real-world event ingestion (Catalyst Edge). Master switch gates the scheduled
   // run; manual runs honor the per-source switches regardless.
   eventIngestionEnabled: boolean;
@@ -68,6 +72,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   yahooBrowserEnabled: true,
   agentMinScore: 7,
   portfolioWatchlistRecLimit: 3,
+  sectorScoutScanEnabled: false,
+  sectorScoutIndustries: [],
   eventIngestionEnabled: false,
   eventSourceSecEnabled: true,
   eventSourceGdeltEnabled: false,

@@ -5,7 +5,9 @@ import { listSectorPicks, listSectorScans, runSectorScan } from "@/services/sect
 export const maxDuration = 300;
 
 const scanSchema = z.object({
-  industry: z.string().min(1).max(80),
+  // .trim() first so a whitespace-only industry fails min(1) here (400) rather
+  // than passing validation and throwing later in runSectorScan (500).
+  industry: z.string().trim().min(1).max(80),
   minScore: z.number().min(1).max(10).optional(),
 });
 

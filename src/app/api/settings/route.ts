@@ -20,6 +20,8 @@ const settingsSchema = z
     yahooBrowserEnabled: z.coerce.boolean(),
     agentMinScore: z.coerce.number().min(1).max(10),
     portfolioWatchlistRecLimit: z.coerce.number().int().min(0).max(50),
+    sectorScoutScanEnabled: z.coerce.boolean(),
+    sectorScoutIndustries: z.array(z.string().trim().min(1).max(80)).max(20),
     eventIngestionEnabled: z.coerce.boolean(),
     eventSourceSecEnabled: z.coerce.boolean(),
     eventSourceGdeltEnabled: z.coerce.boolean(),

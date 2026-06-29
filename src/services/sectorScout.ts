@@ -136,8 +136,14 @@ export async function expandIndustry(
     return { tickers: curated.slice(0, max), by: "rules" };
   }
 
-  const prompt = `You are a financial research assistant. List up to ${max} publicly traded, US-exchange-listed stock tickers most relevant to this industry/theme: "${industry}".
-Prefer pure-play companies in the theme first, then larger diversified companies with meaningful exposure. Use real, current ticker symbols in uppercase. Do NOT include ETFs, mutual funds, indices, private companies, or delisted symbols.
+  const prompt = `You are a financial research assistant. List up to ${max} publicly traded, US-exchange-listed stocks that are PURE-PLAY or primary-business bets on this industry/theme: "${industry}".
+
+Selection rules:
+- Prioritize companies whose CORE business IS this theme (pure-plays and dedicated operators).
+- Only include a large diversified company if this theme is a MAJOR, clearly material part of its business. EXCLUDE mega-caps that merely have incidental, minor, or one-division exposure (do not list a broad megacap just because it touches the theme).
+- Order the list from most pure-play to least.
+- Use real, current ticker symbols in uppercase. Do NOT include ETFs, mutual funds, indices, private companies, or delisted symbols.
+
 Respond with ONLY a JSON array of ticker strings, e.g. ["AAA","BBB"]. No commentary.`;
 
   try {

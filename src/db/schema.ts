@@ -3,6 +3,7 @@ import {
   text,
   integer,
   real,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 // Timestamps are stored as ISO-8601 strings (UTC) for portability to Postgres.
@@ -304,7 +305,11 @@ export const sectorScoutPicks = sqliteTable("sector_scout_picks", {
   briefGeneratedBy: text("brief_generated_by").notNull().default("rules"), // llm | rules
   status: text("status").notNull().default("new"), // new | added | dismissed
   scannedAt: text("scanned_at").notNull(),
-});
+}, (t) => [
+  // Mirrors the runtime DDL's `UNIQUE (industry, ticker)` — one pick row per
+  // industry+ticker. The upsert in runSectorScan conflict-targets these columns.
+  uniqueIndex("sector_scout_picks_industry_ticker_unique").on(t.industry, t.ticker),
+]);
 
 // Quarterly earnings results: actual vs. analyst estimate (the "beat / meet / miss").
 // Feeds the scoring engine as a recency-decayed earnings-surprise signal.
