@@ -273,9 +273,50 @@ export const sectorScans = sqliteTable("sector_scans", {
   considered: integer("considered").notNull().default(0), // tickers the expander proposed
   scanned: integer("scanned").notNull().default(0), // tickers with real data that got scored
   proposed: integer("proposed").notNull().default(0), // picks that cleared the score test
+  thesisReports: integer("thesis_reports").notNull().default(0), // deeper company-claim reports generated
   minScore: real("min_score").notNull(), // threshold used for this run
   expandedBy: text("expanded_by").notNull().default("rules"), // llm | rules (how tickers were sourced)
   ranAt: text("ran_at").notNull(),
+});
+
+// Sector Scout thesis validation. A report is the latest evidence-backed view
+// of one ticker for one searched theme; claims are the individual assertions the
+// app found and scored. Scores are heuristic evidence ratings, not predictions.
+export const companyThesisReports = sqliteTable("company_thesis_reports", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticker: text("ticker").notNull(),
+  companyName: text("company_name"),
+  industry: text("industry").notNull(),
+  theme: text("theme").notNull(),
+  summary: text("summary"),
+  themeFitScore: real("theme_fit_score").notNull(),
+  claimCredibilityScore: real("claim_credibility_score").notNull(),
+  moonshotScore: real("moonshot_score").notNull(),
+  evidenceQualityScore: real("evidence_quality_score").notNull(),
+  hypePenalty: real("hype_penalty").notNull().default(0),
+  overallThesisScore: real("overall_thesis_score").notNull(),
+  verdict: text("verdict").notNull(),
+  generatedBy: text("generated_by").notNull().default("rules"), // llm | rules
+  sourcesJson: text("sources_json"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (t) => [
+  uniqueIndex("company_thesis_reports_ticker_theme_unique").on(t.ticker, t.theme),
+]);
+
+export const companyClaims = sqliteTable("company_claims", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  reportId: integer("report_id").notNull(),
+  ticker: text("ticker").notNull(),
+  claim: text("claim").notNull(),
+  claimType: text("claim_type").notNull().default("company_claim"),
+  probabilityScore: real("probability_score").notNull(),
+  evidenceSummary: text("evidence_summary"),
+  counterEvidenceSummary: text("counter_evidence_summary"),
+  sourceUrlsJson: text("source_urls_json"),
+  confidence: text("confidence").notNull().default("low"),
+  status: text("status").notNull().default("unverified"),
+  createdAt: text("created_at").notNull(),
 });
 
 export const sectorScoutPicks = sqliteTable("sector_scout_picks", {
@@ -303,6 +344,16 @@ export const sectorScoutPicks = sqliteTable("sector_scout_picks", {
   keyRisks: text("key_risks"), // JSON array of strings
   recommendedAction: text("recommended_action"),
   briefGeneratedBy: text("brief_generated_by").notNull().default("rules"), // llm | rules
+  thesisReportId: integer("thesis_report_id"),
+  thesisScore: real("thesis_score"),
+  themeFitScore: real("theme_fit_score"),
+  claimCredibilityScore: real("claim_credibility_score"),
+  moonshotScore: real("moonshot_score"),
+  evidenceQualityScore: real("evidence_quality_score"),
+  hypePenalty: real("hype_penalty"),
+  thesisVerdict: text("thesis_verdict"),
+  thesisSummary: text("thesis_summary"),
+  thesisGeneratedBy: text("thesis_generated_by"),
   status: text("status").notNull().default("new"), // new | added | dismissed
   scannedAt: text("scanned_at").notNull(),
 }, (t) => [

@@ -260,11 +260,49 @@ CREATE TABLE IF NOT EXISTS sector_scans (
   considered INTEGER NOT NULL DEFAULT 0,
   scanned INTEGER NOT NULL DEFAULT 0,
   proposed INTEGER NOT NULL DEFAULT 0,
+  thesis_reports INTEGER NOT NULL DEFAULT 0,
   min_score REAL NOT NULL,
   expanded_by TEXT NOT NULL DEFAULT 'rules',
   ran_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sector_scans_industry_time ON sector_scans (industry, ran_at DESC);
+CREATE TABLE IF NOT EXISTS company_thesis_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticker TEXT NOT NULL,
+  company_name TEXT,
+  industry TEXT NOT NULL,
+  theme TEXT NOT NULL,
+  summary TEXT,
+  theme_fit_score REAL NOT NULL,
+  claim_credibility_score REAL NOT NULL,
+  moonshot_score REAL NOT NULL,
+  evidence_quality_score REAL NOT NULL,
+  hype_penalty REAL NOT NULL DEFAULT 0,
+  overall_thesis_score REAL NOT NULL,
+  verdict TEXT NOT NULL,
+  generated_by TEXT NOT NULL DEFAULT 'rules',
+  sources_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (ticker, theme)
+);
+CREATE INDEX IF NOT EXISTS idx_company_thesis_reports_ticker ON company_thesis_reports (ticker, updated_at DESC);
+CREATE TABLE IF NOT EXISTS company_claims (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id INTEGER NOT NULL,
+  ticker TEXT NOT NULL,
+  claim TEXT NOT NULL,
+  claim_type TEXT NOT NULL DEFAULT 'company_claim',
+  probability_score REAL NOT NULL,
+  evidence_summary TEXT,
+  counter_evidence_summary TEXT,
+  source_urls_json TEXT,
+  confidence TEXT NOT NULL DEFAULT 'low',
+  status TEXT NOT NULL DEFAULT 'unverified',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_company_claims_report ON company_claims (report_id);
+CREATE INDEX IF NOT EXISTS idx_company_claims_ticker ON company_claims (ticker, created_at DESC);
 CREATE TABLE IF NOT EXISTS sector_scout_picks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   industry TEXT NOT NULL,
@@ -289,6 +327,16 @@ CREATE TABLE IF NOT EXISTS sector_scout_picks (
   key_risks TEXT,
   recommended_action TEXT,
   brief_generated_by TEXT NOT NULL DEFAULT 'rules',
+  thesis_report_id INTEGER,
+  thesis_score REAL,
+  theme_fit_score REAL,
+  claim_credibility_score REAL,
+  moonshot_score REAL,
+  evidence_quality_score REAL,
+  hype_penalty REAL,
+  thesis_verdict TEXT,
+  thesis_summary TEXT,
+  thesis_generated_by TEXT,
   status TEXT NOT NULL DEFAULT 'new',
   scanned_at TEXT NOT NULL,
   UNIQUE (industry, ticker)
@@ -312,6 +360,17 @@ export function getDb(): BetterSQLite3Database<typeof schema> {
     "ALTER TABLE active_trades ADD COLUMN reasoning_json TEXT",
     "ALTER TABLE active_trades ADD COLUMN broker TEXT",
     "ALTER TABLE active_trades ADD COLUMN broker_order_id TEXT",
+    "ALTER TABLE sector_scout_picks ADD COLUMN thesis_report_id INTEGER",
+    "ALTER TABLE sector_scout_picks ADD COLUMN thesis_score REAL",
+    "ALTER TABLE sector_scout_picks ADD COLUMN theme_fit_score REAL",
+    "ALTER TABLE sector_scout_picks ADD COLUMN claim_credibility_score REAL",
+    "ALTER TABLE sector_scout_picks ADD COLUMN moonshot_score REAL",
+    "ALTER TABLE sector_scout_picks ADD COLUMN evidence_quality_score REAL",
+    "ALTER TABLE sector_scout_picks ADD COLUMN hype_penalty REAL",
+    "ALTER TABLE sector_scout_picks ADD COLUMN thesis_verdict TEXT",
+    "ALTER TABLE sector_scout_picks ADD COLUMN thesis_summary TEXT",
+    "ALTER TABLE sector_scout_picks ADD COLUMN thesis_generated_by TEXT",
+    "ALTER TABLE sector_scans ADD COLUMN thesis_reports INTEGER NOT NULL DEFAULT 0",
   ]) {
     try {
       sqlite.exec(stmt);

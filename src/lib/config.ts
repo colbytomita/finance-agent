@@ -27,6 +27,9 @@ export interface AppConfig {
   // each favorite industry (reusing agentMinScore as the threshold).
   sectorScoutScanEnabled: boolean;
   sectorScoutIndustries: string[]; // favorite industries/themes to auto-scan, e.g. ["space","energy"]
+  sectorScoutThesisEnabled: boolean; // validate company claims/evidence during Sector Scout scans
+  sectorScoutThesisMaxReports: number; // per-scan cap for deeper thesis work
+  sectorScoutThesisMinScore: number; // thesis-only picks can surface at or above this score
   // Real-world event ingestion (Catalyst Edge). Master switch gates the scheduled
   // run; manual runs honor the per-source switches regardless.
   eventIngestionEnabled: boolean;
@@ -74,6 +77,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   portfolioWatchlistRecLimit: 3,
   sectorScoutScanEnabled: false,
   sectorScoutIndustries: [],
+  sectorScoutThesisEnabled: true,
+  sectorScoutThesisMaxReports: 6,
+  sectorScoutThesisMinScore: 7,
   eventIngestionEnabled: false,
   eventSourceSecEnabled: true,
   eventSourceGdeltEnabled: false,

@@ -4,6 +4,10 @@ import {
   listSectorScans,
   type SectorPick,
 } from "@/services/sectorScout";
+import {
+  listCompanyClaimsForReports,
+  type CompanyClaimRow,
+} from "@/services/companyThesisScout";
 import { loadConfig } from "@/lib/config";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { Pct, RecBadge, ScoreBadge } from "@/components/badges";
@@ -37,7 +41,7 @@ function groupByIndustry(picks: SectorPick[]): { industry: string; picks: Sector
   return groups;
 }
 
-function PickCard({ pick }: { pick: SectorPick }) {
+function PickCard({ pick, claims }: { pick: SectorPick; claims: CompanyClaimRow[] }) {
   const catalysts = parseList(pick.keyCatalysts);
   const risks = parseList(pick.keyRisks);
   const added = pick.status === "added";
@@ -79,6 +83,44 @@ function PickCard({ pick }: { pick: SectorPick }) {
       </div>
 
       {pick.summary && <p className="text-sm text-zinc-200">{pick.summary}</p>}
+
+      {pick.thesisScore != null && (
+        <div className="rounded border border-zinc-800 bg-zinc-950/40 p-2">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-300">
+              Thesis validation
+            </span>
+            <ScoreBadge score={pick.thesisScore} />
+            {pick.thesisVerdict && <span className="text-xs text-zinc-300">{pick.thesisVerdict}</span>}
+            {pick.thesisGeneratedBy === "llm" && (
+              <span className="text-xs text-violet-300" title="Claims extracted with the configured LLM; scores are rules-based">
+                · AI extracted
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
+            <span>claim cred {pick.claimCredibilityScore?.toFixed(1) ?? "—"}</span>
+            <span>theme fit {pick.themeFitScore?.toFixed(1) ?? "—"}</span>
+            <span>moonshot {pick.moonshotScore?.toFixed(1) ?? "—"}</span>
+            <span>evidence {pick.evidenceQualityScore?.toFixed(1) ?? "—"}</span>
+            <span>hype penalty {pick.hypePenalty?.toFixed(1) ?? "—"}</span>
+          </div>
+          {pick.thesisSummary && <p className="mt-1 text-xs text-zinc-300">{pick.thesisSummary}</p>}
+          {claims.length > 0 && (
+            <ul className="mt-2 space-y-1 text-xs text-zinc-300">
+              {claims.slice(0, 2).map((claim) => (
+                <li key={claim.id}>
+                  <span className="tabular-nums text-sky-300">
+                    {(claim.probabilityScore * 100).toFixed(0)}%
+                  </span>{" "}
+                  <span>{claim.claim}</span>
+                  <span className="text-zinc-500"> · {claim.status.replace(/_/g, " ")}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div>
@@ -139,6 +181,9 @@ export default function SectorScoutPage() {
   const picks = listSectorPicks();
   const groups = groupByIndustry(picks);
   const scans = listSectorScans();
+  const claimsByReport = listCompanyClaimsForReports(
+    picks.map((p) => p.thesisReportId).filter((id): id is number => id != null),
+  );
 
   return (
     <div className="space-y-4">
@@ -149,8 +194,9 @@ export default function SectorScoutPage() {
       <p className="text-xs text-zinc-500">
         Type an industry or theme. The scout expands it into real, US-listed tickers (LLM-assisted when an
         Anthropic key is configured, a curated list otherwise), drops anything without real price data, scores
-        the rest with the same engine used everywhere, and writes a bull/bear/risk brief for any scoring{" "}
-        <span className="text-zinc-300">≥ your min score</span> (defaults to{" "}
+        the rest with the same engine used everywhere, validates company claims/evidence when enabled, and writes
+        a bull/bear/risk brief for any scoring <span className="text-zinc-300">≥ your min score</span> or clearing
+        the thesis-led evidence threshold (defaults to{" "}
         {cfg.agentMinScore.toFixed(1)}, from{" "}
         <Link href="/settings" className="text-sky-300 hover:underline">
           Settings
@@ -170,6 +216,7 @@ export default function SectorScoutPage() {
                 <span className="text-zinc-500">
                   {s.considered} considered · {s.scanned} scored · {s.proposed} pick(s) · ≥{" "}
                   {s.minScore.toFixed(1)}
+                  {s.thesisReports > 0 ? ` · ${s.thesisReports} thesis report(s)` : ""}
                 </span>
                 {s.expandedBy === "rules" && <span className="text-zinc-600">· curated</span>}
                 <span className="ml-auto text-zinc-600">{fmtDateTime(s.ranAt)}</span>
@@ -195,7 +242,7 @@ export default function SectorScoutPage() {
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               {g.picks.map((p) => (
-                <PickCard key={p.id} pick={p} />
+                <PickCard key={p.id} pick={p} claims={p.thesisReportId ? claimsByReport[p.thesisReportId] ?? [] : []} />
               ))}
             </div>
           </section>
@@ -203,9 +250,9 @@ export default function SectorScoutPage() {
       )}
 
       <p className="text-[11px] text-zinc-600">
-        Sector Scout findings are heuristic interpretations of price/technical data plus model-written briefs —
-        not financial advice, not a guarantee, and the ticker list (LLM-assisted) may be incomplete or
-        include unrelated names. Always review before acting.
+        Sector Scout findings are heuristic interpretations of price/technical data, source-backed thesis
+        evidence, and model-written briefs — not financial advice, not a guarantee, and claim probability
+        is not a price prediction. Always review before acting.
       </p>
     </div>
   );

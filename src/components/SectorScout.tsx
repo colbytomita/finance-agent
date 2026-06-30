@@ -30,6 +30,7 @@ export function SectorScanForm({ defaultMinScore }: { defaultMinScore: number })
       if (!res.ok) throw new Error(data.error ?? "scan failed");
       setMsg(
         `“${data.industry}”: ${data.considered} considered · ${data.scanned} scored · ${data.proposed} pick(s)` +
+          (data.thesisReports ? ` · ${data.thesisReports} thesis report(s)` : "") +
           (data.expandedBy === "rules" ? " · curated list" : "") +
           (data.errors?.length ? ` · ${data.errors.length} error(s)` : ""),
       );

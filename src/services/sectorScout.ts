@@ -10,6 +10,10 @@ import {
 } from "./discoveryAgent";
 import { getProvider } from "./researchAgent";
 import { edgeCatalystsForTicker } from "./catalystEdge";
+import {
+  generateCompanyThesisReport,
+  type CompanyThesisReport,
+} from "./companyThesisScout";
 
 // Sector Scout: on-demand, industry-targeted discovery.
 //
@@ -292,10 +296,15 @@ export interface SectorScanResult {
   considered: number; // tickers the expander proposed
   scanned: number; // tickers with real data that got scored
   proposed: number; // picks that cleared the score test
+  thesisReports: number; // deeper company-claim reports generated
   expandedBy: "llm" | "rules";
   minScore: number;
   picks: { ticker: string; score: number }[];
   errors: string[];
+}
+
+function thesisAdjustedScore(marketScore: number, thesisScore: number | null | undefined): number {
+  return thesisScore == null ? marketScore : marketScore * 0.65 + thesisScore * 0.35;
 }
 
 /**
@@ -321,6 +330,7 @@ export async function runSectorScan(opts: {
     considered: 0,
     scanned: 0,
     proposed: 0,
+    thesisReports: 0,
     expandedBy: "rules",
     minScore,
     picks: [],
@@ -331,20 +341,60 @@ export async function runSectorScan(opts: {
   result.expandedBy = expansion.by;
   result.considered = expansion.tickers.length;
 
-  const surfaced: { a: CandidateAnalysis; brief: SectorBrief; low: number | null; high: number | null }[] = [];
+  const thesisBudget = cfg.sectorScoutThesisEnabled
+    ? Math.min(maxCandidates, Math.max(0, cfg.sectorScoutThesisMaxReports))
+    : 0;
+  let thesisUsed = 0;
+  const surfaced: {
+    a: CandidateAnalysis;
+    brief: SectorBrief;
+    low: number | null;
+    high: number | null;
+    thesis: CompanyThesisReport | null;
+    thesisReportId: number | null;
+  }[] = [];
   for (const ticker of expansion.tickers) {
     try {
       const a = await analyzeTicker(ticker, alpaca, cfg);
       if (!a) continue; // no real bars/price -> validation drop
       result.scanned++;
-      if (!passesTest(a, minScore)) continue;
+
+      let thesis: CompanyThesisReport | null = null;
+      let thesisReportId: number | null = null;
+      if (thesisUsed < thesisBudget) {
+        thesisUsed++;
+        try {
+          const res = await generateCompanyThesisReport({
+            ticker: a.ticker,
+            companyName: a.companyName,
+            industry,
+            cfg,
+          });
+          thesis = res.report;
+          thesisReportId = res.reportId;
+          result.thesisReports++;
+        } catch (e) {
+          result.errors.push(`${ticker} thesis: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+
+      const marketPass = passesTest(a, minScore);
+      const thesisPass =
+        thesis != null && thesis.overallThesisScore >= cfg.sectorScoutThesisMinScore;
+      if (!marketPass && !thesisPass) continue;
+
       const brief = await generateSectorBrief(a, industry);
       const { low, high } = suggestBuyZone(a);
-      surfaced.push({ a, brief, low, high });
+      surfaced.push({ a, brief, low, high, thesis, thesisReportId });
     } catch (e) {
       result.errors.push(`${ticker}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  surfaced.sort(
+    (x, y) =>
+      thesisAdjustedScore(y.a.score.overallScore, y.thesis?.overallThesisScore) -
+      thesisAdjustedScore(x.a.score.overallScore, x.thesis?.overallThesisScore),
+  );
 
   // Refresh: drop this industry's un-acted picks, then upsert the current set.
   // Existing "added"/"dismissed" rows survive (their status is preserved on conflict).
@@ -353,7 +403,7 @@ export async function runSectorScan(opts: {
     .where(and(eq(schema.sectorScoutPicks.industry, industry), eq(schema.sectorScoutPicks.status, "new")))
     .run();
 
-  for (const { a, brief, low, high } of surfaced) {
+  for (const { a, brief, low, high, thesis, thesisReportId } of surfaced) {
     const values = {
       industry,
       ticker: a.ticker,
@@ -377,6 +427,16 @@ export async function runSectorScan(opts: {
       keyRisks: JSON.stringify(brief.keyRisks),
       recommendedAction: brief.recommendedAction,
       briefGeneratedBy: brief.by,
+      thesisReportId,
+      thesisScore: thesis?.overallThesisScore ?? null,
+      themeFitScore: thesis?.themeFitScore ?? null,
+      claimCredibilityScore: thesis?.claimCredibilityScore ?? null,
+      moonshotScore: thesis?.moonshotScore ?? null,
+      evidenceQualityScore: thesis?.evidenceQualityScore ?? null,
+      hypePenalty: thesis?.hypePenalty ?? null,
+      thesisVerdict: thesis?.verdict ?? null,
+      thesisSummary: thesis?.summary ?? null,
+      thesisGeneratedBy: thesis?.generatedBy ?? null,
       scannedAt: now,
     };
     db.insert(schema.sectorScoutPicks)
@@ -398,6 +458,7 @@ export async function runSectorScan(opts: {
       considered: result.considered,
       scanned: result.scanned,
       proposed: result.proposed,
+      thesisReports: result.thesisReports,
       minScore,
       expandedBy: result.expandedBy,
       ranAt: now,
@@ -427,7 +488,7 @@ export function listSectorPicks(industry?: string): SectorPick[] {
     .filter((r) => r.status !== "dismissed")
     .sort((a, b) => {
       if (a.industry !== b.industry) return b.scannedAt.localeCompare(a.scannedAt);
-      return b.overallScore - a.overallScore;
+      return thesisAdjustedScore(b.overallScore, b.thesisScore) - thesisAdjustedScore(a.overallScore, a.thesisScore);
     });
 }
 
@@ -452,7 +513,9 @@ export function acceptSectorPick(id: number): { ok: true; ticker: string } | { e
     companyName: p.companyName ?? null,
     targetBuyLow: p.suggestedBuyLow ?? null,
     targetBuyHigh: p.suggestedBuyHigh ?? null,
-    notes: `Added from Sector Scout (${p.industry}) — ${p.summary ?? "scout-proposed"}`.slice(0, 500),
+    notes: `Added from Sector Scout (${p.industry}) — ${p.summary ?? "scout-proposed"}${
+      p.thesisSummary ? ` Thesis: ${p.thesisSummary}` : ""
+    }`.slice(0, 500),
     updatedAt: now,
   };
   db.insert(schema.watchlistItems)
