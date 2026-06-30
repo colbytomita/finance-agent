@@ -1,5 +1,6 @@
 import { listMentions, distinctEntities } from "@/services/entityMentions";
-import { fmtDate } from "@/lib/format";
+import { listIngestionRuns } from "@/services/eventIngestion";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 import { DeleteButton } from "@/components/forms";
 import { AddMentionForm, EntityAnalyzer, IngestButton, ApplyEdgeButton } from "@/components/Events";
 
@@ -12,9 +13,24 @@ const DIRECTION_CLS: Record<string, string> = {
   unknown: "text-zinc-500",
 };
 
+/** "sec-edgar 5 · gdelt 12" from the stored bySource JSON (empty string if none). */
+function bySourceSummary(json: string | null): string {
+  if (!json) return "";
+  try {
+    const obj = JSON.parse(json) as Record<string, number>;
+    return Object.entries(obj)
+      .filter(([, n]) => n > 0)
+      .map(([src, n]) => `${src} ${n}`)
+      .join(" · ");
+  } catch {
+    return "";
+  }
+}
+
 export default function EventsPage() {
   const mentions = listMentions();
   const entities = distinctEntities();
+  const runs = listIngestionRuns();
 
   return (
     <div className="space-y-3">
@@ -56,6 +72,33 @@ export default function EventsPage() {
         entity edge flows into the stock score, the catalysts view, and Agent Picks. Always shown with
         sample size and the historical-correlation caveat.
       </p>
+
+      {runs.length > 0 && (
+        <section className="card">
+          <h2 className="card-title">Recent ingestion runs</h2>
+          <ul className="space-y-1 text-xs">
+            {runs.map((r) => {
+              const sources = bySourceSummary(r.bySource);
+              return (
+                <li key={r.id} className="flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                    {r.trigger}
+                  </span>
+                  <span className="text-zinc-200">
+                    {r.persisted} added{r.catalystsAdded > 0 ? ` · ${r.catalystsAdded} catalyst(s)` : ""}
+                  </span>
+                  <span className="text-zinc-500">
+                    {r.fetched} fetched · {r.extracted} extracted · {r.skipped} skipped · {r.generatedBy}
+                  </span>
+                  {sources && <span className="text-zinc-600">{sources}</span>}
+                  {r.errorCount > 0 && <span className="text-amber-400">{r.errorCount} error(s)</span>}
+                  <span className="ml-auto text-zinc-600">{fmtDateTime(r.ranAt)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <AddMentionForm />
 

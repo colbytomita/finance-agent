@@ -117,6 +117,8 @@ export interface IngestOptions {
   /** Also write each mention into the catalysts table. Default false. */
   alsoCreateCatalysts?: boolean;
   fetchFn?: typeof fetch;
+  /** What kicked off this run — recorded in the run log. Default "manual". */
+  trigger?: "manual" | "scheduled";
 }
 
 export interface IngestResult {
@@ -130,7 +132,7 @@ export interface IngestResult {
   generatedBy: "llm" | "rules" | "mixed" | "none";
 }
 
-export async function runEventIngestion(opts: IngestOptions = {}): Promise<IngestResult> {
+async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
   const cfg = loadConfig();
   const sources = {
     sec: opts.sources?.sec ?? cfg.eventSourceSecEnabled,
@@ -267,4 +269,50 @@ export async function runEventIngestion(opts: IngestOptions = {}): Promise<Inges
   }
 
   return result;
+}
+
+/** Build the persisted run-summary row from an ingest result. Pure. */
+export function ingestionRunRecord(result: IngestResult, trigger: string, ranAt: string) {
+  return {
+    trigger: trigger === "scheduled" ? "scheduled" : "manual",
+    fetched: result.fetched,
+    extracted: result.extracted,
+    persisted: result.persisted,
+    catalystsAdded: result.catalystsAdded,
+    skipped: result.skipped,
+    generatedBy: result.generatedBy,
+    bySource: JSON.stringify(result.bySource ?? {}),
+    errorCount: result.errors.length,
+    errorsJson: JSON.stringify(result.errors.slice(0, 10)),
+    ranAt,
+  };
+}
+
+/**
+ * Run ingestion and log the run so the Events page can show its history. The
+ * inner core does the work; a logging failure never masks the actual result.
+ */
+export async function runEventIngestion(opts: IngestOptions = {}): Promise<IngestResult> {
+  const result = await ingestCore(opts);
+  try {
+    getDb()
+      .insert(schema.ingestionRuns)
+      .values(ingestionRunRecord(result, opts.trigger ?? "manual", new Date().toISOString()))
+      .run();
+  } catch (e) {
+    console.error("[eventIngestion] failed to log run:", e instanceof Error ? e.message : e);
+  }
+  return result;
+}
+
+export type IngestionRun = typeof schema.ingestionRuns.$inferSelect;
+
+/** Recent ingestion runs, newest first (for the Events page). */
+export function listIngestionRuns(limit = 10): IngestionRun[] {
+  return getDb()
+    .select()
+    .from(schema.ingestionRuns)
+    .orderBy(desc(schema.ingestionRuns.ranAt))
+    .limit(limit)
+    .all();
 }
