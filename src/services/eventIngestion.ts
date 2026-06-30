@@ -1,11 +1,12 @@
 import type { Confidence, ImpactDirection } from "@/lib/types";
+import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { addMention, listMentions, distinctEntities, type MentionDirection } from "./entityMentions";
 import { addCatalyst } from "./catalysts";
 import { extractEvents, type ExtractedEvent } from "./eventExtraction";
 import type { RawEventItem } from "./sources/types";
 import { fetchEdgarFilings } from "./sources/secEdgar";
-import { fetchGdeltNews } from "./sources/gdelt";
+import { fetchGdeltNews, buildGdeltQueriesFor, type GdeltQueryItem } from "./sources/gdelt";
 import { fetchIrFeeds, type IrFeed } from "./sources/irRss";
 
 // Orchestrates real-world event ingestion: pull from the enabled source
@@ -33,6 +34,35 @@ export function dedupeKey(
 
 function mentionToImpact(d: MentionDirection): ImpactDirection {
   return d === "bullish" ? "positive" : d === "bearish" ? "negative" : d === "neutral" ? "mixed" : "unknown";
+}
+
+/**
+ * Companies to auto-derive GDELT queries from: everything you actively track —
+ * watchlist, holdings, then the latest agent picks. De-duping by ticker happens
+ * in buildGdeltQueriesFor, so order just sets priority within the per-run cap.
+ */
+function trackedCompaniesForGdelt(): GdeltQueryItem[] {
+  const db = getDb();
+  const out: GdeltQueryItem[] = [];
+  out.push(
+    ...db
+      .select({ ticker: schema.watchlistItems.ticker, companyName: schema.watchlistItems.companyName })
+      .from(schema.watchlistItems)
+      .all(),
+  );
+  out.push(
+    ...db
+      .select({ ticker: schema.portfolioHoldings.ticker, companyName: schema.portfolioHoldings.companyName })
+      .from(schema.portfolioHoldings)
+      .all(),
+  );
+  out.push(
+    ...db
+      .select({ ticker: schema.agentCandidates.ticker, companyName: schema.agentCandidates.companyName })
+      .from(schema.agentCandidates)
+      .all(),
+  );
+  return out;
 }
 
 function sourceLabel(source: string): string {
@@ -71,7 +101,13 @@ export async function runEventIngestion(opts: IngestOptions = {}): Promise<Inges
     gdelt: opts.sources?.gdelt ?? cfg.eventSourceGdeltEnabled,
     ir: opts.sources?.ir ?? cfg.eventSourceIrEnabled,
   };
-  const gdeltQueries = opts.gdeltQueries ?? cfg.gdeltQueries;
+  let gdeltQueries = opts.gdeltQueries ?? cfg.gdeltQueries;
+  // Auto-derive queries from the companies you track so enabling GDELT works out
+  // of the box. Only when the source is on, the caller passed no queries, and
+  // none are configured — an explicit/configured list always wins.
+  if (sources.gdelt && opts.gdeltQueries === undefined && gdeltQueries.length === 0) {
+    gdeltQueries = buildGdeltQueriesFor(trackedCompaniesForGdelt());
+  }
   const irFeeds = opts.irFeeds ?? cfg.irFeeds;
   const maxItems = opts.maxItems ?? cfg.eventIngestionMaxItems;
   const minConfidence = opts.minConfidence ?? cfg.eventMinConfidence;
