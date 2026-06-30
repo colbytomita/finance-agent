@@ -8,7 +8,7 @@ import {
   buildGdeltQueriesFor,
 } from "../sources/gdelt";
 import { irItemsFromFeed } from "../sources/irRss";
-import { normalizeCik, parseCikTickers } from "../sources/cikMap";
+import { normalizeCik, parseCikTickers, parseTickerNames } from "../sources/cikMap";
 
 const ATOM = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -111,6 +111,29 @@ describe("cikMap", () => {
     expect(parseCikTickers(null).size).toBe(0);
     expect(parseCikTickers("nope").size).toBe(0);
   });
+
+  it("parses company_tickers.json into a TICKER->name map", () => {
+    const json = {
+      "0": { cik_str: 320193, ticker: "aapl", title: "Apple Inc." },
+      "1": { cik_str: 1045810, ticker: "NVDA", title: "  NVIDIA   CORP " }, // whitespace collapsed
+      "2": { cik_str: 1, ticker: "DUP", title: "Class A" },
+      "3": { cik_str: 2, ticker: "dup", title: "Class B (ignored)" }, // first ticker wins
+      "4": { cik_str: 3, ticker: "NONAME" }, // no title -> dropped
+      "5": { cik_str: 4, ticker: "BAC", title: "BANK OF AMERICA CORP /DE/" }, // state marker stripped
+    };
+    const map = parseTickerNames(json);
+    expect(map.get("AAPL")).toBe("Apple Inc.");
+    expect(map.get("NVDA")).toBe("NVIDIA CORP");
+    expect(map.get("DUP")).toBe("Class A");
+    expect(map.get("BAC")).toBe("BANK OF AMERICA CORP");
+    expect(map.has("NONAME")).toBe(false);
+    expect(map.size).toBe(4);
+  });
+
+  it("tolerates malformed name input", () => {
+    expect(parseTickerNames(null).size).toBe(0);
+    expect(parseTickerNames("nope").size).toBe(0);
+  });
 });
 
 describe("gdelt", () => {
@@ -141,6 +164,15 @@ describe("gdelt auto-queries", () => {
     expect(cleanCompanyName("Rocket Lab USA, Inc.")).toBe("Rocket Lab USA");
     expect(cleanCompanyName("The Walt Disney Company")).toBe("Walt Disney");
     expect(cleanCompanyName("Coca-Cola Co")).toBe("Coca-Cola");
+  });
+
+  it("strips SEC state markers and stray trailing connectors", () => {
+    expect(cleanCompanyName("BANK OF AMERICA CORP /DE/")).toBe("BANK OF AMERICA");
+    expect(cleanCompanyName("VALERO ENERGY CORP/TX")).toBe("VALERO ENERGY");
+    expect(cleanCompanyName("Merck & Co., Inc.")).toBe("Merck");
+    expect(cleanCompanyName("ELI LILLY & CO")).toBe("ELI LILLY");
+    // an internal ampersand is preserved
+    expect(cleanCompanyName("Johnson & Johnson")).toBe("Johnson & Johnson");
   });
 
   it("quotes a clean name, falls back to a distinctive ticker, else null", () => {
