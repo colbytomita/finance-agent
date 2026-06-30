@@ -1,3 +1,4 @@
+import { desc, eq } from "drizzle-orm";
 import type { Confidence, ImpactDirection } from "@/lib/types";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
@@ -38,8 +39,12 @@ function mentionToImpact(d: MentionDirection): ImpactDirection {
 
 /**
  * Companies to auto-derive GDELT queries from: everything you actively track —
- * watchlist, holdings, then the latest agent picks. De-duping by ticker happens
- * in buildGdeltQueriesFor, so order just sets priority within the per-run cap.
+ * watchlist, holdings, then current (pending) agent picks, newest first. Only
+ * pending candidates count: accepted ones are already promoted into the
+ * watchlist (covered above), and declined ones aren't tracked at all — including
+ * them would waste the per-run query budget on names you've dismissed. De-duping
+ * by ticker happens in buildGdeltQueriesFor, so order just sets priority within
+ * the cap.
  */
 function trackedCompaniesForGdelt(): GdeltQueryItem[] {
   const db = getDb();
@@ -60,6 +65,8 @@ function trackedCompaniesForGdelt(): GdeltQueryItem[] {
     ...db
       .select({ ticker: schema.agentCandidates.ticker, companyName: schema.agentCandidates.companyName })
       .from(schema.agentCandidates)
+      .where(eq(schema.agentCandidates.status, "pending"))
+      .orderBy(desc(schema.agentCandidates.proposedAt))
       .all(),
   );
   return out;
