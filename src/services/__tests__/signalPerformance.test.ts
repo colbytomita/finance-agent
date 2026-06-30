@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { bucketAndAggregate, calibrationVerdict, poolBySource, SCORE_BANDS } from "../signalPerformance";
+import {
+  bucketAndAggregate,
+  calibrationVerdict,
+  poolByIndustry,
+  poolBySource,
+  SCORE_BANDS,
+} from "../signalPerformance";
 import {
   EVENT_WINDOWS,
   type EventStudyResult,
@@ -39,6 +45,31 @@ describe("signalPerformance.poolBySource", () => {
     expect(ap.windows.find((w) => w.key === "post5")!.meanAbnormalReturnPct).toBeCloseTo(2);
     expect(ap.windows.find((w) => w.key === "post5")!.hitRate).toBe(100);
     expect(res.find((r) => r.source === "Empty")!.totalEvents).toBe(0);
+  });
+});
+
+describe("signalPerformance.poolByIndustry", () => {
+  it("fans multi-industry picks out to each industry and orders by sample size", () => {
+    const rows = poolByIndustry([
+      { groups: ["space"], study: studyWith({ post5: 4 }) },
+      { groups: ["space"], study: studyWith({ post5: 2 }) },
+      { groups: ["ai", "semiconductors"], study: studyWith({ post5: 6 }) }, // counts in both
+      { study: studyWith({ post5: 9 }) }, // no groups -> ignored entirely
+    ]);
+    // space=2 sampled, ai=1, semiconductors=1 -> space first, then alphabetical
+    expect(rows.map((r) => r.industry)).toEqual(["space", "ai", "semiconductors"]);
+
+    const space = rows.find((r) => r.industry === "space")!;
+    expect(space.totalEvents).toBe(2);
+    expect(space.windows.find((w) => w.key === "post5")!.meanAbnormalReturnPct).toBeCloseTo(3);
+
+    const ai = rows.find((r) => r.industry === "ai")!;
+    expect(ai.totalEvents).toBe(1);
+    expect(ai.windows.find((w) => w.key === "post5")!.meanAbnormalReturnPct).toBeCloseTo(6);
+  });
+
+  it("returns an empty list when no studies carry industries", () => {
+    expect(poolByIndustry([{ study: studyWith({ post5: 1 }) }])).toEqual([]);
   });
 });
 
