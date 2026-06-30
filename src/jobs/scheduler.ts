@@ -18,6 +18,7 @@ import { AlpacaService } from "@/services/alpaca";
 import { runDiscoveryScan } from "@/services/discoveryAgent";
 import { runSectorScan } from "@/services/sectorScout";
 import { runEventIngestion } from "@/services/eventIngestion";
+import { backfillCompanyNames } from "@/services/companyNames";
 import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers } from "@/services/earnings";
 
@@ -147,6 +148,15 @@ async function dailyMaintenance(): Promise<void> {
         }
       }
     }
+    // Backfill missing company names (SEC ticker->name) so the UI and GDELT
+    // auto-queries have real names to work with. Cheap; the SEC file is cached.
+    const names = await backfillCompanyNames().catch((e) => {
+      log(`name backfill failed: ${e instanceof Error ? e.message : e}`);
+      return null;
+    });
+    if (names && names.resolved > 0)
+      log(`name backfill: filled ${names.resolved}/${names.scanned} missing name(s)`);
+
     if (cfg.eventIngestionEnabled) {
       const ing = await runEventIngestion().catch((e) => {
         log(`event ingestion failed: ${e instanceof Error ? e.message : e}`);

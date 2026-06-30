@@ -49,16 +49,22 @@ export function parseGdelt(json: unknown, query?: string): RawEventItem[] {
 const TRAILING_SUFFIX =
   /[\s,]+(?:incorporated|inc|corporation|corp|company|co|llc|l\.?l\.?c|plc|ltd|limited|lp|l\.?p|holdings?|group|s\.?a|n\.?v|a\.?g|s\.?e|a\.?b)\.?$/i;
 
+// SEC company titles carry a trailing state-of-incorporation marker like
+// " /DE/" or "/TX" — pure noise for both display and search.
+const STATE_MARKER = /\s*\/[^/]*\/?\s*$/;
+
 /** Reduce a legal company name to the form news actually uses for searching. */
 export function cleanCompanyName(name: string): string {
   let s = name.trim().replace(/^the\s+/i, "");
-  // Peel up to a few stacked suffixes, e.g. "Acme Co., Ltd." -> "Acme".
-  for (let i = 0; i < 3; i++) {
-    const next = s.replace(TRAILING_SUFFIX, "").trim();
+  // Peel stacked trailing artifacts — state markers and legal suffixes —
+  // e.g. "Acme Co., Ltd /DE/" -> "Acme".
+  for (let i = 0; i < 4; i++) {
+    const next = s.replace(STATE_MARKER, "").trim().replace(TRAILING_SUFFIX, "").trim();
     if (next === s) break;
     s = next;
   }
-  return s.replace(/\s+/g, " ").trim();
+  // Drop a stray trailing connector/punctuation left behind ("Merck & Co" -> "Merck").
+  return s.replace(/[\s&.,-]+$/g, "").replace(/\s+/g, " ").trim();
 }
 
 /**
