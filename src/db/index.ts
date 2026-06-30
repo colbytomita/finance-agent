@@ -342,6 +342,21 @@ CREATE TABLE IF NOT EXISTS sector_scout_picks (
   UNIQUE (industry, ticker)
 );
 CREATE INDEX IF NOT EXISTS idx_sector_picks_industry ON sector_scout_picks (industry, overall_score DESC);
+CREATE TABLE IF NOT EXISTS ingestion_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trigger TEXT NOT NULL DEFAULT 'manual',
+  fetched INTEGER NOT NULL DEFAULT 0,
+  extracted INTEGER NOT NULL DEFAULT 0,
+  persisted INTEGER NOT NULL DEFAULT 0,
+  catalysts_added INTEGER NOT NULL DEFAULT 0,
+  skipped INTEGER NOT NULL DEFAULT 0,
+  generated_by TEXT NOT NULL DEFAULT 'none',
+  by_source TEXT,
+  error_count INTEGER NOT NULL DEFAULT 0,
+  errors_json TEXT,
+  ran_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ingestion_runs_time ON ingestion_runs (ran_at DESC);
 `;
 
 let _db: BetterSQLite3Database<typeof schema> | null = null;

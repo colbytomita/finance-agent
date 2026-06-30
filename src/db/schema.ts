@@ -377,3 +377,21 @@ export const earningsReports = sqliteTable("earnings_reports", {
   source: text("source").notNull().default("manual"), // manual | yahoo
   createdAt: text("created_at").notNull(),
 });
+
+// Per-run log of real-world event ingestion (Catalyst Edge). One row per
+// runEventIngestion call so the Events page can show when it last ran, what each
+// source produced, and how the extraction went — manual button or scheduled job.
+export const ingestionRuns = sqliteTable("ingestion_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  trigger: text("trigger").notNull().default("manual"), // manual | scheduled
+  fetched: integer("fetched").notNull().default(0),
+  extracted: integer("extracted").notNull().default(0),
+  persisted: integer("persisted").notNull().default(0),
+  catalystsAdded: integer("catalysts_added").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  generatedBy: text("generated_by").notNull().default("none"), // llm | rules | mixed | none
+  bySource: text("by_source"), // JSON: { "sec-edgar": n, gdelt: n, "ir-rss": n }
+  errorCount: integer("error_count").notNull().default(0),
+  errorsJson: text("errors_json"), // JSON array of error strings (capped)
+  ranAt: text("ran_at").notNull(),
+});

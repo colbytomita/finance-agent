@@ -158,7 +158,7 @@ async function dailyMaintenance(): Promise<void> {
       log(`name backfill: filled ${names.resolved}/${names.scanned} missing name(s)`);
 
     if (cfg.eventIngestionEnabled) {
-      const ing = await runEventIngestion().catch((e) => {
+      const ing = await runEventIngestion({ trigger: "scheduled" }).catch((e) => {
         log(`event ingestion failed: ${e instanceof Error ? e.message : e}`);
         return null;
       });
