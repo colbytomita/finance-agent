@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   curatedTickersFor,
+  describeIndustry,
   normalizeIndustryLabel,
   parseTickerList,
   ruleBriefFromAnalysis,
 } from "../sectorScout";
+import { DEFAULT_CONFIG } from "@/lib/config";
 import { buildCandidate } from "../discoveryAgent";
 import { barsFromCloses, trendCloses, uptrendWithPullback } from "./helpers";
 
@@ -52,6 +54,53 @@ describe("sectorScout.curatedTickersFor", () => {
 
   it("returns an empty list for an unknown theme", () => {
     expect(curatedTickersFor("underwater basket weaving")).toEqual([]);
+  });
+});
+
+describe("sectorScout.describeIndustry", () => {
+  const cfg = DEFAULT_CONFIG;
+
+  it("describes a curated-matched industry with its keywords and starter tickers", () => {
+    const d = describeIndustry("space", { expandedBy: "rules", cfg });
+    expect(d.industry).toBe("space");
+    expect(d.expansionMode).toBe("rules");
+    expect(d.matchedThemeKeywords).toContain("space");
+    expect(d.curatedExamples).toContain("RKLB");
+    expect(d.whatShowsUp).toContain("space");
+    // curated expansion criterion names the matched keyword and seed count
+    expect(d.fitCriteria[0]).toMatch(/curated/i);
+    expect(d.fitCriteria[0]).toContain('"space"');
+    // pipeline always explains validation + scoring gate
+    expect(d.fitCriteria.some((c) => /real Alpaca price/i.test(c))).toBe(true);
+    expect(d.fitCriteria.some((c) => c.includes(`≥ ${cfg.agentMinScore.toFixed(1)}`))).toBe(true);
+  });
+
+  it("explains the empty result for an unrecognized curated theme with no LLM", () => {
+    const d = describeIndustry("underwater basket weaving", { expandedBy: "rules", cfg });
+    expect(d.matchedThemeKeywords).toEqual([]);
+    expect(d.curatedExamples).toEqual([]);
+    expect(d.fitCriteria[0]).toMatch(/didn't match any built-in theme keyword/i);
+  });
+
+  it("uses an AI expansion criterion when expandedBy is llm", () => {
+    const d = describeIndustry("space", { expandedBy: "llm", cfg });
+    expect(d.expansionMode).toBe("llm");
+    expect(d.fitCriteria[0]).toMatch(/AI/);
+    expect(d.fitCriteria[0]).toMatch(/pure-play/i);
+  });
+
+  it("includes a thesis gate only when thesis validation is enabled", () => {
+    const withThesis = describeIndustry("energy", {
+      expandedBy: "rules",
+      cfg: { ...cfg, sectorScoutThesisEnabled: true },
+    });
+    expect(withThesis.fitCriteria.some((c) => /Thesis gate/.test(c))).toBe(true);
+
+    const withoutThesis = describeIndustry("energy", {
+      expandedBy: "rules",
+      cfg: { ...cfg, sectorScoutThesisEnabled: false },
+    });
+    expect(withoutThesis.fitCriteria.some((c) => /Thesis gate/.test(c))).toBe(false);
   });
 });
 
