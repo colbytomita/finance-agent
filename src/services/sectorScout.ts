@@ -502,6 +502,157 @@ export function listSectorScans(limit = 20) {
     .all();
 }
 
+// ----------------------------------------------------------------------------
+// Industry guide — explain what surfaces for an industry and why
+// ----------------------------------------------------------------------------
+
+/** Curated theme keys that match a query, plus the tickers those themes seed. */
+function curatedMatch(industry: string): { keywords: string[]; tickers: string[] } {
+  const q = normalizeIndustryLabel(industry);
+  const keywords: string[] = [];
+  const tickers = new Set<string>();
+  if (q) {
+    for (const theme of CURATED_THEMES) {
+      if (theme.keys.some((k) => q === k || q.includes(k) || k.includes(q))) {
+        theme.keys.forEach((k) => keywords.push(k));
+        theme.tickers.forEach((t) => tickers.add(t));
+      }
+    }
+  }
+  return { keywords, tickers: [...tickers] };
+}
+
+export interface IndustryDescription {
+  industry: string;
+  /** How candidate tickers are sourced for this industry. */
+  expansionMode: "llm" | "rules";
+  /** Curated theme keyword(s) the industry label matched (rules-mode signal). */
+  matchedThemeKeywords: string[];
+  /** Concrete starter tickers from the curated map (examples; still validated). */
+  curatedExamples: string[];
+  minScore: number;
+  thesisEnabled: boolean;
+  thesisMinScore: number;
+  /** Plain-language description of what kinds of companies surface here. */
+  whatShowsUp: string;
+  /** Ordered pipeline: how a ticker is determined to fit this industry. */
+  fitCriteria: string[];
+}
+
+/**
+ * Describe, in plain language, what an industry surfaces and how the scout
+ * decides a ticker belongs — a faithful narration of the real pipeline
+ * (expand -> validate against real data -> score/thesis gate). Pure: pass
+ * `expandedBy` (e.g. from the latest scan) to describe how those picks were
+ * actually sourced; otherwise it reflects the currently-configured provider.
+ */
+export function describeIndustry(
+  industry: string,
+  opts: { expandedBy?: "llm" | "rules"; cfg?: AppConfig } = {},
+): IndustryDescription {
+  const cfg = opts.cfg ?? loadConfig();
+  const label = normalizeIndustryLabel(industry);
+  const expansionMode = opts.expandedBy ?? (getProvider() ? "llm" : "rules");
+  const { keywords: matchedThemeKeywords, tickers: curatedExamples } = curatedMatch(label);
+
+  const minScore = cfg.agentMinScore;
+  const thesisEnabled = cfg.sectorScoutThesisEnabled;
+  const thesisMinScore = cfg.sectorScoutThesisMinScore;
+
+  const whatShowsUp =
+    `US-exchange-listed stocks whose core business is a pure-play or primary-business bet on "${label}". ` +
+    `Large, diversified companies appear only when this theme is a major, material part of their business — ` +
+    `names with merely incidental or one-division exposure are deliberately left out. Every candidate must have ` +
+    `real, current price data and must clear the scoring (and, when enabled, thesis-evidence) gate before it is listed.`;
+
+  const fitCriteria: string[] = [];
+  if (expansionMode === "llm") {
+    fitCriteria.push(
+      `Candidate expansion (AI): an LLM lists up to 24 real, US-listed companies that are pure-play or ` +
+        `primary-business bets on "${label}", ordered most pure-play to least, excluding ETFs, indices, private, ` +
+        `and delisted names — and excluding mega-caps with only incidental exposure.`,
+    );
+    if (curatedExamples.length > 0) {
+      fitCriteria.push(`The AI list is then unioned with a curated starter set for this theme to fill any gaps.`);
+    }
+  } else if (matchedThemeKeywords.length > 0) {
+    fitCriteria.push(
+      `Candidate expansion (curated): "${label}" matched the built-in theme map on keyword(s) ` +
+        `${matchedThemeKeywords.map((k) => `"${k}"`).join(", ")}, seeding ${curatedExamples.length} starter ticker(s). ` +
+        `Configure an Anthropic key to expand with the LLM instead.`,
+    );
+  } else {
+    fitCriteria.push(
+      `Candidate expansion (curated): "${label}" didn't match any built-in theme keyword, so without an LLM key no ` +
+        `starter tickers are produced. Configure an Anthropic key, or use a recognized theme term, to populate this industry.`,
+    );
+  }
+  fitCriteria.push(
+    `Data validation: each candidate is checked against real Alpaca price/bar data; anything without real data is ` +
+      `dropped — never guessed or fabricated.`,
+  );
+  fitCriteria.push(
+    `Scoring gate: survivors are scored 1–10 by the same engine used across the app (valuation, momentum, catalyst, ` +
+      `risk, sentiment) and surface when they score ≥ ${minScore.toFixed(1)}.`,
+  );
+  if (thesisEnabled) {
+    fitCriteria.push(
+      `Thesis gate: a name can also surface — even below the score gate — when company-claim/evidence validation ` +
+        `produces a thesis score ≥ ${thesisMinScore.toFixed(1)}.`,
+    );
+  }
+
+  return {
+    industry: label,
+    expansionMode,
+    matchedThemeKeywords,
+    curatedExamples,
+    minScore,
+    thesisEnabled,
+    thesisMinScore,
+    whatShowsUp,
+    fitCriteria,
+  };
+}
+
+export interface IndustryGuide extends IndustryDescription {
+  pickCount: number; // current (non-dismissed) picks for this industry
+  lastScannedAt: string | null;
+}
+
+/**
+ * One guide per industry the user has scanned (or that still has picks), newest
+ * scan first. Each guide describes the industry using the expansion mode of its
+ * most recent scan, so it explains how the picks you see were actually sourced.
+ */
+export function listIndustryGuides(cfg: AppConfig = loadConfig()): IndustryGuide[] {
+  const db = getDb();
+  const scans = db.select().from(schema.sectorScans).orderBy(desc(schema.sectorScans.ranAt)).all();
+  const picks = listSectorPicks(); // non-dismissed
+
+  const pickCount = new Map<string, number>();
+  for (const p of picks) pickCount.set(p.industry, (pickCount.get(p.industry) ?? 0) + 1);
+
+  const latest = new Map<string, { ranAt: string; expandedBy: "llm" | "rules" }>();
+  for (const s of scans) {
+    if (!latest.has(s.industry)) {
+      latest.set(s.industry, { ranAt: s.ranAt, expandedBy: s.expandedBy === "llm" ? "llm" : "rules" });
+    }
+  }
+
+  const industries = new Set<string>([...latest.keys(), ...pickCount.keys()]);
+  return [...industries]
+    .map((industry) => {
+      const meta = latest.get(industry);
+      return {
+        ...describeIndustry(industry, { expandedBy: meta?.expandedBy, cfg }),
+        pickCount: pickCount.get(industry) ?? 0,
+        lastScannedAt: meta?.ranAt ?? null,
+      };
+    })
+    .sort((a, b) => (b.lastScannedAt ?? "").localeCompare(a.lastScannedAt ?? ""));
+}
+
 /** Promote a pick into the real watchlist and mark it added. */
 export function acceptSectorPick(id: number): { ok: true; ticker: string } | { error: string } {
   const db = getDb();

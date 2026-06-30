@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  listIndustryGuides,
   listSectorPicks,
   listSectorScans,
   type SectorPick,
@@ -11,7 +12,7 @@ import {
 import { loadConfig } from "@/lib/config";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { Pct, RecBadge, ScoreBadge } from "@/components/badges";
-import { SectorScanForm, SectorPickActions } from "@/components/SectorScout";
+import { SectorScanForm, SectorPickActions, IndustryExplorer } from "@/components/SectorScout";
 
 export const dynamic = "force-dynamic";
 
@@ -181,6 +182,7 @@ export default function SectorScoutPage() {
   const picks = listSectorPicks();
   const groups = groupByIndustry(picks);
   const scans = listSectorScans();
+  const industryGuides = listIndustryGuides(cfg);
   const claimsByReport = listCompanyClaimsForReports(
     picks.map((p) => p.thesisReportId).filter((id): id is number => id != null),
   );
@@ -205,6 +207,8 @@ export default function SectorScoutPage() {
       </p>
 
       <SectorScanForm defaultMinScore={cfg.agentMinScore} />
+
+      {industryGuides.length > 0 && <IndustryExplorer guides={industryGuides} />}
 
       {scans.length > 0 && (
         <section className="card">
