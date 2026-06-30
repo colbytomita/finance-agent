@@ -3,6 +3,7 @@ import {
   listIndustryGuides,
   listSectorPicks,
   listSectorScans,
+  normalizeIndustryLabel,
   type SectorPick,
 } from "@/services/sectorScout";
 import {
@@ -177,12 +178,26 @@ function PickCard({ pick, claims }: { pick: SectorPick; claims: CompanyClaimRow[
   );
 }
 
-export default function SectorScoutPage() {
+export default async function SectorScoutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ industry?: string | string[] }>;
+}) {
   const cfg = loadConfig();
   const picks = listSectorPicks();
-  const groups = groupByIndustry(picks);
   const scans = listSectorScans();
   const industryGuides = listIndustryGuides(cfg);
+
+  // ?industry=<label> filters the picks below to one industry and focuses the
+  // explorer on it. Only honor it when it's a known scanned industry.
+  const sp = await searchParams;
+  const rawIndustry = Array.isArray(sp.industry) ? sp.industry[0] : sp.industry;
+  const requested = rawIndustry ? normalizeIndustryLabel(rawIndustry) : "";
+  const selectedIndustry = industryGuides.some((g) => g.industry === requested) ? requested : "";
+  const visiblePicks = selectedIndustry
+    ? picks.filter((p) => p.industry === selectedIndustry)
+    : picks;
+  const groups = groupByIndustry(visiblePicks);
   const claimsByReport = listCompanyClaimsForReports(
     picks.map((p) => p.thesisReportId).filter((id): id is number => id != null),
   );
@@ -208,7 +223,14 @@ export default function SectorScoutPage() {
 
       <SectorScanForm defaultMinScore={cfg.agentMinScore} />
 
-      {industryGuides.length > 0 && <IndustryExplorer guides={industryGuides} />}
+      {industryGuides.length > 0 && (
+        <IndustryExplorer
+          guides={industryGuides}
+          selected={selectedIndustry}
+          favorites={cfg.sectorScoutIndustries}
+          autoScanEnabled={cfg.sectorScoutScanEnabled}
+        />
+      )}
 
       {scans.length > 0 && (
         <section className="card">
@@ -231,10 +253,17 @@ export default function SectorScoutPage() {
       )}
 
       {groups.length === 0 ? (
-        <p className="py-10 text-center text-sm text-zinc-500">
-          No picks yet. Enter an industry above and click{" "}
-          <span className="text-zinc-300">Scan industry</span> to find high-potential names.
-        </p>
+        selectedIndustry ? (
+          <p className="py-10 text-center text-sm text-zinc-500">
+            No surfaced picks for <span className="capitalize text-zinc-300">{selectedIndustry}</span> yet. Use{" "}
+            <span className="text-zinc-300">Re-scan now</span> above, or lower your min score, to find names.
+          </p>
+        ) : (
+          <p className="py-10 text-center text-sm text-zinc-500">
+            No picks yet. Enter an industry above and click{" "}
+            <span className="text-zinc-300">Scan industry</span> to find high-potential names.
+          </p>
+        )
       ) : (
         groups.map((g) => (
           <section key={g.industry} className="space-y-2">
