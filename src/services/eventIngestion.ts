@@ -9,6 +9,7 @@ import type { RawEventItem } from "./sources/types";
 import { fetchEdgarFilings } from "./sources/secEdgar";
 import { fetchGdeltNews, buildGdeltQueriesFor, type GdeltQueryItem } from "./sources/gdelt";
 import { fetchIrFeeds, type IrFeed } from "./sources/irRss";
+import { makeResolver } from "./sources/tickerMap";
 
 // Orchestrates real-world event ingestion: pull from the enabled source
 // connectors, extract structured mentions (Haiku + rule-based fallback), dedupe,
@@ -69,6 +70,34 @@ function trackedCompaniesForGdelt(): GdeltQueryItem[] {
       .orderBy(desc(schema.agentCandidates.proposedAt))
       .all(),
   );
+  return out;
+}
+
+/**
+ * Every tracked ticker + company name (all four tables, all statuses), deduped.
+ * Augments the extraction resolver so news/filings about smaller tracked names —
+ * outside the curated universe — still map to the right ticker instead of being
+ * dropped. Unlike the GDELT-query set, this is broad on purpose (no per-run cap).
+ */
+function trackedTickerHints(): { ticker: string; name: string | null }[] {
+  const db = getDb();
+  const out: { ticker: string; name: string | null }[] = [];
+  const seen = new Set<string>();
+  const add = (ticker: string | null, name: string | null) => {
+    if (!ticker) return;
+    const t = ticker.toUpperCase();
+    if (seen.has(t)) return;
+    seen.add(t);
+    out.push({ ticker: t, name });
+  };
+  for (const r of db.select({ ticker: schema.watchlistItems.ticker, name: schema.watchlistItems.companyName }).from(schema.watchlistItems).all())
+    add(r.ticker, r.name);
+  for (const r of db.select({ ticker: schema.portfolioHoldings.ticker, name: schema.portfolioHoldings.companyName }).from(schema.portfolioHoldings).all())
+    add(r.ticker, r.name);
+  for (const r of db.select({ ticker: schema.agentCandidates.ticker, name: schema.agentCandidates.companyName }).from(schema.agentCandidates).all())
+    add(r.ticker, r.name);
+  for (const r of db.select({ ticker: schema.sectorScoutPicks.ticker, name: schema.sectorScoutPicks.companyName }).from(schema.sectorScoutPicks).all())
+    add(r.ticker, r.name);
   return out;
 }
 
@@ -165,10 +194,13 @@ export async function runEventIngestion(opts: IngestOptions = {}): Promise<Inges
   if (capped.length === 0) return result;
 
   // 2. Extract structured events (one batched LLM call; rule-based fallback).
+  // The resolver knows the curated universe PLUS everything you track, so news
+  // about smaller tracked names still maps to a ticker instead of being dropped.
   const knownEntities = distinctEntities().map((e) => e.entity);
+  const resolver = makeResolver(trackedTickerHints());
   let extracted: ExtractedEvent[];
   try {
-    extracted = await extractEvents(capped, { knownEntities });
+    extracted = await extractEvents(capped, { knownEntities, resolver });
   } catch (e) {
     result.errors.push(`extraction: ${e instanceof Error ? e.message : String(e)}`);
     return result;

@@ -6,6 +6,7 @@ import {
   fallbackExtract,
   extractEvents,
 } from "../eventExtraction";
+import { makeResolver } from "../sources/tickerMap";
 import type { RawEventItem } from "../sources/types";
 import type { LLMProvider } from "../researchAgent";
 
@@ -80,6 +81,22 @@ describe("parseExtractionResponse", () => {
     const out = parseExtractionResponse(raw, [cikFilingItem]);
     expect(out![0].ticker).toBe("VRSN"); // would be null via the name-universe path
     expect(out![0].entity).toBe("VeriSign Inc");
+  });
+
+  it("resolves a tracked company outside the curated universe via the resolver", () => {
+    const item: RawEventItem = {
+      source: "gdelt:Rocket Lab",
+      title: "Rocket Lab wins a new launch contract",
+      text: "Rocket Lab wins a new launch contract",
+      url: "https://news.example/rklb",
+      publishedAt: "2026-06-05",
+    };
+    const raw = `[{"index":0,"entity":"Reuters","company":"Rocket Lab","ticker":"RKLB","claim":"wins launch contract","direction":"bullish","confidence":"medium"}]`;
+    // Default universe doesn't know RKLB -> ticker drops to null.
+    expect(parseExtractionResponse(raw, [item])![0].ticker).toBeNull();
+    // A resolver seeded with the tracked company maps it.
+    const resolver = makeResolver([{ ticker: "RKLB", name: "Rocket Lab USA, Inc." }]);
+    expect(parseExtractionResponse(raw, [item], resolver)![0].ticker).toBe("RKLB");
   });
 
   it("skips items flagged relevant:false", () => {
