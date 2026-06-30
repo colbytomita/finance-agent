@@ -10,6 +10,7 @@ import {
   listCompanyClaimsForReports,
   type CompanyClaimRow,
 } from "@/services/companyThesisScout";
+import { readCachedReport } from "@/services/signalPerformance";
 import { loadConfig } from "@/lib/config";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { Pct, RecBadge, ScoreBadge } from "@/components/badges";
@@ -202,6 +203,15 @@ export default async function SectorScoutPage({
     picks.map((p) => p.thesisReportId).filter((id): id is number => id != null),
   );
 
+  // Historical performance for the focused theme, from the cached Signal
+  // Performance backtest (byIndustry breakdown). Null when nothing's focused or
+  // the backtest hasn't run / doesn't cover this industry yet.
+  const perfReport = readCachedReport();
+  const selectedPerformance =
+    selectedIndustry && perfReport
+      ? perfReport.picks.byIndustry?.find((r) => r.industry === selectedIndustry) ?? null
+      : null;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -229,6 +239,8 @@ export default async function SectorScoutPage({
           selected={selectedIndustry}
           favorites={cfg.sectorScoutIndustries}
           autoScanEnabled={cfg.sectorScoutScanEnabled}
+          performance={selectedPerformance}
+          performanceGeneratedAt={perfReport?.generatedAt ?? null}
         />
       )}
 

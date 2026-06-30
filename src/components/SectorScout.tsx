@@ -4,10 +4,27 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { IndustryGuide } from "@/services/sectorScout";
+import type { IndustryPerformanceResult } from "@/services/signalPerformance";
 
 /** Normalize a label the same way the server does, for favorite comparisons. */
 function normLabel(s: string): string {
   return s.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Forward windows shown in the explorer's per-theme performance strip. */
+const PERF_WINDOWS = [
+  { key: "post1", label: "+1d" },
+  { key: "post5", label: "+5d" },
+  { key: "post20", label: "+20d" },
+] as const;
+
+function fmtSignedPct(v: number | null): string {
+  return v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
+function pctClass(v: number | null): string {
+  if (v == null) return "text-zinc-600";
+  return v > 0 ? "pos" : v < 0 ? "neg" : "text-zinc-300";
 }
 
 export function SectorScanForm({ defaultMinScore }: { defaultMinScore: number }) {
@@ -92,11 +109,15 @@ export function IndustryExplorer({
   selected,
   favorites,
   autoScanEnabled,
+  performance,
+  performanceGeneratedAt,
 }: {
   guides: IndustryGuide[];
   selected: string; // "" = all industries (no focus)
   favorites: string[];
   autoScanEnabled: boolean;
+  performance: IndustryPerformanceResult | null; // focused theme's backtest row
+  performanceGeneratedAt: string | null;
 }) {
   const router = useRouter();
   const [navigating, startNav] = useTransition();
@@ -105,6 +126,15 @@ export function IndustryExplorer({
 
   const guide = selected ? guides.find((g) => g.industry === selected) ?? null : null;
   const isPinned = guide ? favorites.some((f) => normLabel(f) === guide.industry) : false;
+  // Only the forward windows we display count as "data" — the byIndustry row also
+  // carries a pre-event window that's almost always populated, which would
+  // otherwise mask the honest "not matured yet" state.
+  const perfHasData =
+    !!performance &&
+    PERF_WINDOWS.some((w) => {
+      const edge = performance.windows.find((x) => x.key === w.key);
+      return edge != null && edge.n > 0;
+    });
 
   function navTo(value: string) {
     setMsg(null);
@@ -233,6 +263,57 @@ export function IndustryExplorer({
               </span>
             )}
             {msg && <span className="text-xs text-zinc-500">{msg}</span>}
+          </div>
+
+          <div className="rounded border border-zinc-800 bg-zinc-950/40 p-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-300">
+                How this theme has performed
+              </span>
+              <Link href="/performance" className="text-[11px] text-sky-300 hover:underline">
+                Signal Performance →
+              </Link>
+              {performanceGeneratedAt && (
+                <span className="ml-auto text-[10px] text-zinc-600">backtest {performanceGeneratedAt.slice(0, 10)}</span>
+              )}
+            </div>
+            {perfHasData ? (
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400">
+                {PERF_WINDOWS.map((w) => {
+                  const edge = performance!.windows.find((x) => x.key === w.key);
+                  return (
+                    <span key={w.key}>
+                      {w.label} vs SPY:{" "}
+                      {edge && edge.n > 0 ? (
+                        <>
+                          <span className={pctClass(edge.meanAbnormalReturnPct)}>
+                            {fmtSignedPct(edge.meanAbnormalReturnPct)}
+                          </span>
+                          <span className="ml-1 text-[10px] text-zinc-600">
+                            hit {edge.hitRate?.toFixed(0)}% · n={edge.n}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : performance ? (
+              <p className="mt-1 text-xs text-zinc-500">
+                Tracking {performance.totalEvents} pick event{performance.totalEvents === 1 ? "" : "s"}, but forward
+                returns haven&apos;t matured yet — figures fill in as price history ages.
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-zinc-500">
+                No measured performance for this theme yet — run the backtest on the{" "}
+                <Link href="/performance" className="text-sky-300 hover:underline">
+                  Signal Performance
+                </Link>{" "}
+                page (picks need a few days to mature).
+              </p>
+            )}
           </div>
 
           <div>
