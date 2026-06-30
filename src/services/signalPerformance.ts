@@ -52,6 +52,12 @@ export interface PickSourceResult {
   windows: WindowEdge[];
 }
 
+export interface IndustryPerformanceResult {
+  industry: string;
+  totalEvents: number;
+  windows: WindowEdge[];
+}
+
 export interface ScoreCalibration {
   totalScoreRows: number;
   sampledEvents: number;
@@ -69,6 +75,7 @@ export interface PickPerformance {
   analyzed: number;
   spyAvailable: boolean;
   sources: PickSourceResult[];
+  byIndustry: IndustryPerformanceResult[];
   notes: string[];
 }
 
@@ -106,6 +113,26 @@ export function poolBySource(
     const summary = aggregateEventStudies(studies);
     return { source, totalEvents: summary.totalEvents, windows: summary.windows };
   });
+}
+
+/**
+ * Per-industry forward-return rows for picks that carry industry tags. Pure: each
+ * studied event fans out to every industry in its `groups`, so a pick that
+ * surfaced under multiple industries on the same day counts once per industry.
+ * Rows are ordered most-sampled first, then alphabetically. Studies without
+ * industries (e.g. Agent Picks) are ignored.
+ */
+export function poolByIndustry(
+  studies: { groups?: string[]; study: EventStudyResult }[],
+): IndustryPerformanceResult[] {
+  const fanned: { source: string; study: EventStudyResult }[] = [];
+  for (const s of studies) {
+    for (const industry of s.groups ?? []) fanned.push({ source: industry, study: s.study });
+  }
+  const industries = [...new Set(fanned.map((f) => f.source))];
+  return poolBySource(fanned, industries)
+    .map((r) => ({ industry: r.source, totalEvents: r.totalEvents, windows: r.windows }))
+    .sort((a, b) => b.totalEvents - a.totalEvents || a.industry.localeCompare(b.industry));
 }
 
 /** Mean forward abnormal return for a band's window, or null if no samples. */
@@ -194,11 +221,12 @@ async function ensureFreshSpy(earliest: string, alpaca: AlpacaService | null): P
 interface SignalEvent {
   ticker: string;
   day: string; // YYYY-MM-DD
-  key: string; // band label or pick source — the pooling key
+  key: string; // band label or pick source — the primary pooling key
+  groups?: string[]; // optional secondary pooling keys (e.g. a pick's industries)
 }
 
 interface StudiedEvents {
-  studies: { key: string; study: EventStudyResult }[];
+  studies: { key: string; groups?: string[]; study: EventStudyResult }[];
   sampledEvents: number;
   analyzed: number;
   tickers: number;
@@ -243,14 +271,14 @@ async function studyEvents(
     byTicker.set(e.ticker, list);
   }
 
-  const studies: { key: string; study: EventStudyResult }[] = [];
+  const studies: { key: string; groups?: string[]; study: EventStudyResult }[] = [];
   for (const [ticker, list] of byTicker) {
     const earliestForTicker = list.reduce((min, e) => (e.day < min ? e.day : min), list[0].day);
     const bars = await ensureBarsCover(ticker, earliestForTicker, alpaca).catch(() => []);
     if (bars.length === 0) continue;
     for (const e of list) {
       const study = eventStudy(bars, spyBars, e.day);
-      if (study) studies.push({ key: e.key, study });
+      if (study) studies.push({ key: e.key, groups: e.groups, study });
     }
   }
 
@@ -341,24 +369,43 @@ function buildPickEvents(): SignalEvent[] {
   const db = getDb();
   const out: SignalEvent[] = [];
   const seen = new Set<string>();
-  const add = (ticker: string | null, at: string | null, source: string) => {
+  const add = (ticker: string | null, at: string | null, source: string, groups?: string[]) => {
     if (!ticker || !at) return;
     const day = at.slice(0, 10);
     const k = `${source}|${ticker}|${day}`;
     if (seen.has(k)) return;
     seen.add(k);
-    out.push({ ticker, day, key: source });
+    out.push({ ticker, day, key: source, groups });
   };
   for (const r of db
     .select({ ticker: schema.agentCandidates.ticker, at: schema.agentCandidates.proposedAt })
     .from(schema.agentCandidates)
     .all())
     add(r.ticker, r.at, "Agent Picks");
+  // Sector Scout: one event per ticker/day for the source pool, tagged with every
+  // industry that surfaced it that day so the per-industry breakdown can fan out
+  // (the same ticker can be a pick under more than one industry).
+  const sectorByKey = new Map<string, { ticker: string; at: string; industries: Set<string> }>();
   for (const r of db
-    .select({ ticker: schema.sectorScoutPicks.ticker, at: schema.sectorScoutPicks.scannedAt })
+    .select({
+      ticker: schema.sectorScoutPicks.ticker,
+      at: schema.sectorScoutPicks.scannedAt,
+      industry: schema.sectorScoutPicks.industry,
+    })
     .from(schema.sectorScoutPicks)
-    .all())
-    add(r.ticker, r.at, "Sector Scout");
+    .all()) {
+    if (!r.ticker || !r.at) continue;
+    const day = r.at.slice(0, 10);
+    const k = `${r.ticker}|${day}`;
+    let entry = sectorByKey.get(k);
+    if (!entry) {
+      entry = { ticker: r.ticker, at: r.at, industries: new Set() };
+      sectorByKey.set(k, entry);
+    }
+    if (r.industry) entry.industries.add(r.industry);
+  }
+  for (const entry of sectorByKey.values())
+    add(entry.ticker, entry.at, "Sector Scout", [...entry.industries]);
   return out;
 }
 
@@ -369,6 +416,7 @@ async function runPickPerformance(alpaca: AlpacaService | null): Promise<PickPer
     studied.studies.map((s) => ({ source: s.key, study: s.study })),
     PICK_SOURCES,
   );
+  const byIndustry = poolByIndustry(studied.studies);
   const primaryN = sources.reduce(
     (n, s) => n + (s.windows.find((w) => w.key === PRIMARY_WINDOW)?.n ?? 0),
     0,
@@ -383,6 +431,7 @@ async function runPickPerformance(alpaca: AlpacaService | null): Promise<PickPer
     analyzed: studied.analyzed,
     spyAvailable: studied.spyAvailable,
     sources,
+    byIndustry,
     notes,
   };
 }

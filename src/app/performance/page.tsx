@@ -170,6 +170,41 @@ export default function PerformancePage() {
                 </tbody>
               </table>
             </div>
+
+            {picks.byIndustry && picks.byIndustry.length > 0 && (
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Sector Scout — by industry
+                </h3>
+                <p className="text-[11px] text-zinc-600">
+                  Which themes have actually panned out. A name that surfaced under more than one industry counts
+                  once per industry. Most-sampled first.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Industry</th>
+                        {WINDOWS.map((w) => (
+                          <th key={w.key} className="text-right">Mean abn. return {w.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {picks.byIndustry.map((r) => (
+                        <tr key={r.industry}>
+                          <td className="font-semibold capitalize text-zinc-200">
+                            {r.industry} <span className="text-[10px] text-zinc-500">({r.totalEvents})</span>
+                          </td>
+                          <WindowCells windows={r.windows} />
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             <Notes notes={picks.notes} />
           </>
         )}
