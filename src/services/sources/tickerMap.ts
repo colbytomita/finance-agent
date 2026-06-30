@@ -1,4 +1,5 @@
 import { DEFAULT_UNIVERSE } from "../discoveryAgent";
+import { cleanCompanyName } from "./gdelt";
 
 // Company-name → ticker resolution for the known universe. Turns extracted
 // company names (from filings / news coverage) into tickers. Anything outside
@@ -134,4 +135,78 @@ export function findKnownTicker(text: string): string | null {
 /** Human-readable display name for a ticker (its primary alias), or the ticker. */
 export function companyDisplayName(ticker: string): string {
   return TICKER_TO_DISPLAY.get(ticker.toUpperCase()) ?? ticker.toUpperCase();
+}
+
+// ----------------------------------------------------------------------------
+// Resolver — the curated universe, optionally augmented with extra (ticker,name)
+// pairs (e.g. the companies you track) so extraction can map news/filings about
+// smaller names back to a ticker instead of dropping them.
+// ----------------------------------------------------------------------------
+
+export interface TickerResolver {
+  /** Resolve a ticker symbol or company name to a ticker, or null. */
+  resolve(input: string | null | undefined): string | null;
+  /** Find the first recognized company/ticker mentioned in free text, or null. */
+  findInText(text: string): string | null;
+  /** Human-readable display name for a ticker (or the ticker itself). */
+  displayName(ticker: string): string;
+}
+
+/** Resolver over the built-in curated universe (the long-standing behavior). */
+export const defaultResolver: TickerResolver = {
+  resolve: resolveTicker,
+  findInText: findKnownTicker,
+  displayName: companyDisplayName,
+};
+
+/**
+ * Build a resolver that ALSO recognizes the given (ticker, name) pairs. Names are
+ * suffix-cleaned (e.g. "Rocket Lab Corp" -> "Rocket Lab") so they match how they
+ * appear in prose, and each ticker joins the resolvable universe. Falls back to
+ * the curated universe for everything else. Pure.
+ */
+export function makeResolver(extra: { ticker: string; name?: string | null }[]): TickerResolver {
+  const nameToTicker = new Map(NAME_TO_TICKER);
+  const display = new Map(TICKER_TO_DISPLAY);
+  const universe = new Set(UNIVERSE_SET);
+  const extraAliases: [string, string[]][] = [];
+  for (const e of extra) {
+    const t = e.ticker?.trim().toUpperCase();
+    if (!t) continue;
+    universe.add(t);
+    const alias = e.name ? cleanCompanyName(e.name) : "";
+    const aliases = alias ? [alias] : [];
+    for (const a of aliases) {
+      const k = norm(a);
+      if (k) nameToTicker.set(k, t);
+    }
+    if (alias && !display.has(t)) display.set(t, alias);
+    extraAliases.push([t, aliases]);
+  }
+
+  return {
+    resolve(input) {
+      if (!input) return null;
+      const raw = input.trim();
+      if (!raw) return null;
+      if (universe.has(raw.toUpperCase())) return raw.toUpperCase();
+      return nameToTicker.get(norm(raw)) ?? null;
+    },
+    findInText(text) {
+      const base = findKnownTicker(text); // curated names first (unchanged behavior)
+      if (base || !text) return base;
+      for (const [ticker, names] of extraAliases) {
+        const aliases = [...names];
+        if (ticker.length >= 3) aliases.push(ticker); // avoid 1-2 char tickers in prose
+        for (const a of aliases) {
+          const re = new RegExp(`\\b${a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+          if (re.test(text)) return ticker;
+        }
+      }
+      return null;
+    },
+    displayName(ticker) {
+      return display.get(ticker.toUpperCase()) ?? ticker.toUpperCase();
+    },
+  };
 }

@@ -3,7 +3,7 @@ import type { MentionDirection } from "./entityMentions";
 import type { RawEventItem } from "./sources/types";
 import { AnthropicProvider, type LLMProvider } from "./researchAgent";
 import { classifyCatalyst } from "./catalysts";
-import { resolveTicker, findKnownTicker, companyDisplayName } from "./sources/tickerMap";
+import { defaultResolver, type TickerResolver } from "./sources/tickerMap";
 
 // Turn raw real-world text (filings, press releases, news coverage) into
 // structured entity→ticker mentions. The LLM (Haiku — cheap, batched into one
@@ -97,6 +97,7 @@ interface RawExtraction {
 export function parseExtractionResponse(
   raw: string,
   items: RawEventItem[],
+  resolver: TickerResolver = defaultResolver,
 ): ExtractedEvent[] | null {
   const jsonText = raw.match(/\[[\s\S]*\]/)?.[0];
   if (!jsonText) return null;
@@ -117,14 +118,14 @@ export function parseExtractionResponse(
 
     // An item's tickerHint is authoritative (IR feed ticker, or a filer resolved
     // via SEC's CIK map) — trust it directly. Otherwise fall back to resolving the
-    // LLM's ticker/company against the known name universe.
+    // LLM's ticker/company against the resolver's name universe.
     const ticker =
       item.tickerHint ??
-      resolveTicker(el.ticker) ??
-      resolveTicker(el.company);
+      resolver.resolve(el.ticker) ??
+      resolver.resolve(el.company);
 
     const companyName =
-      (el.company && el.company.trim()) || (ticker ? companyDisplayName(ticker) : null);
+      (el.company && el.company.trim()) || (ticker ? resolver.displayName(ticker) : null);
 
     let entity = (el.entity && el.entity.trim()) || null;
     if (!entity && isFiling(item.source)) entity = companyName;
@@ -150,13 +151,14 @@ export function parseExtractionResponse(
 export function fallbackExtract(
   item: RawEventItem,
   knownEntities: string[],
+  resolver: TickerResolver = defaultResolver,
 ): ExtractedEvent | null {
-  const ticker = item.tickerHint ?? findKnownTicker(item.text);
+  const ticker = item.tickerHint ?? resolver.findInText(item.text);
   if (!ticker) return null;
 
   let entity: string | null;
   if (isFiling(item.source)) {
-    entity = companyDisplayName(ticker); // the company is the source of its own filing
+    entity = resolver.displayName(ticker); // the company is the source of its own filing
   } else {
     const lower = item.text.toLowerCase();
     entity = knownEntities.find((e) => e && lower.includes(e.toLowerCase())) ?? null;
@@ -167,7 +169,7 @@ export function fallbackExtract(
   return {
     entity,
     ticker,
-    companyName: companyDisplayName(ticker),
+    companyName: resolver.displayName(ticker),
     claim: item.title,
     direction: impactToMention(cls.impactDirection),
     confidence: "low",
@@ -183,6 +185,8 @@ export interface ExtractOptions {
   knownEntities?: string[];
   /** Inject a provider (or null to force fallback). Defaults to Haiku. */
   provider?: LLMProvider | null;
+  /** Name→ticker resolver (e.g. augmented with tracked companies). Defaults to curated. */
+  resolver?: TickerResolver;
 }
 
 /** Extract events from a batch of items — one LLM call, with a rule-based fallback. */
@@ -192,11 +196,12 @@ export async function extractEvents(
 ): Promise<ExtractedEvent[]> {
   if (items.length === 0) return [];
   const provider = opts.provider !== undefined ? opts.provider : getExtractionProvider();
+  const resolver = opts.resolver ?? defaultResolver;
 
   if (provider) {
     try {
       const raw = await provider.complete(buildExtractionPrompt(items), { maxTokens: 2000 });
-      const parsed = parseExtractionResponse(raw, items);
+      const parsed = parseExtractionResponse(raw, items, resolver);
       if (parsed !== null) return parsed;
     } catch (e) {
       console.error(
@@ -208,6 +213,6 @@ export async function extractEvents(
 
   const known = opts.knownEntities ?? [];
   return items
-    .map((it) => fallbackExtract(it, known))
+    .map((it) => fallbackExtract(it, known, resolver))
     .filter((e): e is ExtractedEvent => e !== null);
 }
