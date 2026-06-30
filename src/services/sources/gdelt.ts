@@ -39,6 +39,83 @@ export function parseGdelt(json: unknown, query?: string): RawEventItem[] {
     }));
 }
 
+// ----------------------------------------------------------------------------
+// Auto query building — derive GDELT searches from the companies you track so
+// the source produces relevant coverage without hand-written queries.
+// ----------------------------------------------------------------------------
+
+// Trailing legal-entity suffixes that news prose rarely uses ("Apple Inc." is
+// "Apple" in a headline). Stripped so the phrase search matches real coverage.
+const TRAILING_SUFFIX =
+  /[\s,]+(?:incorporated|inc|corporation|corp|company|co|llc|l\.?l\.?c|plc|ltd|limited|lp|l\.?p|holdings?|group|s\.?a|n\.?v|a\.?g|s\.?e|a\.?b)\.?$/i;
+
+/** Reduce a legal company name to the form news actually uses for searching. */
+export function cleanCompanyName(name: string): string {
+  let s = name.trim().replace(/^the\s+/i, "");
+  // Peel up to a few stacked suffixes, e.g. "Acme Co., Ltd." -> "Acme".
+  for (let i = 0; i < 3; i++) {
+    const next = s.replace(TRAILING_SUFFIX, "").trim();
+    if (next === s) break;
+    s = next;
+  }
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * A GDELT phrase query for one company. Prefers a cleaned company-name phrase;
+ * falls back to a distinctive (4+ char) ticker when no usable name exists.
+ * Returns null when nothing safe enough to search remains (short/ambiguous
+ * tickers like "F" or "CAT" would only add noise).
+ */
+export function companyGdeltQuery(companyName: string | null | undefined, ticker: string): string | null {
+  const clean = companyName ? cleanCompanyName(companyName) : "";
+  if (clean.length >= 3) return `"${clean}"`;
+  const t = (ticker ?? "").trim().toUpperCase();
+  if (t.length >= 4) return `"${t}"`;
+  return null;
+}
+
+export interface GdeltQueryItem {
+  ticker: string;
+  companyName?: string | null;
+}
+
+/**
+ * Build GDELT queries from tracked companies, de-duplicated by ticker and by
+ * phrase. Companies are batched into OR-queries (default 6 per query) so a real
+ * watchlist fits inside GDELT's tight per-run request budget — the downstream
+ * extractor attributes each article by its own title, so batching doesn't blur
+ * which ticker an event belongs to. Pure (no IO). Order is preserved.
+ */
+export function buildGdeltQueriesFor(
+  items: GdeltQueryItem[],
+  opts: { batchSize?: number; maxCompanies?: number } = {},
+): string[] {
+  const batchSize = Math.max(1, opts.batchSize ?? 6);
+  const maxCompanies = Math.max(1, opts.maxCompanies ?? 48);
+  const phrases: string[] = [];
+  const seenTicker = new Set<string>();
+  const seenPhrase = new Set<string>();
+  for (const it of items) {
+    const t = (it.ticker ?? "").trim().toUpperCase();
+    if (!t || seenTicker.has(t)) continue;
+    seenTicker.add(t);
+    const q = companyGdeltQuery(it.companyName, t);
+    if (!q) continue;
+    const key = q.toLowerCase();
+    if (seenPhrase.has(key)) continue;
+    seenPhrase.add(key);
+    phrases.push(q);
+    if (phrases.length >= maxCompanies) break;
+  }
+  const queries: string[] = [];
+  for (let i = 0; i < phrases.length; i += batchSize) {
+    const batch = phrases.slice(i, i + batchSize);
+    queries.push(batch.length === 1 ? batch[0] : `(${batch.join(" OR ")})`);
+  }
+  return queries;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**

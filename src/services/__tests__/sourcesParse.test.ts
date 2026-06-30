@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { parseRssItems, parseAtomEntries, parseFeed, decodeEntities, stripTags } from "../sources/parse";
 import { parseEdgarCompany, parseEdgarCik, edgarItemsFromAtom } from "../sources/secEdgar";
-import { parseGdelt } from "../sources/gdelt";
+import {
+  parseGdelt,
+  cleanCompanyName,
+  companyGdeltQuery,
+  buildGdeltQueriesFor,
+} from "../sources/gdelt";
 import { irItemsFromFeed } from "../sources/irRss";
 import { normalizeCik, parseCikTickers } from "../sources/cikMap";
 
@@ -126,6 +131,46 @@ describe("gdelt", () => {
   it("handles malformed payloads without throwing", () => {
     expect(parseGdelt(null)).toEqual([]);
     expect(parseGdelt({})).toEqual([]);
+  });
+});
+
+describe("gdelt auto-queries", () => {
+  it("strips legal suffixes (and a leading 'The') from company names", () => {
+    expect(cleanCompanyName("Apple Inc.")).toBe("Apple");
+    expect(cleanCompanyName("NVIDIA Corporation")).toBe("NVIDIA");
+    expect(cleanCompanyName("Rocket Lab USA, Inc.")).toBe("Rocket Lab USA");
+    expect(cleanCompanyName("The Walt Disney Company")).toBe("Walt Disney");
+    expect(cleanCompanyName("Coca-Cola Co")).toBe("Coca-Cola");
+  });
+
+  it("quotes a clean name, falls back to a distinctive ticker, else null", () => {
+    expect(companyGdeltQuery("Rocket Lab USA, Inc.", "RKLB")).toBe('"Rocket Lab USA"');
+    expect(companyGdeltQuery(null, "RKLB")).toBe('"RKLB"'); // 4+ char ticker is safe
+    expect(companyGdeltQuery(null, "F")).toBeNull(); // too ambiguous to search
+    expect(companyGdeltQuery("  ", "GM")).toBeNull(); // no name, short ticker
+  });
+
+  it("dedupes by ticker and phrase, then batches into OR-queries", () => {
+    const queries = buildGdeltQueriesFor(
+      [
+        { ticker: "RKLB", companyName: "Rocket Lab USA, Inc." },
+        { ticker: "RKLB", companyName: "Rocket Lab USA, Inc." }, // dup ticker -> dropped
+        { ticker: "ASTS", companyName: "AST SpaceMobile, Inc." },
+        { ticker: "GOOGL", companyName: "Alphabet Inc." },
+        { ticker: "GOOG", companyName: "Alphabet Inc." }, // same phrase -> dropped
+        { ticker: "XYZ", companyName: null }, // 3-char, no name -> skipped
+      ],
+      { batchSize: 2 },
+    );
+    expect(queries).toEqual([
+      '("Rocket Lab USA" OR "AST SpaceMobile")',
+      '"Alphabet"',
+    ]);
+  });
+
+  it("returns no queries when nothing is searchable", () => {
+    expect(buildGdeltQueriesFor([{ ticker: "F", companyName: null }])).toEqual([]);
+    expect(buildGdeltQueriesFor([])).toEqual([]);
   });
 });
 
