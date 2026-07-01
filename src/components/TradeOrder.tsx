@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useApiAction } from "./useApiAction";
 
 // User-initiated trade entry. A "Trade" button on a setup row opens this dialog,
 // pre-filled from the setup, where the user sets size/order type/protective legs
@@ -33,10 +33,8 @@ const fieldCls = "flex flex-col gap-0.5";
 
 export function PlaceOrderButton(props: PlaceOrderButtonProps) {
   const { ticker, mode } = props;
-  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { call, busy, error, reset: resetAction } = useApiAction();
   const [result, setResult] = useState<OrderResult | null>(null);
 
   const [direction, setDirection] = useState<"long" | "short">(props.direction ?? "long");
@@ -54,53 +52,38 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
   const isLive = mode === "live";
 
   function reset() {
-    setError(null);
+    resetAction();
     setResult(null);
     setConfirmLive(false);
   }
 
-  async function submit() {
-    setBusy(true);
-    setError(null);
-    try {
-      const referencePrice = props.entryPrice ?? (Number(limitPrice) || undefined);
-      const res = await fetch("/api/trades/place", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ticker,
-          direction,
-          shares,
-          orderType,
-          limitPrice: orderType === "limit" ? limitPrice : null,
-          timeInForce,
-          referencePrice,
-          attachBracket,
-          stopLoss: attachBracket ? stopLoss : null,
-          targetPrice1: attachBracket ? targetPrice1 : null,
-          thesis: thesis || null,
-          confirmLive,
-          logTrade: true,
+  function submit() {
+    const referencePrice = props.entryPrice ?? (Number(limitPrice) || undefined);
+    void call<{ order: OrderResult }>("/api/trades/place", {
+      body: {
+        ticker,
+        direction,
+        shares,
+        orderType,
+        limitPrice: orderType === "limit" ? limitPrice : null,
+        timeInForce,
+        referencePrice,
+        attachBracket,
+        stopLoss: attachBracket ? stopLoss : null,
+        targetPrice1: attachBracket ? targetPrice1 : null,
+        thesis: thesis || null,
+        confirmLive,
+        logTrade: true,
+      },
+      errorText: "Order rejected — check the fields.",
+      onSuccess: (d) =>
+        setResult({
+          id: d.order.id,
+          status: d.order.status,
+          orderClass: d.order.orderClass,
+          filledAvgPrice: d.order.filledAvgPrice,
         }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(
-          typeof data.error === "string" ? data.error : "Order rejected — check the fields.",
-        );
-      }
-      setResult({
-        id: data.order.id,
-        status: data.order.status,
-        orderClass: data.order.orderClass,
-        filledAvgPrice: data.order.filledAvgPrice,
-      });
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "failed");
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   const estCost = Number(shares) * Number(orderType === "limit" ? limitPrice : props.entryPrice ?? 0);

@@ -1,7 +1,8 @@
 import type { Confidence, ImpactDirection } from "@/lib/types";
 import type { MentionDirection } from "./entityMentions";
 import type { RawEventItem } from "./sources/types";
-import { AnthropicProvider, type LLMProvider } from "./researchAgent";
+import { extractJson, getProvider, type LLMProvider } from "./llm";
+import { errorMessage } from "@/lib/util";
 import { classifyCatalyst } from "./catalysts";
 import { defaultResolver, type TickerResolver } from "./sources/tickerMap";
 
@@ -52,12 +53,7 @@ function isFiling(source: string): boolean {
 
 /** Provider for extraction — Haiku by default (cheap), overridable via env. */
 export function getExtractionProvider(): LLMProvider | null {
-  const provider = process.env.LLM_PROVIDER ?? "anthropic";
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (provider === "anthropic" && key) {
-    return new AnthropicProvider(key, process.env.LLM_MODEL_EXTRACTION || "claude-haiku-4-5");
-  }
-  return null;
+  return getProvider(process.env.LLM_MODEL_EXTRACTION || "claude-haiku-4-5");
 }
 
 export function buildExtractionPrompt(items: RawEventItem[]): string {
@@ -99,14 +95,7 @@ export function parseExtractionResponse(
   items: RawEventItem[],
   resolver: TickerResolver = defaultResolver,
 ): ExtractedEvent[] | null {
-  const jsonText = raw.match(/\[[\s\S]*\]/)?.[0];
-  if (!jsonText) return null;
-  let arr: RawExtraction[];
-  try {
-    arr = JSON.parse(jsonText) as RawExtraction[];
-  } catch {
-    return null;
-  }
+  const arr = extractJson<RawExtraction[]>(raw, "array");
   if (!Array.isArray(arr)) return null;
 
   const out: ExtractedEvent[] = [];
@@ -206,7 +195,7 @@ export async function extractEvents(
     } catch (e) {
       console.error(
         "[eventExtraction] LLM extraction failed, using rule-based fallback:",
-        e instanceof Error ? e.message : e,
+        errorMessage(e),
       );
     }
   }

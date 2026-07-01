@@ -1,55 +1,12 @@
-import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { latestDrawdown, latestScore, tickerCatalysts } from "@/lib/queries";
+import { desc, eq } from "drizzle-orm";
+import { completeJson, getProvider } from "./llm";
 
-// Provider-agnostic LLM research module. When no LLM is configured the
-// rule-based composer produces the same shape of output from score
-// reasoning, so the app degrades gracefully. All output is labelled
-// model-generated interpretation — never presented as fact.
-
-export interface LLMProvider {
-  name: string;
-  complete(prompt: string, opts?: { maxTokens?: number }): Promise<string>;
-}
-
-export class AnthropicProvider implements LLMProvider {
-  name = "anthropic";
-  constructor(
-    private apiKey: string,
-    private model = process.env.LLM_MODEL || "claude-sonnet-4-6",
-  ) {}
-
-  async complete(prompt: string, opts: { maxTokens?: number } = {}): Promise<string> {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": this.apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: this.model,
-        max_tokens: opts.maxTokens ?? 1024,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`Anthropic API error ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    }
-    const data = (await res.json()) as { content: { type: string; text?: string }[] };
-    return data.content
-      .filter((b) => b.type === "text")
-      .map((b) => b.text ?? "")
-      .join("");
-  }
-}
-
-export function getProvider(): LLMProvider | null {
-  const provider = process.env.LLM_PROVIDER ?? "anthropic";
-  if (provider === "anthropic" && process.env.ANTHROPIC_API_KEY) {
-    return new AnthropicProvider(process.env.ANTHROPIC_API_KEY);
-  }
-  return null; // rule-based fallback
-}
+// Research briefs: LLM-generated when a provider is configured, rule-based
+// otherwise — same output shape either way, so the app degrades gracefully.
+// All output is labelled model-generated interpretation — never presented as
+// fact. (LLM provider plumbing lives in ./llm.)
 
 export interface ResearchBrief {
   ticker: string;
@@ -65,35 +22,16 @@ export interface ResearchBrief {
 }
 
 function gatherContext(ticker: string) {
-  const db = getDb();
-  const score = db
-    .select()
-    .from(schema.stockScores)
-    .where(eq(schema.stockScores.ticker, ticker))
-    .orderBy(desc(schema.stockScores.calculatedAt))
-    .limit(1)
-    .get();
-  const catalysts = db
-    .select()
-    .from(schema.catalysts)
-    .where(eq(schema.catalysts.ticker, ticker))
-    .orderBy(desc(schema.catalysts.discoveredAt))
-    .limit(10)
-    .all();
-  const trade = db
+  const score = latestScore(ticker);
+  const catalysts = tickerCatalysts(ticker, 10);
+  const trade = getDb()
     .select()
     .from(schema.activeTrades)
     .where(eq(schema.activeTrades.ticker, ticker))
     .orderBy(desc(schema.activeTrades.updatedAt))
     .limit(1)
     .get();
-  const drawdown = db
-    .select()
-    .from(schema.drawdownMetrics)
-    .where(eq(schema.drawdownMetrics.ticker, ticker))
-    .orderBy(desc(schema.drawdownMetrics.calculatedAt))
-    .limit(1)
-    .get();
+  const drawdown = latestDrawdown(ticker);
   return { score, catalysts, trade: trade?.status === "open" ? trade : null, drawdown };
 }
 
@@ -158,29 +96,22 @@ Recent catalysts: ${JSON.stringify(catalysts.slice(0, 8))}
 
 Respond in strict JSON with keys: summary (1 sentence), bullCase (1-2 sentences), bearCase (1-2 sentences), keyCatalysts (array of strings), keyRisks (array of strings), scoreExplanation (1-2 sentences), recommendedAction (one of Enter/Wait/Hold/Add/Trim/Exit/Avoid), confidence (low/medium/high).`;
 
-  try {
-    const raw = await provider.complete(prompt);
-    const jsonText = raw.match(/\{[\s\S]*\}/)?.[0];
-    if (!jsonText) return fallback;
-    const parsed = JSON.parse(jsonText) as Partial<ResearchBrief>;
-    const brief: ResearchBrief = {
-      ticker,
-      summary: parsed.summary ?? fallback.summary,
-      bullCase: parsed.bullCase ?? fallback.bullCase,
-      bearCase: parsed.bearCase ?? fallback.bearCase,
-      keyCatalysts: parsed.keyCatalysts ?? fallback.keyCatalysts,
-      keyRisks: parsed.keyRisks ?? fallback.keyRisks,
-      scoreExplanation: parsed.scoreExplanation ?? fallback.scoreExplanation,
-      recommendedAction: parsed.recommendedAction ?? fallback.recommendedAction,
-      confidence: parsed.confidence ?? fallback.confidence,
-      generatedBy: "llm",
-    };
-    persistBrief(brief);
-    return brief;
-  } catch (e) {
-    console.error(`[research] LLM brief failed for ${ticker}, using rules:`, e instanceof Error ? e.message : e);
-    return fallback;
-  }
+  const parsed = await completeJson<Partial<ResearchBrief>>(provider, prompt);
+  if (!parsed) return fallback;
+  const brief: ResearchBrief = {
+    ticker,
+    summary: parsed.summary ?? fallback.summary,
+    bullCase: parsed.bullCase ?? fallback.bullCase,
+    bearCase: parsed.bearCase ?? fallback.bearCase,
+    keyCatalysts: parsed.keyCatalysts ?? fallback.keyCatalysts,
+    keyRisks: parsed.keyRisks ?? fallback.keyRisks,
+    scoreExplanation: parsed.scoreExplanation ?? fallback.scoreExplanation,
+    recommendedAction: parsed.recommendedAction ?? fallback.recommendedAction,
+    confidence: parsed.confidence ?? fallback.confidence,
+    generatedBy: "llm",
+  };
+  persistBrief(brief);
+  return brief;
 }
 
 function persistBrief(brief: ResearchBrief): void {

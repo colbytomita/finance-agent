@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { UniverseRow, UniverseSection } from "@/lib/catalystUniverse";
+import { useApiAction } from "./useApiAction";
 
 // Client widgets for the Catalyst Research Universe page: a searchable/section-
 // switchable view over the three ranked tables, and a button that applies the
@@ -163,25 +164,14 @@ export function UniverseTables({
 }
 
 export function ApplyQueriesButton({ count }: { count: number }) {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const { call, busy, msg, error } = useApiAction();
 
-  async function apply() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/universe/queries", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "failed");
-      setMsg(
-        `Applied ${data.appliedQueries} monitoring quer${data.appliedQueries === 1 ? "y" : "ies"} — GDELT source and event ingestion enabled. Run ingestion from Catalyst Edge.`,
-      );
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const apply = () =>
+    call<{ appliedQueries: number }>("/api/universe/queries", {
+      refresh: false, // settings change; nothing on this page re-renders
+      message: (d) =>
+        `Applied ${d.appliedQueries} monitoring quer${d.appliedQueries === 1 ? "y" : "ies"} — GDELT source and event ingestion enabled. Run ingestion from Catalyst Edge.`,
+    });
 
   return (
     <span className="inline-flex items-center gap-2">
@@ -193,7 +183,7 @@ export function ApplyQueriesButton({ count }: { count: number }) {
       >
         {busy ? "Applying…" : `Use ${count} queries for ingestion`}
       </button>
-      {msg && <span className="text-xs text-zinc-500">{msg}</span>}
+      {(msg ?? error) && <span className="text-xs text-zinc-500">{msg ?? error}</span>}
     </span>
   );
 }

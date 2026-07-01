@@ -1,37 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useApiAction } from "./useApiAction";
 
 export function RunBacktestButton() {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const router = useRouter();
+  const { call, busy, msg, error } = useApiAction();
 
-  async function run() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/performance", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "backtest failed");
-      setMsg(
-        `Scores: ${data.score?.analyzed ?? 0} analyzed · Picks: ${data.picks?.analyzed ?? 0} · Trades: ${data.trades?.closed ?? 0} closed`,
-      );
-      router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "backtest failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const run = () =>
+    call<{
+      score?: { analyzed?: number };
+      picks?: { analyzed?: number };
+      trades?: { closed?: number };
+    }>("/api/performance", {
+      errorText: "backtest failed",
+      message: (d) =>
+        `Scores: ${d.score?.analyzed ?? 0} analyzed · Picks: ${d.picks?.analyzed ?? 0} · Trades: ${d.trades?.closed ?? 0} closed`,
+    });
 
   return (
     <span className="inline-flex items-center gap-2">
       <button className="btn btn-primary" onClick={run} disabled={busy}>
         {busy ? "Running…" : "Run backtest"}
       </button>
-      {msg && <span className="text-xs text-zinc-500">{msg}</span>}
+      {(msg ?? error) && <span className="text-xs text-zinc-500">{msg ?? error}</span>}
     </span>
   );
 }

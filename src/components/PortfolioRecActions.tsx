@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useApiAction } from "./useApiAction";
 
 // Accept ("Add") / Dismiss controls for a portfolio-derived watchlist suggestion.
 // Accept promotes the holding into the watchlist; Dismiss hides it from future
@@ -13,29 +12,13 @@ export function PortfolioRecActions({
   ticker: string;
   companyName: string | null;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const { call, busy, error } = useApiAction();
 
-  async function act(action: "accept" | "dismiss") {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/portfolio-recs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ticker, companyName, action }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(typeof data.error === "string" ? data.error : "failed");
-      }
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "failed");
-      setBusy(false);
-    }
-  }
+  const act = (action: "accept" | "dismiss") =>
+    call("/api/portfolio-recs", {
+      body: { ticker, companyName, action },
+      keepBusyOnSuccess: true,
+    });
 
   return (
     <span className="inline-flex items-center gap-2">

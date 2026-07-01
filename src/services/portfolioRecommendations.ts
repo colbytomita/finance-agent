@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
+import { nowIso } from "@/lib/util";
 
 // "Add to watchlist" suggestions derived from your portfolio: holdings you own
 // that aren't on the watchlist yet. Accepting one promotes it into the
@@ -10,8 +11,6 @@ import { loadConfig } from "@/lib/config";
 // array of tickers, so a holding you never want watched stays hidden.
 
 const DISMISSED_KEY = "portfolio_watchlist_dismissed";
-const nowIso = () => new Date().toISOString();
-
 export interface PortfolioRecommendation {
   ticker: string;
   companyName: string | null;

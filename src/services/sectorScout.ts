@@ -8,12 +8,15 @@ import {
   suggestBuyZone,
   type CandidateAnalysis,
 } from "./discoveryAgent";
-import { getProvider } from "./researchAgent";
+import { completeJson, extractJson, getProvider } from "./llm";
+import { errorMessage, nowIso } from "@/lib/util";
 import { edgeCatalystsForTicker } from "./catalystEdge";
 import {
   generateCompanyThesisReport,
   type CompanyThesisReport,
 } from "./companyThesisScout";
+import { scoreRowValues } from "./scoring";
+import { upsertWatchlistItem } from "./watchlist";
 
 // Sector Scout: on-demand, industry-targeted discovery.
 //
@@ -24,8 +27,6 @@ import {
 // used everywhere else -> for the ones that clear the score test, generate a
 // full bull/bear/risk research brief. Nothing is fabricated and nothing touches
 // the watchlist until the user clicks "Add".
-
-const nowIso = () => new Date().toISOString();
 
 /** Normalize a typed industry into a stable, lower-cased storage/display label. */
 export function normalizeIndustryLabel(industry: string): string {
@@ -74,17 +75,10 @@ const TICKER_STOPWORDS = new Set([
 export function parseTickerList(raw: string): string[] {
   let tokens: string[] = [];
   let fromJson = false;
-  const arrayMatch = raw.match(/\[[\s\S]*\]/);
-  if (arrayMatch) {
-    try {
-      const parsed = JSON.parse(arrayMatch[0]);
-      if (Array.isArray(parsed)) {
-        tokens = parsed.map((v) => String(v));
-        fromJson = true;
-      }
-    } catch {
-      // fall through to delimiter split
-    }
+  const parsed = extractJson<unknown>(raw, "array");
+  if (Array.isArray(parsed)) {
+    tokens = parsed.map((v) => String(v));
+    fromJson = true;
   }
   if (!fromJson) tokens = raw.split(/[^A-Za-z.]+/);
 
@@ -267,24 +261,18 @@ Entity catalyst edges: ${JSON.stringify(edges.slice(0, 5).map((e) => ({ title: e
 
 Respond in strict JSON with keys: summary (1 sentence), bullCase (1-2 sentences), bearCase (1-2 sentences), keyCatalysts (array of short strings), keyRisks (array of short strings), recommendedAction (short phrase), confidence (low/medium/high).`;
 
-  try {
-    const raw = await provider.complete(prompt, { maxTokens: 700 });
-    const jsonText = raw.match(/\{[\s\S]*\}/)?.[0];
-    if (!jsonText) return fallback;
-    const p = JSON.parse(jsonText) as Partial<SectorBrief>;
-    return {
-      summary: p.summary ?? fallback.summary,
-      bullCase: p.bullCase ?? fallback.bullCase,
-      bearCase: p.bearCase ?? fallback.bearCase,
-      keyCatalysts: Array.isArray(p.keyCatalysts) ? p.keyCatalysts : fallback.keyCatalysts,
-      keyRisks: Array.isArray(p.keyRisks) ? p.keyRisks : fallback.keyRisks,
-      recommendedAction: p.recommendedAction ?? fallback.recommendedAction,
-      confidence: p.confidence ?? fallback.confidence,
-      by: "llm",
-    };
-  } catch {
-    return fallback;
-  }
+  const p = await completeJson<Partial<SectorBrief>>(provider, prompt, { maxTokens: 700 });
+  if (!p) return fallback;
+  return {
+    summary: p.summary ?? fallback.summary,
+    bullCase: p.bullCase ?? fallback.bullCase,
+    bearCase: p.bearCase ?? fallback.bearCase,
+    keyCatalysts: Array.isArray(p.keyCatalysts) ? p.keyCatalysts : fallback.keyCatalysts,
+    keyRisks: Array.isArray(p.keyRisks) ? p.keyRisks : fallback.keyRisks,
+    recommendedAction: p.recommendedAction ?? fallback.recommendedAction,
+    confidence: p.confidence ?? fallback.confidence,
+    by: "llm",
+  };
 }
 
 // ----------------------------------------------------------------------------
@@ -374,7 +362,7 @@ export async function runSectorScan(opts: {
           thesisReportId = res.reportId;
           result.thesisReports++;
         } catch (e) {
-          result.errors.push(`${ticker} thesis: ${e instanceof Error ? e.message : String(e)}`);
+          result.errors.push(`${ticker} thesis: ${errorMessage(e)}`);
         }
       }
 
@@ -387,7 +375,7 @@ export async function runSectorScan(opts: {
       const { low, high } = suggestBuyZone(a);
       surfaced.push({ a, brief, low, high, thesis, thesisReportId });
     } catch (e) {
-      result.errors.push(`${ticker}: ${e instanceof Error ? e.message : String(e)}`);
+      result.errors.push(`${ticker}: ${errorMessage(e)}`);
     }
   }
   surfaced.sort(
@@ -409,14 +397,7 @@ export async function runSectorScan(opts: {
       ticker: a.ticker,
       companyName: a.companyName,
       price: a.price,
-      overallScore: a.score.overallScore,
-      valuationScore: a.score.components.valuationScore,
-      momentumScore: a.score.components.momentumScore,
-      catalystScore: a.score.components.catalystScore,
-      riskScore: a.score.components.riskScore,
-      sentimentScore: a.score.components.sentimentScore,
-      recommendation: a.score.recommendation,
-      confidence: a.score.confidence,
+      ...scoreRowValues(a.score),
       drawdownPercent: a.drawdown?.drawdownFrom52wHighPercent ?? null,
       suggestedBuyLow: low,
       suggestedBuyHigh: high,
@@ -658,21 +639,15 @@ export function acceptSectorPick(id: number): { ok: true; ticker: string } | { e
   const db = getDb();
   const p = db.select().from(schema.sectorScoutPicks).where(eq(schema.sectorScoutPicks.id, id)).get();
   if (!p) return { error: "pick not found" };
-  const now = nowIso();
-  const values = {
+  upsertWatchlistItem({
     ticker: p.ticker,
-    companyName: p.companyName ?? null,
-    targetBuyLow: p.suggestedBuyLow ?? null,
-    targetBuyHigh: p.suggestedBuyHigh ?? null,
+    companyName: p.companyName,
+    targetBuyLow: p.suggestedBuyLow,
+    targetBuyHigh: p.suggestedBuyHigh,
     notes: `Added from Sector Scout (${p.industry}) — ${p.summary ?? "scout-proposed"}${
       p.thesisSummary ? ` Thesis: ${p.thesisSummary}` : ""
-    }`.slice(0, 500),
-    updatedAt: now,
-  };
-  db.insert(schema.watchlistItems)
-    .values({ ...values, createdAt: now })
-    .onConflictDoUpdate({ target: schema.watchlistItems.ticker, set: values })
-    .run();
+    }`,
+  });
   db.update(schema.sectorScoutPicks)
     .set({ status: "added" })
     .where(eq(schema.sectorScoutPicks.id, id))

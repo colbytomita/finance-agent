@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { applyEntityEdge } from "@/services/catalystEdge";
+import { errorMessage } from "@/lib/util";
 
 // Applying the edge runs an event study per entity (which may backfill bars) and
 // recomputes affected scores, so allow a generous duration.
@@ -23,6 +24,6 @@ export async function POST(req: Request) {
     const result = await applyEntityEdge(parsed.data ?? {});
     return NextResponse.json(result);
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
 }

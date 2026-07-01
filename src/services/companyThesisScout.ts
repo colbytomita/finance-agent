@@ -3,7 +3,8 @@ import { getDb, schema } from "@/db";
 import type { AppConfig } from "@/lib/config";
 import { loadConfig } from "@/lib/config";
 import type { Confidence } from "@/lib/types";
-import { getProvider, type LLMProvider } from "./researchAgent";
+import { clamp, nowIso } from "@/lib/util";
+import { extractJson, getProvider, type LLMProvider } from "./llm";
 import { getCatalystsForTicker } from "./catalysts";
 import { listMentions } from "./entityMentions";
 import { fetchGdeltNews } from "./sources/gdelt";
@@ -16,8 +17,6 @@ import type { RawEventItem } from "./sources/types";
 // snippets. The probability/credibility scores are deterministic and bounded so
 // every report remains explainable and testable. Scores are evidence ratings,
 // not financial advice, price predictions, or autonomous trading signals.
-
-const nowIso = () => new Date().toISOString();
 
 const TRACTION_RE =
   /\b(contract|customer|customers|commercial|commercialization|revenue|sales|backlog|purchase order|po\b|pilot|deployment|deployed|partnership|partner|award|awarded|grant|permit|approved|approval|facility|factory|production|shipment|deliveries|agreement|signed|selected)\b/i;
@@ -49,10 +48,6 @@ const STOPWORDS = new Set([
   "industry",
   "technology",
 ]);
-
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, v));
-}
 
 function round1(v: number): number {
   return Math.round(v * 10) / 10;
@@ -291,14 +286,7 @@ function parseIndexArray(v: unknown): number[] {
 }
 
 export function parseClaimDrafts(raw: string, evidenceLength: number): ClaimDraft[] | null {
-  const jsonText = raw.match(/\[[\s\S]*\]/)?.[0];
-  if (!jsonText) return null;
-  let arr: RawClaimDraft[];
-  try {
-    arr = JSON.parse(jsonText) as RawClaimDraft[];
-  } catch {
-    return null;
-  }
+  const arr = extractJson<RawClaimDraft[]>(raw, "array");
   if (!Array.isArray(arr)) return null;
   const out: ClaimDraft[] = [];
   for (const item of arr) {

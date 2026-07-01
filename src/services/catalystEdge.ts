@@ -6,6 +6,7 @@ import { isCatalystStale } from "./catalysts";
 import { analyzeEntity, distinctEntities, type MentionDirection } from "./entityMentions";
 import type { EntityEdgeSummary, EventWindowKey } from "./eventStudy";
 import { getTrackedTickers, recomputeStockAnalysis } from "./marketData";
+import { clamp } from "@/lib/util";
 
 // Phase 3 — close the loop. Turn a measured entity edge (from analyzeEntity)
 // into catalysts that feed the existing scoring engine. Because edge catalysts
@@ -19,8 +20,6 @@ const PRIMARY_WINDOW: EventWindowKey = "post5"; // the [0,+5] trading-day window
 const DEFAULT_MIN_SAMPLES = 3;
 const IMPACT_SCALE = 1.0; // ~1 impact point per 1% mean abnormal return
 const MIN_ABS_IMPACT = 0.5; // below this we don't bother creating a catalyst
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 export interface EdgeImpact {
   impactScore: number; // -5..+5 (1 decimal)

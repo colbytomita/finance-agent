@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { AlpacaService, AlpacaError } from "@/services/alpaca";
+import { errorMessage } from "@/lib/util";
 
 // User-initiated order placement. The user fills in the trade dialog and submits;
 // this sends ONE order to Alpaca (paper by default; live requires explicit
@@ -91,7 +92,7 @@ export async function POST(req: Request) {
   } catch (e) {
     const status = e instanceof AlpacaError && e.status ? 502 : 500;
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
+      { error: errorMessage(e) },
       { status },
     );
   }

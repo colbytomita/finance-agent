@@ -8,7 +8,7 @@ import {
 } from "../eventExtraction";
 import { makeResolver } from "../sources/tickerMap";
 import type { RawEventItem } from "../sources/types";
-import type { LLMProvider } from "../researchAgent";
+import type { LLMProvider } from "../llm";
 
 const newsItem: RawEventItem = {
   source: "gdelt:Nvidia",
