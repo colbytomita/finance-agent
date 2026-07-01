@@ -338,3 +338,21 @@ export function scoreStock(input: {
     weightsUsed,
   };
 }
+
+/**
+ * A score's components + labels as flat DB column values — the shape shared by
+ * every table that persists a stock score (stock_scores, agent_candidates,
+ * sector_scout_picks). Pure; callers spread in their table-specific extras.
+ */
+export function scoreRowValues(score: StockScoreResult) {
+  return {
+    overallScore: score.overallScore,
+    valuationScore: score.components.valuationScore,
+    momentumScore: score.components.momentumScore,
+    catalystScore: score.components.catalystScore,
+    riskScore: score.components.riskScore,
+    sentimentScore: score.components.sentimentScore,
+    recommendation: score.recommendation,
+    confidence: score.confidence,
+  };
+}

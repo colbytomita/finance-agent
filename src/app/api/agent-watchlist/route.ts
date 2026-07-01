@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { listCandidates, runDiscoveryScan } from "@/services/discoveryAgent";
+import { errorMessage } from "@/lib/util";
 
 export const maxDuration = 300;
 
@@ -13,7 +14,7 @@ export async function POST() {
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
+      { error: errorMessage(e) },
       { status: 500 },
     );
   }

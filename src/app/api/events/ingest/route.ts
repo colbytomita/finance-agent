@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { runEventIngestion } from "@/services/eventIngestion";
+import { errorMessage } from "@/lib/util";
 
 // Ingestion fetches from external sources and may make one LLM call, so allow a
 // generous duration like the discovery-scan route.
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
+      { error: errorMessage(e) },
       { status: 500 },
     );
   }

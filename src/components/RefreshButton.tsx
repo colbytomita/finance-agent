@@ -1,36 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useApiAction } from "./useApiAction";
 
 export function RefreshButton() {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const router = useRouter();
+  const { call, busy, msg, error } = useApiAction();
 
-  async function refresh() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/refresh", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "refresh failed");
-      const failed = (data.prices ?? []).filter((p: { ok: boolean }) => !p.ok).length;
-      setMsg(failed > 0 ? `Done — ${failed} ticker(s) had no data source` : "Refreshed");
-      router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "refresh failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const refresh = () =>
+    call<{ prices?: { ok: boolean }[] }>("/api/refresh", {
+      errorText: "refresh failed",
+      message: (d) => {
+        const failed = (d.prices ?? []).filter((p) => !p.ok).length;
+        return failed > 0 ? `Done — ${failed} ticker(s) had no data source` : "Refreshed";
+      },
+    });
 
   return (
     <span className="inline-flex items-center gap-2">
       <button className="btn btn-primary" onClick={refresh} disabled={busy}>
         {busy ? "Refreshing…" : "Refresh data"}
       </button>
-      {msg && <span className="text-xs text-zinc-500">{msg}</span>}
+      {(msg ?? error) && <span className="text-xs text-zinc-500">{msg ?? error}</span>}
     </span>
   );
 }

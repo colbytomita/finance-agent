@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listSectorPicks, listSectorScans, runSectorScan } from "@/services/sectorScout";
+import { errorMessage } from "@/lib/util";
 
 export const maxDuration = 300;
 
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
+      { error: errorMessage(e) },
       { status: 500 },
     );
   }

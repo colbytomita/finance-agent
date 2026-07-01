@@ -3,6 +3,7 @@ import { getDb, schema } from "@/db";
 import type { Bar } from "@/lib/types";
 import { AlpacaService } from "./alpaca";
 import { getBars, saveBars } from "./marketData";
+import { errorMessage, nowIso } from "@/lib/util";
 import {
   eventStudy,
   aggregateEventStudies,
@@ -15,8 +16,6 @@ import {
 // price bars needed to cover old event dates, and pool a single entity's
 // mentions into an edge summary. Everything degrades gracefully — an entity or
 // ticker with too little data is reported (n/skip), never thrown.
-
-const nowIso = () => new Date().toISOString();
 
 export type MentionDirection = "bullish" | "bearish" | "neutral" | "unknown";
 
@@ -214,7 +213,7 @@ export async function analyzeEntity(entity: string): Promise<EntityAnalysis> {
         id: m.id,
         ticker: m.ticker,
         eventDate: m.eventDate,
-        reason: e instanceof Error ? e.message : String(e),
+        reason: errorMessage(e),
       });
     }
   }

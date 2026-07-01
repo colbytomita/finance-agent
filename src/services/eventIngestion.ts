@@ -10,6 +10,7 @@ import { fetchEdgarFilings } from "./sources/secEdgar";
 import { fetchGdeltNews, buildGdeltQueriesFor, type GdeltQueryItem } from "./sources/gdelt";
 import { fetchIrFeeds, type IrFeed } from "./sources/irRss";
 import { makeResolver } from "./sources/tickerMap";
+import { errorMessage } from "@/lib/util";
 
 // Orchestrates real-world event ingestion: pull from the enabled source
 // connectors, extract structured mentions (Haiku + rule-based fallback), dedupe,
@@ -169,7 +170,7 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
       raw.push(...items);
       result.bySource["sec-edgar"] = items.length;
     } catch (e) {
-      result.errors.push(`sec-edgar: ${e instanceof Error ? e.message : String(e)}`);
+      result.errors.push(`sec-edgar: ${errorMessage(e)}`);
     }
   }
   if (sources.gdelt && gdeltQueries.length > 0) {
@@ -178,7 +179,7 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
       raw.push(...items);
       result.bySource["gdelt"] = items.length;
     } catch (e) {
-      result.errors.push(`gdelt: ${e instanceof Error ? e.message : String(e)}`);
+      result.errors.push(`gdelt: ${errorMessage(e)}`);
     }
   }
   if (sources.ir && irFeeds.length > 0) {
@@ -187,7 +188,7 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
       raw.push(...items);
       result.bySource["ir-rss"] = items.length;
     } catch (e) {
-      result.errors.push(`ir-rss: ${e instanceof Error ? e.message : String(e)}`);
+      result.errors.push(`ir-rss: ${errorMessage(e)}`);
     }
   }
 
@@ -204,7 +205,7 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
   try {
     extracted = await extractEvents(capped, { knownEntities, resolver });
   } catch (e) {
-    result.errors.push(`extraction: ${e instanceof Error ? e.message : String(e)}`);
+    result.errors.push(`extraction: ${errorMessage(e)}`);
     return result;
   }
   result.extracted = extracted.length;
@@ -300,7 +301,7 @@ export async function runEventIngestion(opts: IngestOptions = {}): Promise<Inges
       .values(ingestionRunRecord(result, opts.trigger ?? "manual", new Date().toISOString()))
       .run();
   } catch (e) {
-    console.error("[eventIngestion] failed to log run:", e instanceof Error ? e.message : e);
+    console.error("[eventIngestion] failed to log run:", errorMessage(e));
   }
   return result;
 }

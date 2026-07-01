@@ -5,6 +5,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { IndustryGuide } from "@/services/sectorScout";
 import type { IndustryPerformanceResult } from "@/services/signalPerformance";
+import { useApiAction } from "./useApiAction";
+
+/** Response shape of POST /api/sector-scout, as far as the widgets need it. */
+interface ScanResponse {
+  industry: string;
+  considered: number;
+  scanned: number;
+  proposed: number;
+  thesisReports?: number;
+  expandedBy: string;
+  errors?: string[];
+}
 
 /** Normalize a label the same way the server does, for favorite comparisons. */
 function normLabel(s: string): string {
@@ -30,40 +42,22 @@ function pctClass(v: number | null): string {
 export function SectorScanForm({ defaultMinScore }: { defaultMinScore: number }) {
   const [industry, setIndustry] = useState("");
   const [minScore, setMinScore] = useState(String(defaultMinScore));
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const router = useRouter();
+  const { call, busy, msg, error } = useApiAction();
 
-  async function scan(e: React.FormEvent) {
+  function scan(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = industry.trim();
     if (!trimmed || busy) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const min = parseFloat(minScore);
-      const res = await fetch("/api/sector-scout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          industry: trimmed,
-          ...(isFinite(min) ? { minScore: min } : {}),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "scan failed");
-      setMsg(
-        `“${data.industry}”: ${data.considered} considered · ${data.scanned} scored · ${data.proposed} pick(s)` +
-          (data.thesisReports ? ` · ${data.thesisReports} thesis report(s)` : "") +
-          (data.expandedBy === "rules" ? " · curated list" : "") +
-          (data.errors?.length ? ` · ${data.errors.length} error(s)` : ""),
-      );
-      router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "scan failed");
-    } finally {
-      setBusy(false);
-    }
+    const min = parseFloat(minScore);
+    void call<ScanResponse>("/api/sector-scout", {
+      body: { industry: trimmed, ...(isFinite(min) ? { minScore: min } : {}) },
+      errorText: "scan failed",
+      message: (d) =>
+        `“${d.industry}”: ${d.considered} considered · ${d.scanned} scored · ${d.proposed} pick(s)` +
+        (d.thesisReports ? ` · ${d.thesisReports} thesis report(s)` : "") +
+        (d.expandedBy === "rules" ? " · curated list" : "") +
+        (d.errors?.length ? ` · ${d.errors.length} error(s)` : ""),
+    });
   }
 
   return (
@@ -91,7 +85,7 @@ export function SectorScanForm({ defaultMinScore }: { defaultMinScore: number })
       <button type="submit" className="btn btn-primary" disabled={busy || !industry.trim()}>
         {busy ? "Scanning…" : "Scan industry"}
       </button>
-      {msg && <span className="text-xs text-zinc-500">{msg}</span>}
+      {(msg ?? error) && <span className="text-xs text-zinc-500">{msg ?? error}</span>}
     </form>
   );
 }
@@ -121,8 +115,7 @@ export function IndustryExplorer({
 }) {
   const router = useRouter();
   const [navigating, startNav] = useTransition();
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const { call, busy, msg, error, reset } = useApiAction();
 
   const guide = selected ? guides.find((g) => g.industry === selected) ?? null : null;
   const isPinned = guide ? favorites.some((f) => normLabel(f) === guide.industry) : false;
@@ -137,59 +130,35 @@ export function IndustryExplorer({
     });
 
   function navTo(value: string) {
-    setMsg(null);
+    reset();
     startNav(() => {
       const qs = value ? `?industry=${encodeURIComponent(value)}` : "";
       router.push(`/sector-scout${qs}`, { scroll: false });
     });
   }
 
-  async function rescan() {
+  function rescan() {
     if (!guide || busy) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/sector-scout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ industry: guide.industry }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "scan failed");
-      setMsg(
-        `${data.scanned} scored · ${data.proposed} pick(s)` +
-          (data.expandedBy === "rules" ? " · curated list" : "") +
-          (data.errors?.length ? ` · ${data.errors.length} error(s)` : ""),
-      );
-      router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "scan failed");
-    } finally {
-      setBusy(false);
-    }
+    void call<ScanResponse>("/api/sector-scout", {
+      body: { industry: guide.industry },
+      errorText: "scan failed",
+      message: (d) =>
+        `${d.scanned} scored · ${d.proposed} pick(s)` +
+        (d.expandedBy === "rules" ? " · curated list" : "") +
+        (d.errors?.length ? ` · ${d.errors.length} error(s)` : ""),
+    });
   }
 
-  async function togglePin() {
+  function togglePin() {
     if (!guide || busy) return;
-    setBusy(true);
-    setMsg(null);
     const next = isPinned
       ? favorites.filter((f) => normLabel(f) !== guide.industry)
       : [...favorites, guide.industry];
-    try {
-      const res = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sectorScoutIndustries: next }),
-      });
-      if (!res.ok) throw new Error("failed to update favorites");
-      setMsg(isPinned ? "Unpinned from daily auto-scan" : "Pinned to daily auto-scan");
-      router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "failed to update favorites");
-    } finally {
-      setBusy(false);
-    }
+    void call("/api/settings", {
+      body: { sectorScoutIndustries: next },
+      errorText: "failed to update favorites",
+      message: () => (isPinned ? "Unpinned from daily auto-scan" : "Pinned to daily auto-scan"),
+    });
   }
 
   return (
@@ -262,7 +231,7 @@ export function IndustryExplorer({
                 </Link>
               </span>
             )}
-            {msg && <span className="text-xs text-zinc-500">{msg}</span>}
+            {(msg ?? error) && <span className="text-xs text-zinc-500">{msg ?? error}</span>}
           </div>
 
           <div className="rounded border border-zinc-800 bg-zinc-950/40 p-2">
@@ -362,29 +331,10 @@ export function IndustryExplorer({
 }
 
 export function SectorPickActions({ id, added }: { id: number; added: boolean }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const { call, busy, error } = useApiAction();
 
-  async function act(action: "accept" | "dismiss") {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/sector-scout/${id}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(typeof data.error === "string" ? data.error : "failed");
-      }
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "failed");
-      setBusy(false);
-    }
-  }
+  const act = (action: "accept" | "dismiss") =>
+    call(`/api/sector-scout/${id}`, { body: { action }, keepBusyOnSuccess: true });
 
   if (added) {
     return (

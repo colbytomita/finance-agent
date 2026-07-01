@@ -1,26 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useApiAction } from "./useApiAction";
 
 export function GenerateBriefButton({ ticker }: { ticker: string }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const { call, busy, error } = useApiAction();
 
-  async function generate() {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/research/${ticker}`, { method: "POST" });
-      if (!res.ok) throw new Error("brief generation failed");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const generate = () => call(`/api/research/${ticker}`, { errorText: "brief generation failed" });
 
   return (
     <span className="inline-flex items-center gap-2">

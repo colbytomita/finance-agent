@@ -6,17 +6,17 @@ import { AlpacaService } from "./alpaca";
 import { getYahooService } from "./yahooFinanceBrowser";
 import { computeIndicators, type IndicatorSnapshot } from "./indicators";
 import { computeDrawdown, evaluateBuyZone } from "./buyZone";
-import { scoreStock, type CatalystInput } from "./scoring";
+import { scoreStock, scoreRowValues, type CatalystInput } from "./scoring";
 import { evaluateTrade } from "./tradeScoring";
 import { detectSetups } from "./setupDetection";
 import { isCatalystStale } from "./catalysts";
 import { earningsSignalForTicker } from "./earnings";
+import { errorMessage, nowIso } from "@/lib/util";
+import { latestSnapshot } from "@/lib/queries";
 
 // Orchestrates: fetch prices/bars -> persist snapshots -> recompute
 // drawdowns, stock scores, trade scores, setups. All steps tolerate partial
 // data; failures are logged and surfaced as stale data, never crashes.
-
-const nowIso = () => new Date().toISOString();
 
 export function getTrackedTickers(): string[] {
   const db = getDb();
@@ -34,18 +34,9 @@ export function getTrackedTickers(): string[] {
   return [...set].sort();
 }
 
-export function getLatestSnapshot(ticker: string) {
-  const db = getDb();
-  return (
-    db
-      .select()
-      .from(schema.marketPriceSnapshots)
-      .where(eq(schema.marketPriceSnapshots.ticker, ticker))
-      .orderBy(desc(schema.marketPriceSnapshots.capturedAt))
-      .limit(1)
-      .get() ?? null
-  );
-}
+// Latest-row lookups live in @/lib/queries; re-exported here for the callers
+// that reach snapshots through the market-data service.
+export { latestSnapshot as getLatestSnapshot };
 
 export function getBars(ticker: string, timeframe = "1Day"): Bar[] {
   const db = getDb();
@@ -159,7 +150,7 @@ export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<
           };
         }
       } catch (e) {
-        error = `alpaca: ${e instanceof Error ? e.message : String(e)}`;
+        error = `alpaca: ${errorMessage(e)}`;
       }
     }
 
@@ -183,7 +174,7 @@ export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<
           }
         }
       } catch (e) {
-        error = `${error ? error + "; " : ""}yahoo: ${e instanceof Error ? e.message : String(e)}`;
+        error = `${error ? error + "; " : ""}yahoo: ${errorMessage(e)}`;
       }
     }
 
@@ -284,7 +275,7 @@ export async function refreshBars(tickers?: string[]): Promise<void> {
       const bars = await alpaca.getHistoricalBars(ticker, "1Day", 400);
       saveBars(ticker, bars);
     } catch (e) {
-      console.error(`[bars] ${ticker}:`, e instanceof Error ? e.message : e);
+      console.error(`[bars] ${ticker}:`, errorMessage(e));
     }
   });
 }
@@ -315,7 +306,7 @@ export async function syncPortfolio(): Promise<{ synced: number } | { error: str
     }
     return { synced: positions.length };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
+    return { error: errorMessage(e) };
   }
 }
 
@@ -375,7 +366,7 @@ export function recomputeStockAnalysis(ticker: string): TickerAnalysis {
   const db = getDb();
   const cfg = loadConfig();
   const bars = getBars(ticker);
-  const snap = getLatestSnapshot(ticker);
+  const snap = latestSnapshot(ticker);
   const price =
     snap?.regularPrice ??
     snap?.afterHoursPrice ??
@@ -466,15 +457,8 @@ export function recomputeStockAnalysis(ticker: string): TickerAnalysis {
   db.insert(schema.stockScores)
     .values({
       ticker,
-      overallScore: stockScore.overallScore,
-      valuationScore: stockScore.components.valuationScore,
-      momentumScore: stockScore.components.momentumScore,
-      catalystScore: stockScore.components.catalystScore,
-      riskScore: stockScore.components.riskScore,
+      ...scoreRowValues(stockScore),
       technicalScore: null,
-      sentimentScore: stockScore.components.sentimentScore,
-      recommendation: stockScore.recommendation,
-      confidence: stockScore.confidence,
       reasoningJson: JSON.stringify({
         ...stockScore.reasoning,
         weightsUsed: stockScore.weightsUsed,
@@ -653,7 +637,7 @@ export async function fullRefresh(): Promise<{
     try {
       recomputeStockAnalysis(t);
     } catch (e) {
-      console.error(`[score] ${t}:`, e instanceof Error ? e.message : e);
+      console.error(`[score] ${t}:`, errorMessage(e));
     }
   }
   recomputeTradeScores();

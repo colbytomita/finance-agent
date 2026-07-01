@@ -4,6 +4,7 @@
 
 import cron from "node-cron";
 import { loadConfig } from "@/lib/config";
+import { errorMessage } from "@/lib/util";
 import {
   fullRefresh,
   refreshPrices,
@@ -74,7 +75,7 @@ async function maybeRefresh(): Promise<void> {
       try {
         recomputeStockAnalysis(t);
       } catch (e) {
-        log(`score ${t} failed: ${e instanceof Error ? e.message : e}`);
+        log(`score ${t} failed: ${errorMessage(e)}`);
       }
     }
     recomputeTradeScores();
@@ -86,7 +87,7 @@ async function maybeRefresh(): Promise<void> {
         (failed.length > 0 ? ` — failed: ${failed.map((f) => f.ticker).join(", ")}` : ""),
     );
   } catch (e) {
-    log(`refresh failed: ${e instanceof Error ? e.message : e}`);
+    log(`refresh failed: ${errorMessage(e)}`);
   } finally {
     refreshing = false;
   }
@@ -102,13 +103,13 @@ async function dailyMaintenance(): Promise<void> {
     const cfg = loadConfig();
     if (cfg.yahooBrowserEnabled) {
       const added = await scanYahooNews(getTrackedTickers()).catch((e) => {
-        log(`news scan failed: ${e instanceof Error ? e.message : e}`);
+        log(`news scan failed: ${errorMessage(e)}`);
         return 0;
       });
       log(`news scan added ${added} catalyst(s)`);
     }
     const picks = await runDiscoveryScan().catch((e) => {
-      log(`discovery scan failed: ${e instanceof Error ? e.message : e}`);
+      log(`discovery scan failed: ${errorMessage(e)}`);
       return null;
     });
     if (picks) log(`discovery scan: ${picks.proposed} new pick(s) from ${picks.scanned} scanned`);
@@ -117,7 +118,7 @@ async function dailyMaintenance(): Promise<void> {
     if (cfg.sectorScoutScanEnabled && cfg.sectorScoutIndustries.length > 0) {
       for (const industry of cfg.sectorScoutIndustries) {
         const res = await runSectorScan({ industry, cfg }).catch((e) => {
-          log(`sector scout "${industry}" failed: ${e instanceof Error ? e.message : e}`);
+          log(`sector scout "${industry}" failed: ${errorMessage(e)}`);
           return null;
         });
         if (res)
@@ -131,7 +132,7 @@ async function dailyMaintenance(): Promise<void> {
     // recompute so a fresh beat/miss weighs into scores. Browser-based, best effort.
     if (cfg.yahooBrowserEnabled) {
       const earn = await fetchEarningsForTickers(getTrackedTickers()).catch((e) => {
-        log(`earnings fetch failed: ${e instanceof Error ? e.message : e}`);
+        log(`earnings fetch failed: ${errorMessage(e)}`);
         return null;
       });
       if (earn) {
@@ -151,7 +152,7 @@ async function dailyMaintenance(): Promise<void> {
     // Backfill missing company names (SEC ticker->name) so the UI and GDELT
     // auto-queries have real names to work with. Cheap; the SEC file is cached.
     const names = await backfillCompanyNames().catch((e) => {
-      log(`name backfill failed: ${e instanceof Error ? e.message : e}`);
+      log(`name backfill failed: ${errorMessage(e)}`);
       return null;
     });
     if (names && names.resolved > 0)
@@ -159,7 +160,7 @@ async function dailyMaintenance(): Promise<void> {
 
     if (cfg.eventIngestionEnabled) {
       const ing = await runEventIngestion({ trigger: "scheduled" }).catch((e) => {
-        log(`event ingestion failed: ${e instanceof Error ? e.message : e}`);
+        log(`event ingestion failed: ${errorMessage(e)}`);
         return null;
       });
       if (ing)
@@ -168,7 +169,7 @@ async function dailyMaintenance(): Promise<void> {
         );
       // Feed the measured entity edge back into scoring as catalysts.
       const edge = await applyEntityEdge().catch((e) => {
-        log(`apply entity edge failed: ${e instanceof Error ? e.message : e}`);
+        log(`apply entity edge failed: ${errorMessage(e)}`);
         return null;
       });
       if (edge)
@@ -179,7 +180,7 @@ async function dailyMaintenance(): Promise<void> {
     generateAlerts();
     log("daily maintenance done");
   } catch (e) {
-    log(`daily maintenance failed: ${e instanceof Error ? e.message : e}`);
+    log(`daily maintenance failed: ${errorMessage(e)}`);
   }
 }
 

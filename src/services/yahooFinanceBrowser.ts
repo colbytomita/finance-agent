@@ -1,4 +1,5 @@
 import type { MarketState, Quote } from "@/lib/types";
+import { errorMessage } from "@/lib/util";
 
 // Yahoo Finance extraction via a real browser (Playwright/Chromium).
 // Design: parseYahooQuoteHtml() is a pure function tested against fixture
@@ -106,7 +107,7 @@ export function parseYahooQuoteHtml(
     try {
       return fn();
     } catch (e) {
-      errors.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(`${label}: ${errorMessage(e)}`);
       return fallback;
     }
   };
@@ -227,7 +228,7 @@ export class YahooFinanceBrowserService {
       } catch (e) {
         console.error(
           "[yahoo-browser] Failed to launch Chromium. Run `npx playwright install chromium`.",
-          e instanceof Error ? e.message : e,
+          errorMessage(e),
         );
         return null;
       } finally {
@@ -265,7 +266,7 @@ export class YahooFinanceBrowserService {
       const html = await page.content();
       return { html, url };
     } catch (e) {
-      console.error(`[yahoo-browser] ${ticker} extraction failed:`, e instanceof Error ? e.message : e);
+      console.error(`[yahoo-browser] ${ticker} extraction failed:`, errorMessage(e));
       return null;
     } finally {
       await context.close().catch(() => {});
@@ -308,7 +309,7 @@ export class YahooFinanceBrowserService {
       );
       return parseYahooEarnings(json);
     } catch (e) {
-      console.error(`[yahoo-earnings] ${ticker}:`, e instanceof Error ? e.message : e);
+      console.error(`[yahoo-earnings] ${ticker}:`, errorMessage(e));
       return [];
     } finally {
       await context.close().catch(() => {});

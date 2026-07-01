@@ -1,24 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { Pct } from "@/components/badges";
 import { fmtNum } from "@/lib/format";
+import { formValues, useApiAction } from "./useApiAction";
 
 // Client widgets for the Catalyst Edge (event-study) page: a collapsible form to
 // add a mention, and an on-demand per-entity edge analyzer that calls the
 // analyze API (which may backfill historical bars, so it can take a moment).
-
-function formValues(e: FormEvent<HTMLFormElement>): Record<string, unknown> {
-  e.preventDefault();
-  const fd = new FormData(e.currentTarget);
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of fd.entries()) {
-    const s = String(v).trim();
-    out[k] = s === "" ? null : s;
-  }
-  return out;
-}
 
 const field = "flex flex-col gap-0.5";
 
@@ -34,26 +23,15 @@ interface IngestResult {
 }
 
 export function IngestButton() {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const { call, busy, error } = useApiAction();
   const [result, setResult] = useState<IngestResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  async function ingest() {
-    setBusy(true);
+  function ingest() {
     setResult(null);
-    setError(null);
-    try {
-      const res = await fetch("/api/events/ingest", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "ingestion failed");
-      setResult(data as IngestResult);
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "ingestion failed");
-    } finally {
-      setBusy(false);
-    }
+    void call<IngestResult>("/api/events/ingest", {
+      errorText: "ingestion failed",
+      onSuccess: setResult,
+    });
   }
 
   return (
@@ -106,29 +84,19 @@ export function IngestButton() {
 }
 
 export function ApplyEdgeButton() {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const { call, busy, msg, error } = useApiAction();
 
-  async function apply() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/events/apply-edge", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "apply failed");
-      setMsg(
-        `Wrote ${data.catalystsWritten} edge catalyst(s) across ${data.entitiesProcessed} entit${
-          data.entitiesProcessed === 1 ? "y" : "ies"
-        }` + (data.tickersRecomputed ? `, recomputed ${data.tickersRecomputed} score(s)` : ""),
-      );
-      router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "apply failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const apply = () =>
+    call<{ catalystsWritten: number; entitiesProcessed: number; tickersRecomputed?: number }>(
+      "/api/events/apply-edge",
+      {
+        errorText: "apply failed",
+        message: (d) =>
+          `Wrote ${d.catalystsWritten} edge catalyst(s) across ${d.entitiesProcessed} entit${
+            d.entitiesProcessed === 1 ? "y" : "ies"
+          }` + (d.tickersRecomputed ? `, recomputed ${d.tickersRecomputed} score(s)` : ""),
+      },
+    );
 
   return (
     <span className="inline-flex items-center gap-2">
@@ -140,41 +108,22 @@ export function ApplyEdgeButton() {
       >
         {busy ? "Applying…" : "Apply edge to scoring"}
       </button>
-      {msg && <span className="text-xs text-zinc-500">{msg}</span>}
+      {(msg ?? error) && <span className="text-xs text-zinc-500">{msg ?? error}</span>}
     </span>
   );
 }
 
 export function AddMentionForm() {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { call, busy, error } = useApiAction();
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     const form = e.currentTarget;
-    const payload = formValues(e);
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/events", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(
-          typeof data.error === "string" ? data.error : "Validation failed — check the fields.",
-        );
-      }
-      form.reset();
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "failed");
-    } finally {
-      setBusy(false);
-    }
+    const ok = await call("/api/events", {
+      body: formValues(e),
+      errorText: "Validation failed — check the fields.",
+    });
+    if (ok) form.reset();
   }
 
   return (
@@ -259,24 +208,17 @@ interface Analysis {
 
 export function EntityAnalyzer({ entities }: { entities: { entity: string; count: number }[] }) {
   const [entity, setEntity] = useState(entities[0]?.entity ?? "");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { call, busy, error } = useApiAction();
   const [data, setData] = useState<Analysis | null>(null);
 
-  async function analyze() {
+  function analyze() {
     if (!entity) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/events/analyze?entity=${encodeURIComponent(entity)}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "analysis failed");
-      setData(json as Analysis);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "analysis failed");
-    } finally {
-      setBusy(false);
-    }
+    void call<Analysis>(`/api/events/analyze?entity=${encodeURIComponent(entity)}`, {
+      method: "GET",
+      refresh: false, // pure read — nothing server-rendered changes
+      errorText: "analysis failed",
+      onSuccess: setData,
+    });
   }
 
   return (

@@ -3,49 +3,21 @@
 // Small client-side entry forms. Each POSTs to an API route and refreshes
 // the server-rendered page data.
 
-import { useState, type FormEvent, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useState, type ReactNode } from "react";
+import { formValues, useApiAction } from "./useApiAction";
 
+/** POST/PATCH/DELETE a form payload to one URL; onDone fires only on success. */
 function useSubmit(url: string, method = "POST") {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-
+  const { call, busy, error } = useApiAction();
   async function submit(payload: Record<string, unknown>, onDone?: () => void) {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(url, {
-        method,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(
-          typeof data.error === "string" ? data.error : "Validation failed — check the fields.",
-        );
-      }
-      onDone?.();
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "failed");
-    } finally {
-      setBusy(false);
-    }
+    const ok = await call(url, {
+      method,
+      body: payload,
+      errorText: "Validation failed — check the fields.",
+    });
+    if (ok) onDone?.();
   }
   return { submit, busy, error };
-}
-
-function formValues(e: FormEvent<HTMLFormElement>): Record<string, unknown> {
-  e.preventDefault();
-  const fd = new FormData(e.currentTarget);
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of fd.entries()) {
-    const s = String(v).trim();
-    out[k] = s === "" ? null : s;
-  }
-  return out;
 }
 
 function Collapsible({ label, children }: { label: string; children: ReactNode }) {
@@ -305,38 +277,22 @@ export function AddEarningsForm({ ticker }: { ticker: string }) {
 }
 
 export function FetchEarningsButton({ ticker }: { ticker: string }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  async function go() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/earnings/fetch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ticker }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "fetch failed");
-      setMsg(
-        data.saved > 0
-          ? `Saved ${data.saved} quarter(s) from Yahoo`
+  const { call, busy, msg, error } = useApiAction();
+  const go = () =>
+    call<{ saved: number }>("/api/earnings/fetch", {
+      body: { ticker },
+      errorText: "fetch failed",
+      message: (d) =>
+        d.saved > 0
+          ? `Saved ${d.saved} quarter(s) from Yahoo`
           : "No earnings found (Yahoo may be unavailable — try manual entry)",
-      );
-      router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "fetch failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+    });
   return (
     <span className="inline-flex items-center gap-2">
       <button className="btn" onClick={go} disabled={busy} title="Auto-fetch quarterly earnings from Yahoo Finance">
         {busy ? "Fetching…" : "Fetch from Yahoo"}
       </button>
-      {msg && <span className="text-xs text-zinc-500">{msg}</span>}
+      {(msg ?? error) && <span className="text-xs text-zinc-500">{msg ?? error}</span>}
     </span>
   );
 }

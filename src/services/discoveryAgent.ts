@@ -6,10 +6,12 @@ import { AlpacaService } from "./alpaca";
 import { getYahooService } from "./yahooFinanceBrowser";
 import { computeIndicators, type IndicatorSnapshot } from "./indicators";
 import { computeDrawdown, type DrawdownReport } from "./buyZone";
-import { scoreStock, DEFAULT_STOCK_WEIGHTS, type StockScoreResult, type StockScoreWeights, type CatalystInput } from "./scoring";
+import { scoreStock, scoreRowValues, DEFAULT_STOCK_WEIGHTS, type StockScoreResult, type StockScoreWeights, type CatalystInput } from "./scoring";
+import { upsertWatchlistItem } from "./watchlist";
 import { getCatalystInputs } from "./marketData";
-import { getProvider } from "./researchAgent";
+import { getProvider } from "./llm";
 import { edgeCatalystsForTicker } from "./catalystEdge";
+import { errorMessage, nowIso } from "@/lib/util";
 
 // Discovery / "scout" agent. Scans a universe of liquid stocks, scores each with
 // the same engine used for tracked tickers, and proposes those that pass the
@@ -19,8 +21,6 @@ import { edgeCatalystsForTicker } from "./catalystEdge";
 // Scoring here is done in memory from freshly fetched bars — candidate tickers
 // are NOT persisted into price_bars/stock_scores until the user accepts one and
 // a normal refresh picks it up. This keeps the DB free of declined-ticker noise.
-
-const nowIso = () => new Date().toISOString();
 
 /**
  * Default candidate universe: liquid US large/mid-caps across sectors. This is a
@@ -233,14 +233,7 @@ export async function runDiscoveryScan(opts: { universe?: string[]; minScore?: n
         ticker: a.ticker,
         companyName: a.companyName,
         price: a.price,
-        overallScore: a.score.overallScore,
-        valuationScore: a.score.components.valuationScore,
-        momentumScore: a.score.components.momentumScore,
-        catalystScore: a.score.components.catalystScore,
-        riskScore: a.score.components.riskScore,
-        sentimentScore: a.score.components.sentimentScore,
-        recommendation: a.score.recommendation,
-        confidence: a.score.confidence,
+        ...scoreRowValues(a.score),
         drawdownPercent: a.drawdown?.drawdownFrom52wHighPercent ?? null,
         suggestedBuyLow: low,
         suggestedBuyHigh: high,
@@ -259,7 +252,7 @@ export async function runDiscoveryScan(opts: { universe?: string[]; minScore?: n
       result.proposed++;
       result.candidates.push({ ticker: a.ticker, score: a.score.overallScore });
     } catch (e) {
-      result.errors.push(`${ticker}: ${e instanceof Error ? e.message : String(e)}`);
+      result.errors.push(`${ticker}: ${errorMessage(e)}`);
     }
   }
   result.candidates.sort((x, y) => y.score - x.score);
@@ -280,21 +273,15 @@ export function acceptCandidate(id: number): { ok: true; ticker: string } | { er
   const db = getDb();
   const c = db.select().from(schema.agentCandidates).where(eq(schema.agentCandidates.id, id)).get();
   if (!c) return { error: "candidate not found" };
-  const now = nowIso();
-  const values = {
+  upsertWatchlistItem({
     ticker: c.ticker,
-    companyName: c.companyName ?? null,
-    targetBuyLow: c.suggestedBuyLow ?? null,
-    targetBuyHigh: c.suggestedBuyHigh ?? null,
-    notes: `Added from Agent Picks — ${c.rationale ?? "agent-proposed"}`.slice(0, 500),
-    updatedAt: now,
-  };
-  db.insert(schema.watchlistItems)
-    .values({ ...values, createdAt: now })
-    .onConflictDoUpdate({ target: schema.watchlistItems.ticker, set: values })
-    .run();
+    companyName: c.companyName,
+    targetBuyLow: c.suggestedBuyLow,
+    targetBuyHigh: c.suggestedBuyHigh,
+    notes: `Added from Agent Picks — ${c.rationale ?? "agent-proposed"}`,
+  });
   db.update(schema.agentCandidates)
-    .set({ status: "accepted", decidedAt: now })
+    .set({ status: "accepted", decidedAt: nowIso() })
     .where(eq(schema.agentCandidates.id, id))
     .run();
   return { ok: true, ticker: c.ticker };

@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Confidence } from "@/lib/types";
 import type { CatalystInput } from "./scoring";
+import { errorMessage, nowIso } from "@/lib/util";
 
 // Quarterly earnings surprise (beat / meet / miss) as a scoring signal. The pure
 // math here (surprise %, impact mapping, recency decay) is unit-tested and feeds
@@ -10,8 +11,6 @@ import type { CatalystInput } from "./scoring";
 // usual "why" reasons without a bespoke component.
 
 export type EarningsRow = typeof schema.earningsReports.$inferSelect;
-
-const nowIso = () => new Date().toISOString();
 
 /** EPS surprise as a percent of the (absolute) estimate. Null when not computable. */
 export function computeSurprisePercent(
@@ -194,7 +193,7 @@ export async function fetchEarningsForTickers(tickers: string[]): Promise<FetchE
         result.saved++;
       }
     } catch (e) {
-      result.errors.push(`${ticker}: ${e instanceof Error ? e.message : String(e)}`);
+      result.errors.push(`${ticker}: ${errorMessage(e)}`);
     }
   }
   return result;
