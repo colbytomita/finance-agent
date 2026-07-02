@@ -122,7 +122,8 @@ CREATE TABLE IF NOT EXISTS active_trades (
   closed_at TEXT,
   exit_price REAL,
   broker TEXT,
-  broker_order_id TEXT
+  broker_order_id TEXT,
+  broker_order_status TEXT
 );
 CREATE TABLE IF NOT EXISTS trade_setups (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -375,6 +376,7 @@ export function getDb(): BetterSQLite3Database<typeof schema> {
     "ALTER TABLE active_trades ADD COLUMN reasoning_json TEXT",
     "ALTER TABLE active_trades ADD COLUMN broker TEXT",
     "ALTER TABLE active_trades ADD COLUMN broker_order_id TEXT",
+    "ALTER TABLE active_trades ADD COLUMN broker_order_status TEXT",
     "ALTER TABLE sector_scout_picks ADD COLUMN thesis_report_id INTEGER",
     "ALTER TABLE sector_scout_picks ADD COLUMN thesis_score REAL",
     "ALTER TABLE sector_scout_picks ADD COLUMN theme_fit_score REAL",
