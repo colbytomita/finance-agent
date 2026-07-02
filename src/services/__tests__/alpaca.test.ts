@@ -200,4 +200,32 @@ describe("AlpacaService", () => {
     expect(call[1].method).toBe("POST");
     expect(JSON.parse(call[1].body)).toMatchObject({ symbol: "MSFT", order_class: "bracket" });
   });
+
+  it("getOrder fetches one order and parses fill fields with numeric coercion", async () => {
+    const fetchFn = mockFetch({
+      "/v2/orders/o1": {
+        id: "o1",
+        symbol: "MSFT",
+        qty: "10",
+        side: "buy",
+        type: "limit",
+        status: "partially_filled",
+        limit_price: "400",
+        filled_avg_price: "399.87",
+        filled_qty: "4",
+        submitted_at: "2026-06-24T00:00:00Z",
+      },
+    });
+    const svc = new AlpacaService({ ...cfg, fetchFn });
+    const order = await svc.getOrder("o1");
+    expect(order).toMatchObject({
+      id: "o1",
+      status: "partially_filled",
+      filledAvgPrice: 399.87,
+      filledQty: 4,
+    });
+    const url = String((fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    expect(url).toContain("/v2/orders/o1");
+    expect(url).toContain("paper-api.alpaca.markets");
+  });
 });

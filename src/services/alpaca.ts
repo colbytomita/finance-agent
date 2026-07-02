@@ -78,6 +78,7 @@ export interface AlpacaOrder {
   status: string;
   limitPrice: number | null;
   filledAvgPrice: number | null;
+  filledQty: number | null;
   submittedAt: string | null;
 }
 
@@ -308,6 +309,22 @@ export class AlpacaService {
     return body;
   }
 
+  private parseOrder(o: Record<string, unknown>): AlpacaOrder {
+    return {
+      id: String(o.id ?? ""),
+      symbol: String(o.symbol ?? ""),
+      qty: num(o.qty),
+      side: String(o.side ?? ""),
+      type: String(o.type ?? ""),
+      orderClass: (o.order_class as string) ?? null,
+      status: String(o.status ?? "unknown"),
+      limitPrice: num(o.limit_price),
+      filledAvgPrice: num(o.filled_avg_price),
+      filledQty: num(o.filled_qty),
+      submittedAt: (o.submitted_at as string) ?? null,
+    };
+  }
+
   /** Submit an order to Alpaca (paper or live per config.mode). */
   async placeOrder(req: AlpacaOrderRequest): Promise<AlpacaOrder> {
     const o = await this.post<Record<string, unknown>>(
@@ -315,17 +332,23 @@ export class AlpacaService {
       "/v2/orders",
       this.buildOrderPayload(req),
     );
+    const parsed = this.parseOrder(o);
+    // Backstop the echo fields with the request values (Alpaca always returns
+    // them, but the caller's intent is the safer default on a sparse response).
     return {
-      id: String(o.id ?? ""),
-      symbol: String(o.symbol ?? req.symbol),
-      qty: num(o.qty),
-      side: String(o.side ?? req.side),
-      type: String(o.type ?? req.type),
-      orderClass: (o.order_class as string) ?? null,
-      status: String(o.status ?? "unknown"),
-      limitPrice: num(o.limit_price),
-      filledAvgPrice: num(o.filled_avg_price),
-      submittedAt: (o.submitted_at as string) ?? null,
+      ...parsed,
+      symbol: parsed.symbol || req.symbol,
+      side: parsed.side || req.side,
+      type: parsed.type || req.type,
     };
+  }
+
+  /** Fetch a single order's current state (fill price/qty, status). */
+  async getOrder(orderId: string): Promise<AlpacaOrder> {
+    const o = await this.request<Record<string, unknown>>(
+      this.tradingBase,
+      `/v2/orders/${encodeURIComponent(orderId)}`,
+    );
+    return this.parseOrder(o);
   }
 }

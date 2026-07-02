@@ -9,6 +9,20 @@ import { getLatestSnapshot } from "./marketData";
 
 export type AlertSeverity = "info" | "warning" | "critical";
 
+/**
+ * Emit one alert (de-duplicated: an identical type+message within the last 20h
+ * is dropped). Exported for services that raise event-driven alerts outside the
+ * scan in generateAlerts (e.g. broker order-fill corrections).
+ */
+export function emitAlert(
+  alertType: string,
+  severity: AlertSeverity,
+  message: string,
+  ticker: string | null = null,
+): boolean {
+  return emit(alertType, severity, message, ticker);
+}
+
 function emit(
   alertType: string,
   severity: AlertSeverity,

@@ -121,7 +121,7 @@ export const activeTrades = sqliteTable("active_trades", {
   reasoningJson: text("reasoning_json"),
   thesis: text("thesis"),
   invalidationReason: text("invalidation_reason"),
-  status: text("status").notNull().default("open"), // open | closed
+  status: text("status").notNull().default("open"), // open | closed | canceled (broker order died unfilled)
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
   closedAt: text("closed_at"),
@@ -130,6 +130,9 @@ export const activeTrades = sqliteTable("active_trades", {
   // trades leave these null.
   broker: text("broker"), // e.g. alpaca-paper | alpaca-live
   brokerOrderId: text("broker_order_id"),
+  // Last synced Alpaca order status (services/orderSync). Terminal statuses
+  // (filled/canceled/expired/rejected/replaced) stop polling for that trade.
+  brokerOrderStatus: text("broker_order_status"),
 });
 
 export const tradeSetups = sqliteTable("trade_setups", {

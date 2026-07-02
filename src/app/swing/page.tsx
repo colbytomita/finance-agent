@@ -209,6 +209,16 @@ export default function SwingPage() {
                       <Link href={`/stock/${t.ticker}`} className="font-semibold text-sky-300 hover:underline">
                         {t.ticker}
                       </Link>
+                      {/* Broker order not (fully) filled yet — the entry shown is the
+                          intended price, not an execution. Cleared once it fills. */}
+                      {t.brokerOrderId && t.brokerOrderStatus !== "filled" && (
+                        <span
+                          className="ml-1 text-[10px] text-amber-400/90"
+                          title="The broker order hasn't fully filled — entry price/size are the intended values until it does."
+                        >
+                          order {t.brokerOrderStatus ?? "working"}
+                        </span>
+                      )}
                     </td>
                     <td className="text-xs text-zinc-400">{t.direction}</td>
                     <td className="tabular-nums">{fmtMoney(t.entryPrice)}</td>

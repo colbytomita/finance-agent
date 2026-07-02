@@ -14,6 +14,7 @@ import {
   syncPortfolio,
 } from "@/services/marketData";
 import { generateAlerts } from "@/services/alerts";
+import { syncBrokerOrders } from "@/services/orderSync";
 import { rollCatalystStatuses, scanYahooNews } from "@/services/catalysts";
 import { AlpacaService } from "@/services/alpaca";
 import { runDiscoveryScan } from "@/services/discoveryAgent";
@@ -71,6 +72,19 @@ async function maybeRefresh(): Promise<void> {
   try {
     log(`refresh start (market ${phase})`);
     const prices = await refreshPrices();
+    // Reconcile broker orders before recomputing trade scores so corrections
+    // (actual fill price/size, canceled phantom trades) feed this cycle.
+    const orders = await syncBrokerOrders().catch((e) => {
+      log(`order sync failed: ${errorMessage(e)}`);
+      return null;
+    });
+    if (orders && (orders.corrected || orders.canceled || orders.flagged || orders.errors.length)) {
+      log(
+        `order sync: ${orders.checked} checked, ${orders.corrected} corrected, ` +
+          `${orders.canceled} canceled, ${orders.flagged} flagged` +
+          (orders.errors.length ? `, ${orders.errors.length} error(s)` : ""),
+      );
+    }
     for (const t of getTrackedTickers()) {
       try {
         recomputeStockAnalysis(t);
