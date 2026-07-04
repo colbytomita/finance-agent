@@ -16,7 +16,7 @@
   "dependencies": {
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.2",
-    "next": "^16.2.9",
+    "next": "^16.2.10",
     "node-cron": "^4.5.0",
     "playwright": "^1.61.1",
     "react": "^19.1.0",
@@ -24,13 +24,13 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.10",
+    "@tailwindcss/postcss": "^4.3.2",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.1.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "tailwindcss": "^4.1.10",
-    "tsx": "^4.20.0",
+    "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   },
