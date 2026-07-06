@@ -170,17 +170,16 @@ export interface FetchEarningsResult {
 
 /**
  * Auto-fetch recent quarterly earnings (estimate vs actual) for tickers from
- * Yahoo via the headless-browser connector and store them. Best effort: a ticker
- * that fails (no data, consent wall, etc.) is recorded as an error, never thrown.
- * The browser/Playwright module is imported lazily so non-fetch paths stay light.
+ * Yahoo (plain HTTP first, headless browser fallback) and store them. Best
+ * effort: a ticker that fails (no data, consent wall, etc.) is recorded as an
+ * error, never thrown. Imported lazily so non-fetch paths stay light.
  */
 export async function fetchEarningsForTickers(tickers: string[]): Promise<FetchEarningsResult> {
-  const { getYahooService } = await import("./yahooFinanceBrowser");
-  const yahoo = getYahooService();
+  const { getYahooEarnings } = await import("./yahooHttp");
   const result: FetchEarningsResult = { tickers: tickers.length, saved: 0, errors: [] };
   for (const ticker of tickers) {
     try {
-      const rows = await yahoo.getEarnings(ticker);
+      const rows = await getYahooEarnings(ticker);
       for (const r of rows) {
         addEarningsReport({
           ticker,

@@ -4,6 +4,7 @@ import type { Bar, MarketState, Quote } from "@/lib/types";
 import { effectiveConfig, loadConfig } from "@/lib/config";
 import { AlpacaService } from "./alpaca";
 import { getYahooService } from "./yahooFinanceBrowser";
+import { getYahooSummaryFields } from "./yahooHttp";
 import { computeIndicators, type IndicatorSnapshot } from "./indicators";
 import { computeDrawdown, evaluateBuyZone } from "./buyZone";
 import { scoreStock, scoreRowValues, type CatalystInput } from "./scoring";
@@ -138,10 +139,9 @@ export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<
     // only while we're within the time budget so the phase stays bounded.
     if ((wantYahoo || !quote) && Date.now() < yahooDeadline) {
       try {
-        const yahoo = getYahooService();
-        const fields = await yahoo.getSummaryFields(ticker);
+        const fields = await getYahooSummaryFields(ticker);
         if (fields) {
-          const yq = yahoo.toQuote(fields);
+          const yq = getYahooService().toQuote(fields);
           if (quote) {
             quote = {
               ...quote,
