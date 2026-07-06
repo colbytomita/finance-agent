@@ -56,10 +56,12 @@ work, then Tier 3 by taste.
 
 ## Tier 3 — Features
 
-- [ ] **8. Reduce Yahoo/Playwright dependence** *(medium–large)*
+- [x] **8. Reduce Yahoo/Playwright dependence** *(medium–large — done)*
   The most fragile subsystem. Evaluate replacing headless-browser scraping with
   Yahoo's plain `quoteSummary`/`chart` HTTP endpoints (fetch + crumb/cookie
-  handling), keeping the browser as fallback.
+  handling), keeping the browser as fallback. *(Quotes, earnings, and daily
+  bars now go over plain HTTP; the browser remains only as fallback and for
+  the news-page scan.)*
 
 - [x] **9. Alert notifications** *(small–medium — done)*
   The alerts feed only shows when you look at it. Stop-loss proximity warnings

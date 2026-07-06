@@ -3,7 +3,7 @@ import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import type { Bar } from "@/lib/types";
 import { AlpacaService } from "./alpaca";
-import { getYahooService } from "./yahooFinanceBrowser";
+import { getYahooDailyBars, getYahooSummaryFields } from "./yahooHttp";
 import { computeIndicators, type IndicatorSnapshot } from "./indicators";
 import { computeDrawdown, type DrawdownReport } from "./buyZone";
 import { scoreStock, scoreRowValues, DEFAULT_STOCK_WEIGHTS, type StockScoreResult, type StockScoreWeights, type CatalystInput } from "./scoring";
@@ -95,7 +95,10 @@ export async function analyzeTicker(
   alpaca: AlpacaService | null,
   cfg = loadConfig(),
 ): Promise<CandidateAnalysis | null> {
-  const bars = alpaca ? await alpaca.getHistoricalBars(ticker, "1Day", 400).catch(() => []) : [];
+  // Bars: Alpaca when configured, otherwise Yahoo's crumb-free chart endpoint —
+  // so discovery/Sector Scout can still score real data without Alpaca keys.
+  let bars = alpaca ? await alpaca.getHistoricalBars(ticker, "1Day", 400).catch(() => []) : [];
+  if (bars.length === 0) bars = await getYahooDailyBars(ticker, 400).catch(() => []);
   let price: number | null = bars.length > 0 ? bars[bars.length - 1].close : null;
   let companyName: string | null = null;
 
@@ -106,7 +109,7 @@ export async function analyzeTicker(
 
   // Yahoo fallback for price/company when Alpaca is unavailable.
   if (price == null && cfg.yahooBrowserEnabled) {
-    const fields = await getYahooService().getSummaryFields(ticker).catch(() => null);
+    const fields = await getYahooSummaryFields(ticker).catch(() => null);
     if (fields) {
       price = fields.regularPrice;
       companyName = fields.companyName;
