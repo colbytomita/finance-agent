@@ -3,6 +3,7 @@ import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { freshness } from "@/lib/format";
 import { getLatestSnapshot } from "./marketData";
+import { notifyAlert } from "./notifications";
 
 // Alert generation. Idempotent per day: an identical (type, ticker, message)
 // emitted within the last 20h is not duplicated.
@@ -53,6 +54,8 @@ function emit(
       createdAt: new Date().toISOString(),
     })
     .run();
+  // Push out-of-app (desktop/ntfy) when configured — best effort, non-blocking.
+  void notifyAlert(severity, message, ticker);
   return true;
 }
 

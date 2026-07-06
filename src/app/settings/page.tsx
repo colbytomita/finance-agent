@@ -12,7 +12,7 @@ interface SettingsResponse {
   };
 }
 
-const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbox"; options?: string[]; hint?: string }[] = [
+const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbox" | "text"; options?: string[]; hint?: string; placeholder?: string }[] = [
   { key: "riskProfile", label: "Risk profile", type: "select", options: ["conservative", "balanced", "aggressive"], hint: "Adjusts risk-per-trade, R/R minimum, earnings avoidance, and concentration caps." },
   { key: "accountValue", label: "Account value (fallback)", type: "number", hint: "Used for position sizing when Alpaca is not connected." },
   { key: "riskPerTradePercent", label: "Risk per trade (%)", type: "number" },
@@ -39,6 +39,9 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
   { key: "eventSourceIrEnabled", label: "Source: company IR RSS", type: "checkbox", hint: "Company investor-relations feeds (requires irFeeds in config)." },
   { key: "eventIngestionMaxItems", label: "Event ingestion item cap", type: "number", hint: "Max raw items processed per run. Lower = cheaper LLM extraction." },
   { key: "eventMinConfidence", label: "Event min confidence", type: "select", options: ["low", "medium", "high"], hint: "Drop extracted events below this confidence before storing." },
+  { key: "notifyEnabled", label: "Alert notifications", type: "checkbox", hint: "Push alerts out of the app: a desktop notification (macOS), plus ntfy when a topic is set below." },
+  { key: "notifyMinSeverity", label: "Notify at or above severity", type: "select", options: ["info", "warning", "critical"], hint: "critical = stop-loss hits, exit recommendations. warning adds stop-loss proximity." },
+  { key: "ntfyTopic", label: "ntfy topic", type: "text", placeholder: "my-secret-topic", hint: "Subscribe to this topic in the ntfy app (ntfy.sh) to get alerts on your phone. Pick something unguessable; leave empty to disable." },
 ];
 
 interface IrFeedSetting {
@@ -177,6 +180,14 @@ export default function SettingsPage() {
                 type="checkbox"
                 checked={Boolean(form[f.key])}
                 onChange={(e) => setForm({ ...form, [f.key]: e.target.checked })}
+              />
+            ) : f.type === "text" ? (
+              <input
+                type="text"
+                className="w-48"
+                placeholder={f.placeholder}
+                value={String(form[f.key] ?? "")}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
               />
             ) : (
               <input

@@ -61,7 +61,7 @@ work, then Tier 3 by taste.
   Yahoo's plain `quoteSummary`/`chart` HTTP endpoints (fetch + crumb/cookie
   handling), keeping the browser as fallback.
 
-- [ ] **9. Alert notifications** *(small–medium)*
+- [x] **9. Alert notifications** *(small–medium — done)*
   The alerts feed only shows when you look at it. Stop-loss proximity warnings
   should reach you — Windows toast from the scheduler, or push via
   ntfy/Telegram for high-severity alerts.
