@@ -4,7 +4,7 @@
 
 import cron from "node-cron";
 import { loadConfig } from "@/lib/config";
-import { errorMessage } from "@/lib/util";
+import { errorMessage, nowIso } from "@/lib/util";
 import {
   fullRefresh,
   refreshPrices,
@@ -28,7 +28,7 @@ import { runRetention } from "@/services/retention";
 import { recordJobRun } from "@/services/jobHealth";
 import { runBackup } from "@/services/backup";
 
-const log = (msg: string) => console.log(`[jobs ${new Date().toISOString()}] ${msg}`);
+const log = (msg: string) => console.log(`[jobs ${nowIso()}] ${msg}`);
 
 type MarketPhase = "open" | "extended" | "closed";
 

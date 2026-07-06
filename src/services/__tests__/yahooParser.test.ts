@@ -30,6 +30,7 @@ describe("parseYahooQuoteHtml", () => {
     expect(f.afterHoursChangePercent).toBe(0.32);
     expect(f.marketState).toBe("POST");
     expect(f.preMarketPrice).toBeNull();
+    expect(f.source).toBe("yahoo-browser");
   });
 
   it("extracts pre-market price regardless of attribute order", () => {

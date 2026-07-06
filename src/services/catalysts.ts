@@ -1,6 +1,7 @@
 import { desc, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
+import { nowIso } from "@/lib/util";
 import type { CatalystType, Confidence, ImpactDirection } from "@/lib/types";
 
 // Source-agnostic catalyst ingestion + keyword classification.
@@ -133,7 +134,7 @@ export function addCatalyst(input: NewCatalyst): number {
       sourceName: input.sourceName ?? "manual",
       catalystType: input.catalystType ?? auto.catalystType,
       eventDate: input.eventDate ?? null,
-      discoveredAt: new Date().toISOString(),
+      discoveredAt: nowIso(),
       impactDirection: input.impactDirection ?? auto.impactDirection,
       impactScore: input.impactScore ?? auto.impactScore,
       confidence: input.confidence ?? auto.confidence,

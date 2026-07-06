@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
+import { nowIso } from "@/lib/util";
 
 const upsertSchema = z.object({
   ticker: z.string().min(1).max(10),
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
     );
   }
   const db = getDb();
-  const now = new Date().toISOString();
+  const now = nowIso();
   const values = {
     ticker: d.ticker.toUpperCase(),
     companyName: d.companyName ?? null,

@@ -10,7 +10,7 @@ import { fetchEdgarFilings } from "./sources/secEdgar";
 import { fetchGdeltNews, buildGdeltQueriesFor, type GdeltQueryItem } from "./sources/gdelt";
 import { fetchIrFeeds, type IrFeed } from "./sources/irRss";
 import { makeResolver } from "./sources/tickerMap";
-import { errorMessage } from "@/lib/util";
+import { errorMessage, nowIso } from "@/lib/util";
 
 // Orchestrates real-world event ingestion: pull from the enabled source
 // connectors, extract structured mentions (Haiku + rule-based fallback), dedupe,
@@ -320,7 +320,7 @@ export async function runEventIngestion(opts: IngestOptions = {}): Promise<Inges
   try {
     getDb()
       .insert(schema.ingestionRuns)
-      .values(ingestionRunRecord(result, opts.trigger ?? "manual", new Date().toISOString()))
+      .values(ingestionRunRecord(result, opts.trigger ?? "manual", nowIso()))
       .run();
   } catch (e) {
     console.error("[eventIngestion] failed to log run:", errorMessage(e));

@@ -6,7 +6,7 @@ import { isCatalystStale } from "./catalysts";
 import { analyzeEntity, distinctEntities, type MentionDirection } from "./entityMentions";
 import type { EntityEdgeSummary, EventWindowKey } from "./eventStudy";
 import { getTrackedTickers, recomputeStockAnalysis } from "./marketData";
-import { clamp } from "@/lib/util";
+import { clamp, nowIso } from "@/lib/util";
 
 // Phase 3 — close the loop. Turn a measured entity edge (from analyzeEntity)
 // into catalysts that feed the existing scoring engine. Because edge catalysts
@@ -155,7 +155,7 @@ function writeEdgeCatalyst(input: {
       sourceName: EDGE_SOURCE,
       catalystType: "entity_mention",
       eventDate: input.eventDate,
-      discoveredAt: new Date().toISOString(),
+      discoveredAt: nowIso(),
       impactDirection: mentionToImpactDirection(input.impact),
       impactScore: input.impact,
       confidence: input.confidence,

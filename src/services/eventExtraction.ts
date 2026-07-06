@@ -2,7 +2,7 @@ import type { Confidence, ImpactDirection } from "@/lib/types";
 import type { MentionDirection } from "./entityMentions";
 import type { RawEventItem } from "./sources/types";
 import { extractJson, getProvider, type LLMProvider } from "./llm";
-import { errorMessage } from "@/lib/util";
+import { errorMessage, nowIso } from "@/lib/util";
 import { classifyCatalyst } from "./catalysts";
 import { defaultResolver, type TickerResolver } from "./sources/tickerMap";
 
@@ -26,7 +26,7 @@ export interface ExtractedEvent {
   generatedBy: "llm" | "rules";
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => nowIso().slice(0, 10);
 
 export function normalizeDirection(s: string | null | undefined): MentionDirection {
   const v = (s ?? "").toLowerCase();

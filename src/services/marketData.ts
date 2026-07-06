@@ -3,7 +3,7 @@ import { getDb, schema } from "@/db";
 import type { Bar, MarketState, Quote } from "@/lib/types";
 import { effectiveConfig, loadConfig } from "@/lib/config";
 import { AlpacaService } from "./alpaca";
-import { getYahooService } from "./yahooFinanceBrowser";
+import { quoteFromSummaryFields } from "./yahooFinanceBrowser";
 import { getYahooDailyBars, getYahooSummaryFields } from "./yahooHttp";
 import { computeIndicators, type IndicatorSnapshot } from "./indicators";
 import { computeDrawdown, evaluateBuyZone } from "./buyZone";
@@ -141,7 +141,7 @@ export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<
       try {
         const fields = await getYahooSummaryFields(ticker);
         if (fields) {
-          const yq = getYahooService().toQuote(fields);
+          const yq = quoteFromSummaryFields(fields);
           if (quote) {
             quote = {
               ...quote,

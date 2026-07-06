@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { nowIso } from "./util";
 import type { Confidence, RiskProfile } from "./types";
 
 // Non-secret app settings live in the DB (editable from the Settings page).
@@ -168,7 +169,7 @@ export function loadConfig(): AppConfig {
 export function saveConfig(partial: Partial<AppConfig>): AppConfig {
   const db = getDb();
   const merged = { ...loadConfig(), ...partial };
-  const now = new Date().toISOString();
+  const now = nowIso();
   db.insert(schema.appSettings)
     .values({ key: CONFIG_KEY, value: JSON.stringify(merged), updatedAt: now })
     .onConflictDoUpdate({

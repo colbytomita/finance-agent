@@ -7,6 +7,7 @@ import {
   latestSnapshot,
 } from "@/lib/queries";
 import { loadConfig } from "@/lib/config";
+import { integrationsStatus } from "@/services/integrations";
 import { portfolioWatchlistRecommendations } from "@/services/portfolioRecommendations";
 import { fmtMoney } from "@/lib/format";
 import { Freshness, Pct } from "@/components/badges";
@@ -28,12 +29,9 @@ export const dynamic = "force-dynamic";
 export default function WatchlistPage() {
   const cfg = loadConfig();
   const items = allWatchlist();
-  const alpacaConfigured = Boolean(process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET);
-  const alpacaMode: "paper" | "live" | null = alpacaConfigured
-    ? process.env.ALPACA_MODE === "live"
-      ? "live"
-      : "paper"
-    : null;
+  const integrations = integrationsStatus();
+  const alpacaConfigured = integrations.alpacaConfigured;
+  const alpacaMode = alpacaConfigured ? integrations.alpacaMode : null;
   const recs = portfolioWatchlistRecommendations(cfg.portfolioWatchlistRecLimit);
   const setups = activeSetups();
   const rows = items.map((w) => ({

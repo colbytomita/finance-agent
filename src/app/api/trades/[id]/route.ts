@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
+import { nowIso } from "@/lib/util";
 import { closeTrade } from "@/services/trades";
 
 const patchSchema = z.object({
@@ -40,7 +41,7 @@ export async function PATCH(
     .where(eq(schema.activeTrades.id, numId))
     .get();
   if (!trade) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const now = new Date().toISOString();
+  const now = nowIso();
 
   if (d.action === "update") {
     db.update(schema.activeTrades)

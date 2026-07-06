@@ -3,10 +3,11 @@
 // dashboard has something to show before real data is connected.
 
 import { getDb, schema } from "./index";
+import { nowIso } from "@/lib/util";
 import { addCatalyst } from "@/services/catalysts";
 
 const db = getDb();
-const now = new Date().toISOString();
+const now = nowIso();
 const daysFromNow = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
 
 const watchlist = [

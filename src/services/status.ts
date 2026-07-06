@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { getJobHealth, type JobHealth } from "./jobHealth";
+import { integrationsStatus, type IntegrationsStatus } from "./integrations";
 import { listBackups, dbPath } from "./backup";
 import { getTrackedTickers } from "./marketData";
 
@@ -17,10 +18,7 @@ export interface BarCoverage {
 }
 
 export interface StatusReport {
-  integrations: {
-    alpacaConfigured: boolean;
-    alpacaMode: "paper" | "live";
-    llmConfigured: boolean;
+  integrations: IntegrationsStatus & {
     yahooEnabled: boolean;
     yahooBrowserFallback: boolean; // env YAHOO_BROWSER_ENABLED gates the browser layer
   };
@@ -70,9 +68,7 @@ export function getStatusReport(yahooEnabled: boolean): StatusReport {
   const p = dbPath();
   return {
     integrations: {
-      alpacaConfigured: Boolean(process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET),
-      alpacaMode: process.env.ALPACA_MODE === "live" ? "live" : "paper",
-      llmConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+      ...integrationsStatus(),
       yahooEnabled,
       // Same default as YahooFinanceBrowserService: on unless explicitly "false".
       yahooBrowserFallback: process.env.YAHOO_BROWSER_ENABLED !== "false",

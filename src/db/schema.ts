@@ -45,7 +45,7 @@ export const marketPriceSnapshots = sqliteTable("market_price_snapshots", {
   afterHoursPrice: real("after_hours_price"),
   dayChangePercent: real("day_change_percent"),
   marketState: text("market_state"), // PRE | REGULAR | POST | CLOSED | UNKNOWN
-  source: text("source").notNull(), // alpaca | yahoo-browser | manual
+  source: text("source").notNull(), // alpaca | yahoo (HTTP) | yahoo-browser (fallback) | manual
   capturedAt: text("captured_at").notNull(),
 }, (t) => [index("idx_snapshots_ticker_time").on(t.ticker, t.capturedAt)]);
 
