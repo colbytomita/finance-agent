@@ -31,6 +31,13 @@ const settingsSchema = z
     eventSourceIrEnabled: z.coerce.boolean(),
     eventIngestionMaxItems: z.coerce.number().int().min(1).max(200),
     eventMinConfidence: z.enum(["low", "medium", "high"]),
+    notifyEnabled: z.coerce.boolean(),
+    notifyMinSeverity: z.enum(["info", "warning", "critical"]),
+    ntfyTopic: z
+      .string()
+      .trim()
+      .max(120)
+      .regex(/^[-_A-Za-z0-9]*$/, "letters, digits, - and _ only"),
     gdeltQueries: z.array(z.string().trim().min(1).max(300)).max(50),
     irFeeds: z
       .array(

@@ -40,6 +40,11 @@ export interface AppConfig {
   eventMinConfidence: Confidence; // drop extracted events below this confidence
   gdeltQueries: string[]; // advanced: GDELT search queries (not in settings form)
   irFeeds: { ticker: string; url: string }[]; // advanced: IR feed URLs
+  // Outbound alert notifications. Desktop notifications need no setup (macOS);
+  // set an ntfy topic to also push to your phone via the ntfy app/web.
+  notifyEnabled: boolean;
+  notifyMinSeverity: "info" | "warning" | "critical"; // notify at or above this
+  ntfyTopic: string; // empty = ntfy channel off; subscribe to this topic in ntfy
   stockScoreWeights: {
     valuation: number;
     momentum: number;
@@ -88,6 +93,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   eventMinConfidence: "medium",
   gdeltQueries: [],
   irFeeds: [],
+  notifyEnabled: false,
+  notifyMinSeverity: "critical",
+  ntfyTopic: "",
   stockScoreWeights: {
     valuation: 0.2,
     momentum: 0.2,
