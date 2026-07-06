@@ -3,6 +3,7 @@ import { getDb, schema } from "@/db";
 import { errorMessage, nowIso } from "@/lib/util";
 import { AlpacaService, type AlpacaOrder } from "./alpaca";
 import { emitAlert } from "./alerts";
+import { closeTrade } from "./trades";
 
 // Broker order-fill sync. Placing an order logs a trade immediately with the
 // intended entry (limit/reference price) and stores the Alpaca order id — but
@@ -17,6 +18,8 @@ import { emitAlert } from "./alerts";
 //   rejected (no fill)-> mark the trade "canceled" (never happened)
 //   ...with a fill    -> keep the filled portion as the position
 //   replaced          -> flag for manual follow-up (we can't track the new id)
+//   exit leg filled   -> the bracket stop/target closed the position: close the
+//                        trade at the leg's actual fill and pre-fill the journal
 //
 // The pure decision lives in planOrderSync (unit-tested); IO stays thin.
 
@@ -39,7 +42,9 @@ export type OrderSyncAction =
   /** The order died with nothing filled — the trade never happened. */
   | { kind: "cancel"; orderStatus: string }
   /** Order was replaced outside the app; the new order id is unknown to us. */
-  | { kind: "orphaned"; orderStatus: string };
+  | { kind: "orphaned"; orderStatus: string }
+  /** A bracket exit leg filled — the broker closed the position. */
+  | { kind: "close"; exitPrice: number; legType: "stop_loss" | "take_profit" };
 
 export interface SyncableTrade {
   entryPrice: number;
@@ -72,6 +77,21 @@ export function planOrderSync(trade: SyncableTrade, order: AlpacaOrder): OrderSy
     return { kind: "fill", orderStatus: status, entryPrice: fillPrice, shares: fillQty };
   }
 
+  // Entry is reconciled. If a bracket/OTO exit leg has fully filled, the broker
+  // closed the position — close the trade at the leg's actual fill price.
+  if (status === "filled") {
+    const exitLeg = (order.legs ?? []).find(
+      (leg) => leg.status === "filled" && leg.filledAvgPrice != null,
+    );
+    if (exitLeg) {
+      return {
+        kind: "close",
+        exitPrice: exitLeg.filledAvgPrice as number,
+        legType: exitLeg.type === "limit" ? "take_profit" : "stop_loss",
+      };
+    }
+  }
+
   // Nothing to reconcile — record the status when it changed (also how terminal
   // orders with already-correct values stop being polled).
   return trade.brokerOrderStatus === status ? { kind: "none" } : { kind: "status", orderStatus: status };
@@ -81,6 +101,7 @@ export interface OrderSyncResult {
   checked: number;
   corrected: number; // trades whose entry/shares were reconciled to fill data
   canceled: number; // phantom trades removed from the open list
+  closed: number; // trades auto-closed by a filled bracket exit leg
   flagged: number; // replaced orders needing manual follow-up
   errors: string[];
 }
@@ -92,7 +113,14 @@ export interface OrderSyncResult {
 export async function syncBrokerOrders(
   alpaca: AlpacaService | null = AlpacaService.fromEnv(),
 ): Promise<OrderSyncResult> {
-  const result: OrderSyncResult = { checked: 0, corrected: 0, canceled: 0, flagged: 0, errors: [] };
+  const result: OrderSyncResult = {
+    checked: 0,
+    corrected: 0,
+    canceled: 0,
+    closed: 0,
+    flagged: 0,
+    errors: [],
+  };
   if (!alpaca) return result;
 
   const db = getDb();
@@ -107,7 +135,14 @@ export async function syncBrokerOrders(
       ),
     )
     .all()
-    .filter((t) => t.brokerOrderStatus == null || !TERMINAL_ORDER_STATUSES.has(t.brokerOrderStatus));
+    // Keep polling non-terminal orders, and also "filled" ones — a filled
+    // bracket parent still has live exit legs that can close the trade.
+    .filter(
+      (t) =>
+        t.brokerOrderStatus == null ||
+        !TERMINAL_ORDER_STATUSES.has(t.brokerOrderStatus) ||
+        t.brokerOrderStatus === "filled",
+    );
 
   for (const t of trades) {
     result.checked++;
@@ -165,6 +200,26 @@ export async function syncBrokerOrders(
             t.ticker,
           );
           break;
+        case "close": {
+          const { profitLoss, profitLossPercent } = closeTrade(t, {
+            exitPrice: action.exitPrice,
+            exitReason:
+              action.legType === "stop_loss"
+                ? `Bracket stop-loss leg filled at ${action.exitPrice.toFixed(2)} — auto-closed from broker.`
+                : `Bracket take-profit leg filled at ${action.exitPrice.toFixed(2)} — auto-closed from broker.`,
+          });
+          result.closed++;
+          emitAlert(
+            "trade_auto_closed",
+            action.legType === "stop_loss" ? "warning" : "info",
+            `${t.ticker}: ${action.legType === "stop_loss" ? "stop-loss" : "take-profit"} leg filled at ` +
+              `${action.exitPrice.toFixed(2)} — trade closed, P/L ${profitLoss.toFixed(2)}` +
+              (profitLossPercent != null ? ` (${profitLossPercent.toFixed(1)}%)` : "") +
+              ". Journal entry pre-filled.",
+            t.ticker,
+          );
+          break;
+        }
         case "orphaned":
           db.update(schema.activeTrades)
             .set({ brokerOrderStatus: action.orderStatus, updatedAt: now })

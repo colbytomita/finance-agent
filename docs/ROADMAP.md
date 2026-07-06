@@ -66,7 +66,7 @@ work, then Tier 3 by taste.
   should reach you — Windows toast from the scheduler, or push via
   ntfy/Telegram for high-severity alerts.
 
-- [ ] **10. Trade lifecycle polish** *(medium)*
+- [x] **10. Trade lifecycle polish** *(medium — done)*
   With #1 in place, bracket-order legs (stop/target fills) can auto-close
   trades and pre-fill the journal entry with the actual exit price — making
   realized-performance stats trustworthy without bookkeeping discipline.

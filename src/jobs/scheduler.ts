@@ -81,10 +81,13 @@ async function maybeRefresh(): Promise<void> {
       log(`order sync failed: ${errorMessage(e)}`);
       return null;
     });
-    if (orders && (orders.corrected || orders.canceled || orders.flagged || orders.errors.length)) {
+    if (
+      orders &&
+      (orders.corrected || orders.canceled || orders.closed || orders.flagged || orders.errors.length)
+    ) {
       log(
         `order sync: ${orders.checked} checked, ${orders.corrected} corrected, ` +
-          `${orders.canceled} canceled, ${orders.flagged} flagged` +
+          `${orders.canceled} canceled, ${orders.closed} auto-closed, ${orders.flagged} flagged` +
           (orders.errors.length ? `, ${orders.errors.length} error(s)` : ""),
       );
     }

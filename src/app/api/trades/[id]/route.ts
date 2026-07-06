@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
+import { closeTrade } from "@/services/trades";
 
 const patchSchema = z.object({
   action: z.enum(["update", "close", "invalidate"]),
@@ -64,44 +65,13 @@ export async function PATCH(
   }
 
   // close: record exit + auto-create journal entry
-  const exitPrice = d.exitPrice ?? trade.currentPrice ?? trade.entryPrice;
-  const dirMult = trade.direction === "short" ? -1 : 1;
-  const profitLoss = (exitPrice - trade.entryPrice) * trade.shares * dirMult;
-  const profitLossPercent =
-    trade.entryPrice > 0 ? ((exitPrice - trade.entryPrice) / trade.entryPrice) * 100 * dirMult : null;
-  const holdingDays = (Date.now() - new Date(trade.entryDate).getTime()) / 86400000;
-
-  db.update(schema.activeTrades)
-    .set({
-      status: "closed",
-      closedAt: now,
-      exitPrice,
-      currentPrice: exitPrice,
-      unrealizedGainLoss: profitLoss,
-      unrealizedGainLossPercent: profitLossPercent,
-      updatedAt: now,
-    })
-    .where(eq(schema.activeTrades.id, numId))
-    .run();
-
-  db.insert(schema.tradeJournalEntries)
-    .values({
-      tradeId: trade.id,
-      ticker: trade.ticker,
-      entryReason: trade.thesis,
-      entryScore: null,
-      exitReason: d.exitReason ?? null,
-      exitScore: trade.tradeScore,
-      profitLoss,
-      profitLossPercent,
-      holdingPeriodDays: Math.round(holdingDays * 10) / 10,
-      mistakes: d.mistakes ?? null,
-      lessons: d.lessons ?? null,
-      catalystImpact: null,
-      thesisPlayedOut: d.thesisPlayedOut ?? null,
-      createdAt: now,
-    })
-    .run();
+  const { profitLoss, profitLossPercent } = closeTrade(trade, {
+    exitPrice: d.exitPrice,
+    exitReason: d.exitReason,
+    lessons: d.lessons,
+    mistakes: d.mistakes,
+    thesisPlayedOut: d.thesisPlayedOut,
+  });
 
   return NextResponse.json({ ok: true, profitLoss, profitLossPercent });
 }
