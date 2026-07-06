@@ -108,7 +108,7 @@ export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<
   }
   // Yahoo adds extended-hours data — useful any time the market isn't in
   // regular session (pre, post, closed, or unknown state).
-  const wantYahoo = (opts.useYahoo ?? cfg.yahooBrowserEnabled) && marketState !== "REGULAR";
+  const wantYahoo = (opts.useYahoo ?? cfg.yahooEnabled) && marketState !== "REGULAR";
   const yahooDeadline = Date.now() + YAHOO_PHASE_BUDGET_MS;
 
   const fetchOne = async (ticker: string): Promise<RefreshResult> => {

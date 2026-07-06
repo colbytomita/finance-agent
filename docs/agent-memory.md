@@ -66,6 +66,13 @@ setups get indicators/setups/event studies, and alert notifications queue
 into a 3s burst digest (`queueAlertNotification`/`buildDigest`;
 `flushQueuedNotifications` for tests/shutdown).
 
+On 2026-07-06 the dependabot minor-and-patch group was merged (PR #30) and the
+`yahooBrowserEnabled` setting was renamed to `yahooEnabled` ("Yahoo Finance
+connector") — it gates all Yahoo usage (quotes, news, earnings, keyless bars);
+env `YAHOO_BROWSER_ENABLED` gates only the headless-browser fallback layer.
+`loadConfig()` still honors the legacy key from an existing database and drops
+it on the next save.
+
 Remaining ideas, none urgent:
 
 - Roadmap #12 (split `marketData.ts`) only if it starts growing again.
@@ -74,9 +81,6 @@ Remaining ideas, none urgent:
 - The dependabot moderate alert is esbuild via drizzle-kit's dev-only
   dependency chain — no runtime exposure; wait for upstream rather than
   downgrade drizzle-kit.
-- The earnings fetch and news scan still run only when `yahooBrowserEnabled`
-  is on (scheduler gates), even though both are HTTP-first now — the setting
-  could be renamed/split into a general "Yahoo connector" toggle.
 
 ## Standard Commands
 

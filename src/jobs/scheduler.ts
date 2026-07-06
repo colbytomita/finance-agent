@@ -124,7 +124,7 @@ async function dailyMaintenance(): Promise<void> {
     log("error" in sync ? `portfolio sync skipped: ${sync.error}` : `portfolio synced: ${sync.synced}`);
     await fullRefresh(); // includes bars + setups
     const cfg = loadConfig();
-    if (cfg.yahooBrowserEnabled) {
+    if (cfg.yahooEnabled) {
       const added = await scanYahooNews(getTrackedTickers()).catch((e) => {
         log(`news scan failed: ${errorMessage(e)}`);
         return 0;
@@ -152,8 +152,9 @@ async function dailyMaintenance(): Promise<void> {
     }
 
     // Auto-fetch quarterly earnings (estimate vs actual) for tracked tickers, then
-    // recompute so a fresh beat/miss weighs into scores. Browser-based, best effort.
-    if (cfg.yahooBrowserEnabled) {
+    // recompute so a fresh beat/miss weighs into scores. Yahoo HTTP-first with
+    // browser fallback, best effort.
+    if (cfg.yahooEnabled) {
       const earn = await fetchEarningsForTickers(getTrackedTickers()).catch((e) => {
         log(`earnings fetch failed: ${errorMessage(e)}`);
         return null;
@@ -244,7 +245,7 @@ async function dailyMaintenance(): Promise<void> {
 
 async function catalystScan(): Promise<void> {
   const cfg = loadConfig();
-  if (!cfg.yahooBrowserEnabled) return;
+  if (!cfg.yahooEnabled) return;
   log("catalyst scan start");
   const added = await scanYahooNews(getTrackedTickers()).catch(() => 0);
   rollCatalystStatuses();

@@ -26,7 +26,7 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
   { key: "refreshIntervalMarketOpenSec", label: "Refresh interval, market open (sec)", type: "number" },
   { key: "refreshIntervalExtendedHoursSec", label: "Refresh interval, pre/after hours (sec)", type: "number" },
   { key: "refreshIntervalClosedSec", label: "Refresh interval, closed (sec)", type: "number" },
-  { key: "yahooBrowserEnabled", label: "Yahoo Finance browser connector", type: "checkbox" },
+  { key: "yahooEnabled", label: "Yahoo Finance connector", type: "checkbox", hint: "Extended-hours quotes, news scan, earnings fetch, and keyless daily bars — via Yahoo's HTTP endpoints, headless browser only as fallback. Off = no Yahoo traffic at all." },
   { key: "agentMinScore", label: "Agent pick min score (1–10)", type: "number", hint: "Discovery agent proposes stocks scoring at or above this. Higher = stricter, fewer picks. Also the default min for Sector Scout." },
   { key: "portfolioWatchlistRecLimit", label: "Portfolio→watchlist suggestions shown", type: "number", hint: "How many of your holdings that aren't on the watchlist to suggest adding (Watchlist page). 0 hides them." },
   { key: "sectorScoutScanEnabled", label: "Sector Scout auto-scan (scheduled)", type: "checkbox", hint: "Re-scan each favorite industry below on the daily schedule. Manual scans on the Sector Scout page work regardless." },

@@ -108,7 +108,7 @@ export async function analyzeTicker(
   }
 
   // Yahoo fallback for price/company when Alpaca is unavailable.
-  if (price == null && cfg.yahooBrowserEnabled) {
+  if (price == null && cfg.yahooEnabled) {
     const fields = await getYahooSummaryFields(ticker).catch(() => null);
     if (fields) {
       price = fields.regularPrice;

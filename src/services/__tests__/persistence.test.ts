@@ -177,4 +177,23 @@ describe("config round-trip", () => {
     expect(cfg.ntfyTopic).toBe("my-topic");
     expect(cfg.riskProfile).toBe("balanced"); // untouched default survives
   });
+
+  it("honors the legacy yahooBrowserEnabled key and drops it on the next save", () => {
+    getDb()
+      .insert(schema.appSettings)
+      .values({
+        key: "app_config",
+        value: JSON.stringify({ yahooBrowserEnabled: false }),
+        updatedAt: new Date().toISOString(),
+      })
+      .run();
+    expect(loadConfig().yahooEnabled).toBe(false);
+
+    saveConfig({ notifyEnabled: true }); // unrelated save re-persists under the new key
+    const row = getDb().select().from(schema.appSettings).all().find((r) => r.key === "app_config")!;
+    const stored = JSON.parse(row.value) as Record<string, unknown>;
+    expect(stored.yahooEnabled).toBe(false);
+    expect("yahooBrowserEnabled" in stored).toBe(false);
+    expect(loadConfig().yahooEnabled).toBe(false);
+  });
 });

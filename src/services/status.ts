@@ -21,7 +21,8 @@ export interface StatusReport {
     alpacaConfigured: boolean;
     alpacaMode: "paper" | "live";
     llmConfigured: boolean;
-    yahooBrowserEnabled: boolean;
+    yahooEnabled: boolean;
+    yahooBrowserFallback: boolean; // env YAHOO_BROWSER_ENABLED gates the browser layer
   };
   jobs: JobHealth;
   db: {
@@ -33,7 +34,7 @@ export interface StatusReport {
   backups: { file: string; bytes: number; modifiedAt: string }[];
 }
 
-export function getStatusReport(yahooBrowserEnabled: boolean): StatusReport {
+export function getStatusReport(yahooEnabled: boolean): StatusReport {
   const db = getDb();
 
   const tableNames = (
@@ -72,7 +73,9 @@ export function getStatusReport(yahooBrowserEnabled: boolean): StatusReport {
       alpacaConfigured: Boolean(process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET),
       alpacaMode: process.env.ALPACA_MODE === "live" ? "live" : "paper",
       llmConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
-      yahooBrowserEnabled,
+      yahooEnabled,
+      // Same default as YahooFinanceBrowserService: on unless explicitly "false".
+      yahooBrowserFallback: process.env.YAHOO_BROWSER_ENABLED !== "false",
     },
     jobs: getJobHealth(),
     db: { path: p, bytes: fs.existsSync(p) ? fs.statSync(p).size : 0, tables },

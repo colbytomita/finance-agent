@@ -16,7 +16,7 @@ function OnOff({ on, onText = "connected", offText = "not configured" }: { on: b
 
 export default function StatusPage() {
   const cfg = loadConfig();
-  const s = getStatusReport(cfg.yahooBrowserEnabled);
+  const s = getStatusReport(cfg.yahooEnabled);
   const totalRows = s.db.tables.reduce((n, t) => n + t.rows, 0);
 
   return (
@@ -29,7 +29,12 @@ export default function StatusPage() {
           <ul className="space-y-1 text-sm">
             <li>Alpaca: <OnOff on={s.integrations.alpacaConfigured} onText={`connected (${s.integrations.alpacaMode})`} /></li>
             <li>LLM research agent: <OnOff on={s.integrations.llmConfigured} offText="no API key — rule-based fallbacks" /></li>
-            <li>Yahoo browser connector: <OnOff on={s.integrations.yahooBrowserEnabled} onText="enabled" offText="disabled" /></li>
+            <li>
+              Yahoo connector: <OnOff on={s.integrations.yahooEnabled} onText="enabled" offText="disabled" />{" "}
+              <span className="text-[11px] text-zinc-600">
+                (HTTP-first; browser fallback {s.integrations.yahooBrowserFallback ? "on" : "off"})
+              </span>
+            </li>
           </ul>
         </section>
 

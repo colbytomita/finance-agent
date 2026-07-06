@@ -20,7 +20,10 @@ export interface AppConfig {
   refreshIntervalMarketOpenSec: number;
   refreshIntervalExtendedHoursSec: number;
   refreshIntervalClosedSec: number;
-  yahooBrowserEnabled: boolean;
+  // Yahoo Finance connector: extended-hours quotes, news scan, earnings fetch,
+  // and keyless daily bars — plain HTTP endpoints with the headless browser as
+  // fallback (the browser layer itself is gated by env YAHOO_BROWSER_ENABLED).
+  yahooEnabled: boolean;
   agentMinScore: number; // discovery agent proposes candidates scoring >= this (1–10)
   portfolioWatchlistRecLimit: number; // max "add to watchlist" suggestions from holdings shown at once (0 hides)
   // Sector Scout scheduled auto-scan. When enabled, daily maintenance re-scans
@@ -77,7 +80,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   refreshIntervalMarketOpenSec: 120,
   refreshIntervalExtendedHoursSec: 600,
   refreshIntervalClosedSec: 2400,
-  yahooBrowserEnabled: true,
+  yahooEnabled: true,
   agentMinScore: 7,
   portfolioWatchlistRecLimit: 3,
   sectorScoutScanEnabled: false,
@@ -144,10 +147,16 @@ export function loadConfig(): AppConfig {
       .where(eq(schema.appSettings.key, CONFIG_KEY))
       .get();
     if (!row) return DEFAULT_CONFIG;
-    const stored = JSON.parse(row.value) as Partial<AppConfig>;
+    // `yahooEnabled` was called `yahooBrowserEnabled` before the connector went
+    // HTTP-first; honor the legacy key (stripped here, so the next save
+    // persists only the new name).
+    const { yahooBrowserEnabled: legacyYahoo, ...stored } = JSON.parse(row.value) as Partial<AppConfig> & {
+      yahooBrowserEnabled?: boolean;
+    };
     return {
       ...DEFAULT_CONFIG,
       ...stored,
+      yahooEnabled: stored.yahooEnabled ?? legacyYahoo ?? DEFAULT_CONFIG.yahooEnabled,
       stockScoreWeights: { ...DEFAULT_CONFIG.stockScoreWeights, ...stored.stockScoreWeights },
       tradeScoreWeights: { ...DEFAULT_CONFIG.tradeScoreWeights, ...stored.tradeScoreWeights },
     };
