@@ -3,6 +3,7 @@ import { getDb, schema } from "@/db";
 import type { Bar } from "@/lib/types";
 import { AlpacaService } from "./alpaca";
 import { getBars, saveBars } from "./marketData";
+import { getYahooDailyBars } from "./yahooHttp";
 import { errorMessage, nowIso } from "@/lib/util";
 import {
   eventStudy,
@@ -149,12 +150,14 @@ export async function ensureBarsCover(
 ): Promise<Bar[]> {
   let bars = getBars(ticker);
   if (barsCoverEvent(bars, eventDate)) return bars;
-  if (!alpaca) return bars; // best effort without credentials
-  const fetched = await alpaca
-    .getHistoricalBars(ticker, "1Day", backfillLimit(eventDate))
-    .catch(() => [] as Bar[]);
+  const limit = backfillLimit(eventDate);
+  // Alpaca when configured; Yahoo's crumb-free chart endpoint otherwise so
+  // event studies still work on keyless setups.
+  const fetched = alpaca
+    ? await alpaca.getHistoricalBars(ticker, "1Day", limit).catch(() => [] as Bar[])
+    : await getYahooDailyBars(ticker, limit).catch(() => [] as Bar[]);
   if (fetched.length > 0) {
-    saveBars(ticker, fetched); // persist so future runs are fast
+    saveBars(ticker, fetched, "1Day", alpaca ? "alpaca" : "yahoo"); // persist so future runs are fast
     bars = getBars(ticker); // re-read merged old+new
   }
   return bars;

@@ -4,7 +4,7 @@ import type { Bar, MarketState, Quote } from "@/lib/types";
 import { effectiveConfig, loadConfig } from "@/lib/config";
 import { AlpacaService } from "./alpaca";
 import { getYahooService } from "./yahooFinanceBrowser";
-import { getYahooSummaryFields } from "./yahooHttp";
+import { getYahooDailyBars, getYahooSummaryFields } from "./yahooHttp";
 import { computeIndicators, type IndicatorSnapshot } from "./indicators";
 import { computeDrawdown, evaluateBuyZone } from "./buyZone";
 import { scoreStock, scoreRowValues, type CatalystInput } from "./scoring";
@@ -245,15 +245,19 @@ export function saveBars(ticker: string, bars: Bar[], timeframe = "1Day", source
   }
 }
 
-/** Fetch + persist daily bars (needs Alpaca). */
+/** Fetch + persist daily bars — Alpaca when configured, Yahoo's chart endpoint otherwise. */
 export async function refreshBars(tickers?: string[]): Promise<void> {
   const alpaca = AlpacaService.fromEnv();
-  if (!alpaca) return;
   const list = [...new Set([...(tickers ?? getTrackedTickers()), "SPY"])];
   await mapPool(list, PRICE_REFRESH_CONCURRENCY, async (ticker) => {
     try {
-      const bars = await alpaca.getHistoricalBars(ticker, "1Day", 400);
-      saveBars(ticker, bars);
+      let bars = alpaca ? await alpaca.getHistoricalBars(ticker, "1Day", 400) : [];
+      let source = "alpaca";
+      if (bars.length === 0) {
+        bars = await getYahooDailyBars(ticker, 400);
+        source = "yahoo";
+      }
+      if (bars.length > 0) saveBars(ticker, bars, "1Day", source);
     } catch (e) {
       console.error(`[bars] ${ticker}:`, errorMessage(e));
     }
