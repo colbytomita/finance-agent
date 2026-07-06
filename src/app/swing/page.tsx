@@ -8,10 +8,10 @@ import {
 } from "@/lib/queries";
 import { effectiveConfig } from "@/lib/config";
 import { integrationsStatus } from "@/services/integrations";
-import { currentAccountValue } from "@/services/marketData";
+import { currentAccountValue, daysToNextEarnings } from "@/services/marketData";
 import { suggestPositionSize } from "@/services/riskManagement";
 import { fmtDate, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
-import { Freshness, Pct } from "@/components/badges";
+import { EarningsBadge, Freshness, Pct } from "@/components/badges";
 import { SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { AddTradeForm, CloseTradeButton } from "@/components/forms";
 import { RefreshButton } from "@/components/RefreshButton";
@@ -217,6 +217,14 @@ export default function SwingPage() {
                           order {t.brokerOrderStatus ?? "working"}
                         </span>
                       )}
+                      {(() => {
+                        const dte = daysToNextEarnings(t.ticker);
+                        return dte != null ? (
+                          <div className="mt-0.5">
+                            <EarningsBadge days={dte} avoidWithinDays={cfg.avoidEarningsWithinDays} />
+                          </div>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="text-xs text-zinc-400">{t.direction}</td>
                     <td className="tabular-nums">{fmtMoney(t.entryPrice)}</td>

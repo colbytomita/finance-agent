@@ -7,6 +7,12 @@ import { closeTrade } from "../trades";
 import { recordJobRun, getJobHealth } from "../jobHealth";
 import { addMention, findSameDayMention } from "../entityMentions";
 import { runRetention } from "../retention";
+import {
+  addCatalyst,
+  upsertUpcomingEarningsCatalyst,
+  EARNINGS_CALENDAR_SOURCE,
+} from "../catalysts";
+import { daysToNextEarnings, getCatalystInputs } from "../marketData";
 import { saveConfig, loadConfig } from "@/lib/config";
 
 // Write-path integration tests against an in-memory SQLite database
@@ -195,5 +201,45 @@ describe("config round-trip", () => {
     expect(stored.yahooEnabled).toBe(false);
     expect("yahooBrowserEnabled" in stored).toBe(false);
     expect(loadConfig().yahooEnabled).toBe(false);
+  });
+});
+
+describe("upcoming earnings catalyst upsert (roadmap #16)", () => {
+  const inDays = (d: number) => daysAgo(-d).slice(0, 10);
+
+  it("inserts once, updates in place when the date moves, never stacks", () => {
+    const first = inDays(30);
+    expect(upsertUpcomingEarningsCatalyst("msft", first)).toBe("inserted");
+    expect(upsertUpcomingEarningsCatalyst("MSFT", first)).toBe("unchanged");
+
+    const moved = inDays(45);
+    expect(upsertUpcomingEarningsCatalyst("MSFT", moved)).toBe("updated");
+
+    const rows = getDb()
+      .select()
+      .from(schema.catalysts)
+      .all()
+      .filter((c) => c.ticker === "MSFT");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].eventDate).toBe(moved);
+    expect(rows[0].sourceName).toBe(EARNINGS_CALENDAR_SOURCE);
+  });
+
+  it("feeds the proximity guard but stays out of the scoring blend", () => {
+    upsertUpcomingEarningsCatalyst("NVDA", inDays(30));
+
+    // The proximity guard now has data…
+    const dte = daysToNextEarnings("NVDA");
+    expect(dte).not.toBeNull();
+    expect(dte!).toBeGreaterThanOrEqual(28);
+    expect(dte!).toBeLessThanOrEqual(30);
+
+    // …but the marker is excluded from the scoring feed, so a zero-impact future
+    // date can't re-activate the neutral catalyst/sentiment components.
+    expect(getCatalystInputs("NVDA")).toHaveLength(0);
+
+    // A real catalyst on the same ticker still flows into scoring.
+    addCatalyst({ ticker: "NVDA", title: "Analyst upgrade to Buy", impactScore: 3, confidence: "medium" });
+    expect(getCatalystInputs("NVDA")).toHaveLength(1);
   });
 });

@@ -13,9 +13,10 @@ import { isCatalystStale } from "@/services/catalysts";
 import { edgeCatalystsForTicker } from "@/services/catalystEdge";
 import { listEarnings, classifySurprise } from "@/services/earnings";
 import { computeIndicators } from "@/services/indicators";
-import { loadConfig } from "@/lib/config";
+import { daysToNextEarnings } from "@/services/marketData";
+import { effectiveConfig, loadConfig } from "@/lib/config";
 import { fmtDate, fmtMoney, fmtNum, fmtScore } from "@/lib/format";
-import { Freshness, Pct, RecBadge, ScoreBadge } from "@/components/badges";
+import { EarningsBadge, Freshness, Pct, RecBadge, ScoreBadge } from "@/components/badges";
 import { PriceChart } from "@/components/PriceChart";
 import { GenerateBriefButton } from "@/components/GenerateBriefButton";
 import { RefreshButton } from "@/components/RefreshButton";
@@ -49,6 +50,7 @@ export default async function StockDetailPage({
   const catalysts = tickerCatalysts(ticker);
   const edges = edgeCatalystsForTicker(ticker);
   const earnings = listEarnings(ticker, 6);
+  const daysToEarnings = daysToNextEarnings(ticker);
   const note = getLatestNote(ticker);
   const trade = openTrades().find((t) => t.ticker === ticker) ?? null;
   const reasoning: Record<string, unknown> = score?.reasoningJson
@@ -81,6 +83,7 @@ export default async function StockDetailPage({
           <span className="text-sm text-violet-300">after-hours {fmtMoney(snap.afterHoursPrice)}</span>
         )}
         <Freshness capturedAt={snap?.capturedAt} staleMinutes={cfg.staleDataMinutes} />
+        <EarningsBadge days={daysToEarnings} avoidWithinDays={effectiveConfig(cfg).avoidEarningsWithinDays} />
         {snap?.source && <span className="text-[10px] text-zinc-600">source: {snap.source}</span>}
         <div className="ml-auto flex gap-2">
           <GenerateBriefButton ticker={ticker} />

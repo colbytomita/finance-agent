@@ -1,8 +1,19 @@
-import { desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { nowIso } from "@/lib/util";
 import type { CatalystType, Confidence, ImpactDirection } from "@/lib/types";
+
+/**
+ * sourceName for the auto-fetched "upcoming earnings date" schedule markers.
+ * These feed the earnings-proximity guard (daysToNextEarnings) but are held
+ * OUT of the catalyst/sentiment scoring blend — a future date with unknown
+ * direction is a schedule signal, not a directional catalyst. getCatalystInputs
+ * filters this source out for exactly that reason.
+ */
+export const EARNINGS_CALENDAR_SOURCE = "yahoo-calendar";
+
+const earningsMarkerTitle = (date: string) => `Upcoming earnings (estimated) ~${date}`;
 
 // Source-agnostic catalyst ingestion + keyword classification.
 // MVP sources: manual entry, Yahoo news headlines (via browser connector).
@@ -265,4 +276,58 @@ export function getCatalystsForTicker(ticker: string) {
     .where(eq(schema.catalysts.ticker, ticker.toUpperCase()))
     .orderBy(desc(schema.catalysts.discoveredAt))
     .all();
+}
+
+/**
+ * Create or update the single auto-fetched "upcoming earnings" schedule marker
+ * for a ticker (source {@link EARNINGS_CALENDAR_SOURCE}). Idempotent: the date
+ * is updated in place when the schedule moves rather than stacked, and any
+ * accidental duplicates are collapsed so `daysToNextEarnings` stays clean.
+ * Returns what happened so the scheduler can report insert/update counts.
+ */
+export function upsertUpcomingEarningsCatalyst(
+  ticker: string,
+  eventDate: string,
+): "inserted" | "updated" | "unchanged" {
+  const db = getDb();
+  const t = ticker.toUpperCase();
+  const date = eventDate.slice(0, 10);
+  const existing = db
+    .select()
+    .from(schema.catalysts)
+    .where(
+      and(
+        eq(schema.catalysts.ticker, t),
+        eq(schema.catalysts.catalystType, "earnings"),
+        eq(schema.catalysts.status, "upcoming"),
+        eq(schema.catalysts.sourceName, EARNINGS_CALENDAR_SOURCE),
+      ),
+    )
+    .all();
+
+  if (existing.length > 0) {
+    const [keep, ...dups] = existing;
+    for (const dup of dups) {
+      db.delete(schema.catalysts).where(eq(schema.catalysts.id, dup.id)).run();
+    }
+    if (keep.eventDate?.slice(0, 10) === date) return "unchanged";
+    db.update(schema.catalysts)
+      .set({ eventDate: date, title: earningsMarkerTitle(date), discoveredAt: nowIso() })
+      .where(eq(schema.catalysts.id, keep.id))
+      .run();
+    return "updated";
+  }
+
+  addCatalyst({
+    ticker: t,
+    title: earningsMarkerTitle(date),
+    catalystType: "earnings",
+    eventDate: date,
+    sourceName: EARNINGS_CALENDAR_SOURCE,
+    status: "upcoming",
+    impactScore: 0,
+    impactDirection: "unknown",
+    confidence: "low",
+  });
+  return "inserted";
 }

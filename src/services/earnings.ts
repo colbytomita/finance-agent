@@ -198,6 +198,44 @@ export async function fetchEarningsForTickers(tickers: string[]): Promise<FetchE
   return result;
 }
 
+export interface FetchUpcomingEarningsResult {
+  tickers: number;
+  inserted: number;
+  updated: number;
+  errors: string[];
+}
+
+/**
+ * Refresh each ticker's *upcoming* earnings date from Yahoo's calendarEvents and
+ * upsert it as a schedule marker (so the earnings-proximity guard has data — the
+ * quarterly fetch above only stores past results). Best effort: a ticker that
+ * fails or has no scheduled date is skipped, never thrown. Imported lazily.
+ */
+export async function fetchUpcomingEarningsForTickers(
+  tickers: string[],
+): Promise<FetchUpcomingEarningsResult> {
+  const { getYahooNextEarningsDate } = await import("./yahooHttp");
+  const { upsertUpcomingEarningsCatalyst } = await import("./catalysts");
+  const result: FetchUpcomingEarningsResult = {
+    tickers: tickers.length,
+    inserted: 0,
+    updated: 0,
+    errors: [],
+  };
+  for (const ticker of tickers) {
+    try {
+      const date = await getYahooNextEarningsDate(ticker);
+      if (!date) continue;
+      const outcome = upsertUpcomingEarningsCatalyst(ticker, date);
+      if (outcome === "inserted") result.inserted++;
+      else if (outcome === "updated") result.updated++;
+    } catch (e) {
+      result.errors.push(`${ticker}: ${errorMessage(e)}`);
+    }
+  }
+  return result;
+}
+
 /** The latest report's scoring signal for a ticker (null when none/old/in-line). */
 export function earningsSignalForTicker(
   ticker: string,
