@@ -26,6 +26,7 @@ import { fetchEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
 import { runRetention } from "@/services/retention";
 import { recordJobRun } from "@/services/jobHealth";
+import { runBackup } from "@/services/backup";
 
 const log = (msg: string) => console.log(`[jobs ${new Date().toISOString()}] ${msg}`);
 
@@ -224,6 +225,15 @@ async function dailyMaintenance(): Promise<void> {
         `performance backtest: ${perf.score.analyzed} score event(s), ${perf.picks.analyzed} pick event(s) analyzed`,
       );
     generateAlerts();
+    // Last: snapshot the day's final state to data/backups (keeps last 7).
+    try {
+      const b = runBackup();
+      if (b.created)
+        log(`backup written: ${b.path} (${(b.bytes / 1024 / 1024).toFixed(1)} MB)` +
+          (b.pruned.length ? `, pruned ${b.pruned.length} old` : ""));
+    } catch (e) {
+      log(`backup failed: ${errorMessage(e)}`);
+    }
     recordJobRun("daily_maintenance");
     log("daily maintenance done");
   } catch (e) {
