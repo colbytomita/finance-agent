@@ -25,6 +25,7 @@ import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
 import { runRetention } from "@/services/retention";
+import { recordJobRun } from "@/services/jobHealth";
 
 const log = (msg: string) => console.log(`[jobs ${new Date().toISOString()}] ${msg}`);
 
@@ -102,8 +103,10 @@ async function maybeRefresh(): Promise<void> {
       `refresh done: ${prices.length - failed.length}/${prices.length} tickers ok, ${alerts} new alert(s)` +
         (failed.length > 0 ? ` — failed: ${failed.map((f) => f.ticker).join(", ")}` : ""),
     );
+    recordJobRun("refresh");
   } catch (e) {
     log(`refresh failed: ${errorMessage(e)}`);
+    recordJobRun("refresh", "error", errorMessage(e));
   } finally {
     refreshing = false;
   }
@@ -218,9 +221,11 @@ async function dailyMaintenance(): Promise<void> {
         `performance backtest: ${perf.score.analyzed} score event(s), ${perf.picks.analyzed} pick event(s) analyzed`,
       );
     generateAlerts();
+    recordJobRun("daily_maintenance");
     log("daily maintenance done");
   } catch (e) {
     log(`daily maintenance failed: ${errorMessage(e)}`);
+    recordJobRun("daily_maintenance", "error", errorMessage(e));
   }
 }
 
@@ -231,6 +236,7 @@ async function catalystScan(): Promise<void> {
   const added = await scanYahooNews(getTrackedTickers()).catch(() => 0);
   rollCatalystStatuses();
   generateAlerts();
+  recordJobRun("catalyst_scan");
   log(`catalyst scan done: ${added} new`);
 }
 
@@ -243,6 +249,9 @@ log(`tracked tickers: ${getTrackedTickers().join(", ") || "(none yet)"}`);
 // and reschedules, instead of flushing one warning per skipped minute.
 async function refreshLoop(): Promise<void> {
   try {
+    // Liveness signal for the UI: ticks every minute even when the refresh
+    // itself is skipped, so a stale heartbeat means the runner is down.
+    recordJobRun("heartbeat");
     await maybeRefresh();
   } finally {
     setTimeout(() => void refreshLoop(), 60_000);

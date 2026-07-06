@@ -398,3 +398,12 @@ export const ingestionRuns = sqliteTable("ingestion_runs", {
   errorsJson: text("errors_json"), // JSON array of error strings (capped)
   ranAt: text("ran_at").notNull(),
 });
+
+// Scheduler heartbeat: one row per job name, upserted on every run/tick so the
+// UI can show "jobs last ran X min ago" and flag a dead `npm run jobs` process.
+export const jobRuns = sqliteTable("job_runs", {
+  job: text("job").primaryKey(), // heartbeat | refresh | daily_maintenance | catalyst_scan
+  lastRunAt: text("last_run_at").notNull(),
+  status: text("status").notNull().default("ok"), // ok | error
+  message: text("message"), // last error message when status = error
+});

@@ -30,7 +30,7 @@ work, then Tier 3 by taste.
   industry-performance strip in Sector Scout silently shows stale data. Run it
   in daily maintenance after the refresh.
 
-- [ ] **4. Job health visibility** *(small–medium)*
+- [x] **4. Job health visibility** *(small–medium — done)*
   The scheduler only logs to console; if `npm run jobs` dies, nothing in the UI
   says so. Generalize the `ingestion_runs` idea: a small `job_runs` heartbeat
   table written by the scheduler + a "jobs last ran X min ago" indicator in the
