@@ -2,7 +2,7 @@
   "name": "finance-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "Financial market research and swing-trading decision assistant (decision support only — no autonomous trading).",
+  "description": "Financial market research and swing-trading decision assistant (decision support only \u2014 no autonomous trading).",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,7 +11,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
@@ -29,6 +30,7 @@
     "@types/node": "^26.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "drizzle-kit": "^0.31.10",
     "tailwindcss": "^4.1.10",
     "tsx": "^4.20.0",
     "typescript": "^6.0.3",

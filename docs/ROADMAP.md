@@ -38,10 +38,12 @@ work, then Tier 3 by taste.
 
 ## Tier 2 — Code health
 
-- [ ] **5. drizzle-kit migrations** *(medium)*
+- [x] **5. drizzle-kit migrations** *(medium — done)*
   Schema is written twice (`schema.ts` + DDL string in `db/index.ts`) with
   try/catch `ALTER`s for migrations. Migrate to generated migrations; write the
-  schema once. Do this *before* the next feature that adds tables.
+  schema once. Do this *before* the next feature that adds tables. *(schema.ts
+  is now the single source of truth; `npm run db:generate` emits migrations
+  into `drizzle/`; pre-migration databases are baselined automatically.)*
 
 - [x] **6. Integration-test harness with in-memory SQLite** *(medium — done)*
   All tests are pure functions — zero coverage on the persistence layer

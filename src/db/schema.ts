@@ -3,6 +3,7 @@ import {
   text,
   integer,
   real,
+  index,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
@@ -46,7 +47,7 @@ export const marketPriceSnapshots = sqliteTable("market_price_snapshots", {
   marketState: text("market_state"), // PRE | REGULAR | POST | CLOSED | UNKNOWN
   source: text("source").notNull(), // alpaca | yahoo-browser | manual
   capturedAt: text("captured_at").notNull(),
-});
+}, (t) => [index("idx_snapshots_ticker_time").on(t.ticker, t.capturedAt)]);
 
 export const drawdownMetrics = sqliteTable("drawdown_metrics", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -61,7 +62,7 @@ export const drawdownMetrics = sqliteTable("drawdown_metrics", {
   distanceFromBuyZonePercent: real("distance_from_buy_zone_percent"),
   buyZoneStatus: text("buy_zone_status"),
   calculatedAt: text("calculated_at").notNull(),
-});
+}, (t) => [index("idx_drawdown_ticker_time").on(t.ticker, t.calculatedAt)]);
 
 export const catalysts = sqliteTable("catalysts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -98,7 +99,7 @@ export const stockScores = sqliteTable("stock_scores", {
   confidence: text("confidence").notNull().default("low"),
   reasoningJson: text("reasoning_json"),
   calculatedAt: text("calculated_at").notNull(),
-});
+}, (t) => [index("idx_scores_ticker_time").on(t.ticker, t.calculatedAt)]);
 
 export const activeTrades = sqliteTable("active_trades", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -193,7 +194,7 @@ export const priceBars = sqliteTable("price_bars", {
   close: real("close").notNull(),
   volume: real("volume").notNull(),
   source: text("source").notNull().default("alpaca"),
-});
+}, (t) => [uniqueIndex("price_bars_ticker_timeframe_bar_date_unique").on(t.ticker, t.timeframe, t.barDate)]);
 
 export const alerts = sqliteTable("alerts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -253,7 +254,10 @@ export const entityMentions = sqliteTable("entity_mentions", {
   sourceName: text("source_name"),
   sourceUrl: text("source_url"),
   createdAt: text("created_at").notNull(),
-});
+}, (t) => [
+  index("idx_entity_mentions_entity").on(t.entity),
+  index("idx_entity_mentions_ticker_date").on(t.ticker, t.eventDate),
+]);
 
 export const scoreHistory = sqliteTable("score_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -280,7 +284,7 @@ export const sectorScans = sqliteTable("sector_scans", {
   minScore: real("min_score").notNull(), // threshold used for this run
   expandedBy: text("expanded_by").notNull().default("rules"), // llm | rules (how tickers were sourced)
   ranAt: text("ran_at").notNull(),
-});
+}, (t) => [index("idx_sector_scans_industry_time").on(t.industry, t.ranAt)]);
 
 // Sector Scout thesis validation. A report is the latest evidence-backed view
 // of one ticker for one searched theme; claims are the individual assertions the
@@ -305,6 +309,7 @@ export const companyThesisReports = sqliteTable("company_thesis_reports", {
   updatedAt: text("updated_at").notNull(),
 }, (t) => [
   uniqueIndex("company_thesis_reports_ticker_theme_unique").on(t.ticker, t.theme),
+  index("idx_company_thesis_reports_ticker").on(t.ticker, t.updatedAt),
 ]);
 
 export const companyClaims = sqliteTable("company_claims", {
@@ -320,7 +325,10 @@ export const companyClaims = sqliteTable("company_claims", {
   confidence: text("confidence").notNull().default("low"),
   status: text("status").notNull().default("unverified"),
   createdAt: text("created_at").notNull(),
-});
+}, (t) => [
+  index("idx_company_claims_report").on(t.reportId),
+  index("idx_company_claims_ticker").on(t.ticker, t.createdAt),
+]);
 
 export const sectorScoutPicks = sqliteTable("sector_scout_picks", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -363,6 +371,7 @@ export const sectorScoutPicks = sqliteTable("sector_scout_picks", {
   // Mirrors the runtime DDL's `UNIQUE (industry, ticker)` — one pick row per
   // industry+ticker. The upsert in runSectorScan conflict-targets these columns.
   uniqueIndex("sector_scout_picks_industry_ticker_unique").on(t.industry, t.ticker),
+  index("idx_sector_picks_industry").on(t.industry, t.overallScore),
 ]);
 
 // Quarterly earnings results: actual vs. analyst estimate (the "beat / meet / miss").
@@ -379,7 +388,10 @@ export const earningsReports = sqliteTable("earnings_reports", {
   surprisePercent: real("surprise_percent"), // EPS surprise %, + = beat / − = miss
   source: text("source").notNull().default("manual"), // manual | yahoo
   createdAt: text("created_at").notNull(),
-});
+}, (t) => [
+  uniqueIndex("earnings_reports_ticker_report_date_unique").on(t.ticker, t.reportDate),
+  index("idx_earnings_ticker_date").on(t.ticker, t.reportDate),
+]);
 
 // Per-run log of real-world event ingestion (Catalyst Edge). One row per
 // runEventIngestion call so the Events page can show when it last ran, what each
@@ -397,7 +409,7 @@ export const ingestionRuns = sqliteTable("ingestion_runs", {
   errorCount: integer("error_count").notNull().default(0),
   errorsJson: text("errors_json"), // JSON array of error strings (capped)
   ranAt: text("ran_at").notNull(),
-});
+}, (t) => [index("idx_ingestion_runs_time").on(t.ranAt)]);
 
 // Scheduler heartbeat: one row per job name, upserted on every run/tick so the
 // UI can show "jobs last ran X min ago" and flag a dead `npm run jobs` process.
