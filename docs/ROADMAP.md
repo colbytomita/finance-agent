@@ -18,7 +18,7 @@ work, then Tier 3 by taste.
   status via Alpaca, update `entryPrice`/`shares` to actual fill, and
   flag/cancel trades whose orders were canceled or expired.
 
-- [ ] **2. Data retention for append-only tables** *(small)*
+- [x] **2. Data retention for append-only tables** *(small — done)*
   `market_price_snapshots`, `stock_scores`, `drawdown_metrics`, `score_history`
   are never pruned. At the market-open cadence (120s × N tickers) snapshots grow
   by thousands of rows/day. Add a retention pass to daily maintenance (e.g. keep

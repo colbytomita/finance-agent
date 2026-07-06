@@ -24,6 +24,7 @@ import { backfillCompanyNames } from "@/services/companyNames";
 import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
+import { runRetention } from "@/services/retention";
 
 const log = (msg: string) => console.log(`[jobs ${new Date().toISOString()}] ${msg}`);
 
@@ -191,6 +192,20 @@ async function dailyMaintenance(): Promise<void> {
         log(
           `entity edge: ${edge.catalystsWritten} catalyst(s), ${edge.tickersRecomputed} score(s) recomputed`,
         );
+    }
+    // Prune append-only tables (snapshots, drawdowns, score history) and thin
+    // old stock scores so the DB doesn't grow unbounded at refresh cadence.
+    try {
+      const ret = runRetention();
+      const total =
+        ret.snapshotsDeleted + ret.drawdownsDeleted + ret.scoreHistoryDeleted + ret.scoresThinned;
+      if (total > 0)
+        log(
+          `retention: pruned ${ret.snapshotsDeleted} snapshot(s), ${ret.drawdownsDeleted} drawdown(s), ` +
+            `${ret.scoreHistoryDeleted} score change(s), thinned ${ret.scoresThinned} score(s)`,
+        );
+    } catch (e) {
+      log(`retention failed: ${errorMessage(e)}`);
     }
     // Refresh the Signal Performance report so the Sector Scout industry
     // strip reads today's picks/scores instead of a stale manual run.
