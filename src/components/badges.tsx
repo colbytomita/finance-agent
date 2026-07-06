@@ -76,6 +76,29 @@ export function Pct({ value, digits = 1 }: { value: number | null | undefined; d
   );
 }
 
+export function EarningsBadge({
+  days,
+  avoidWithinDays = 0,
+}: {
+  days: number | null | undefined;
+  avoidWithinDays?: number;
+}) {
+  if (days == null || !isFinite(days) || days < 0) return null;
+  // Amber inside the avoid-earnings window (the risk guard is active); muted otherwise.
+  const near = avoidWithinDays > 0 && days <= avoidWithinDays;
+  const cls = near
+    ? "bg-amber-950 text-amber-300 border-amber-800"
+    : "bg-zinc-800 text-zinc-400 border-zinc-700";
+  return (
+    <span
+      className={`inline-block rounded border px-1.5 py-0.5 text-[11px] font-medium ${cls}`}
+      title="Next scheduled earnings (estimated date)"
+    >
+      {days === 0 ? "Earnings today" : `Earnings ${days}d`}
+    </span>
+  );
+}
+
 export function SeverityDot({ severity }: { severity: string }) {
   const color =
     severity === "critical" ? "bg-red-500" : severity === "warning" ? "bg-amber-400" : "bg-sky-400";

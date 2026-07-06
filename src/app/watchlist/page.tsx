@@ -6,11 +6,12 @@ import {
   latestScore,
   latestSnapshot,
 } from "@/lib/queries";
-import { loadConfig } from "@/lib/config";
+import { effectiveConfig, loadConfig } from "@/lib/config";
 import { integrationsStatus } from "@/services/integrations";
+import { daysToNextEarnings } from "@/services/marketData";
 import { portfolioWatchlistRecommendations } from "@/services/portfolioRecommendations";
 import { fmtMoney } from "@/lib/format";
-import { Freshness, Pct } from "@/components/badges";
+import { EarningsBadge, Freshness, Pct } from "@/components/badges";
 import {
   BuyZoneInsight,
   DrawdownInsight,
@@ -34,12 +35,14 @@ export default function WatchlistPage() {
   const alpacaMode = alpacaConfigured ? integrations.alpacaMode : null;
   const recs = portfolioWatchlistRecommendations(cfg.portfolioWatchlistRecLimit);
   const setups = activeSetups();
+  const avoidEarningsWithin = effectiveConfig(cfg).avoidEarningsWithinDays;
   const rows = items.map((w) => ({
     w,
     snap: latestSnapshot(w.ticker),
     score: latestScore(w.ticker),
     dd: latestDrawdown(w.ticker),
     setup: setups.find((s) => s.ticker === w.ticker) ?? null,
+    daysToEarnings: daysToNextEarnings(w.ticker),
   }));
 
   return (
@@ -111,12 +114,17 @@ export default function WatchlistPage() {
                 </td>
               </tr>
             )}
-            {rows.map(({ w, snap, score, dd, setup }) => (
+            {rows.map(({ w, snap, score, dd, setup, daysToEarnings }) => (
               <tr key={w.id}>
                 <td>
                   <Link href={`/stock/${w.ticker}`} className="font-semibold text-sky-300 hover:underline">
                     {w.ticker}
                   </Link>
+                  {daysToEarnings != null && (
+                    <div className="mt-0.5">
+                      <EarningsBadge days={daysToEarnings} avoidWithinDays={avoidEarningsWithin} />
+                    </div>
+                  )}
                 </td>
                 <td className="max-w-40 truncate text-zinc-400">{w.companyName ?? "—"}</td>
                 <td>{fmtMoney(snap?.regularPrice ?? dd?.currentPrice ?? null)}</td>

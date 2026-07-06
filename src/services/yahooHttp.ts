@@ -147,6 +147,37 @@ export function summaryFieldsFromQuoteSummary(
   return fields.regularPrice == null ? null : fields;
 }
 
+/**
+ * Next scheduled earnings date (ISO `YYYY-MM-DD`) from a quoteSummary
+ * `calendarEvents` payload, or null. Yahoo returns `earnings.earningsDate` as
+ * an array of 1–2 timestamps (a range when the exact day isn't confirmed). We
+ * take the earliest entry that is today or later, so a just-reported date Yahoo
+ * hasn't rolled over yet never becomes a phantom "upcoming" marker. Pure.
+ */
+export function nextEarningsDateFromCalendarEvents(
+  json: unknown,
+  now: Date = new Date(),
+): string | null {
+  const result = (
+    json as {
+      quoteSummary?: {
+        result?: Array<{ calendarEvents?: { earnings?: { earningsDate?: RawNum[] } } }>;
+      };
+    }
+  )?.quoteSummary?.result?.[0];
+  const dates = result?.calendarEvents?.earnings?.earningsDate;
+  if (!Array.isArray(dates)) return null;
+  const today = now.toISOString().slice(0, 10);
+  const upcoming = dates
+    .map((d) => {
+      const secs = rawNum(d);
+      return secs == null ? null : new Date(secs * 1000).toISOString().slice(0, 10);
+    })
+    .filter((d): d is string => d != null && d >= today)
+    .sort();
+  return upcoming[0] ?? null;
+}
+
 /** Map a v8 chart payload to ascending daily bars. */
 export function barsFromChart(json: unknown): Bar[] {
   const result = (
@@ -199,6 +230,20 @@ export async function getYahooSummaryFields(ticker: string): Promise<YahooSummar
     /* fall through to the browser */
   }
   return getYahooService().getSummaryFields(ticker);
+}
+
+/**
+ * Next scheduled earnings date (ISO) for a ticker via the `calendarEvents`
+ * module. HTTP-only, best effort: null on any failure (no browser fallback —
+ * this only feeds the earnings-proximity guard, which degrades gracefully).
+ */
+export async function getYahooNextEarningsDate(ticker: string): Promise<string | null> {
+  try {
+    const json = await quoteSummary(ticker, "calendarEvents");
+    return json ? nextEarningsDateFromCalendarEvents(json) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Quarterly EPS estimate vs actual — HTTP first, browser fallback. */

@@ -10,7 +10,7 @@ import { computeDrawdown, evaluateBuyZone } from "./buyZone";
 import { scoreStock, scoreRowValues, type CatalystInput } from "./scoring";
 import { evaluateTrade } from "./tradeScoring";
 import { detectSetups } from "./setupDetection";
-import { isCatalystStale } from "./catalysts";
+import { isCatalystStale, EARNINGS_CALENDAR_SOURCE } from "./catalysts";
 import { earningsSignalForTicker } from "./earnings";
 import { errorMessage, mapPool, nowIso } from "@/lib/util";
 import { latestSnapshot } from "@/lib/queries";
@@ -305,8 +305,17 @@ export function getCatalystInputs(ticker: string): CatalystInput[] {
     .all();
   // Drop expired and stale catalysts entirely so old events never sway any score
   // component — including sentiment, which otherwise averages every catalyst.
+  // Also drop auto-fetched upcoming-earnings *date* markers: a future date with
+  // unknown direction is a schedule signal for the proximity guard, not a
+  // directional catalyst, and would otherwise re-activate the neutral
+  // catalyst/sentiment components on every tracked ticker.
   return rows
-    .filter((c) => c.status !== "expired" && !isCatalystStale(c, freshnessDays, now))
+    .filter(
+      (c) =>
+        c.status !== "expired" &&
+        c.sourceName !== EARNINGS_CALENDAR_SOURCE &&
+        !isCatalystStale(c, freshnessDays, now),
+    )
     .map((c) => ({
       impactScore: c.impactScore,
       confidence: (c.confidence as CatalystInput["confidence"]) ?? "low",

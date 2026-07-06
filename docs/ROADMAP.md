@@ -49,7 +49,7 @@ operational resilience, then Tier 3 features by taste.
   mocked `execFile` (see `src/services/__tests__/notifications.test.ts` for
   the existing mocking pattern). Nothing throws when PowerShell is missing.
 
-- [ ] **16. Auto-fetch upcoming earnings dates (make the earnings guard live)** *(medium)*
+- [x] **16. Auto-fetch upcoming earnings dates (make the earnings guard live)** *(medium — done)*
   **Why:** The earnings-proximity guard (`avoidEarningsWithinDays`, wired into
   `riskManagement.ts` and `tradeScoring.ts`) gets its dates from
   `daysToNextEarnings` (`src/services/marketData.ts:318`), which reads

@@ -22,7 +22,7 @@ import { runSectorScan } from "@/services/sectorScout";
 import { runEventIngestion } from "@/services/eventIngestion";
 import { backfillCompanyNames } from "@/services/companyNames";
 import { applyEntityEdge } from "@/services/catalystEdge";
-import { fetchEarningsForTickers } from "@/services/earnings";
+import { fetchEarningsForTickers, fetchUpcomingEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
 import { runRetention } from "@/services/retention";
 import { recordJobRun } from "@/services/jobHealth";
@@ -172,6 +172,19 @@ async function dailyMaintenance(): Promise<void> {
           }
         }
       }
+
+      // Refresh *upcoming* earnings dates so the earnings-proximity guard has
+      // data — the fetch above only stores past results. These are schedule
+      // markers, kept out of the score blend (see getCatalystInputs).
+      const upcoming = await fetchUpcomingEarningsForTickers(getTrackedTickers()).catch((e) => {
+        log(`upcoming earnings fetch failed: ${errorMessage(e)}`);
+        return null;
+      });
+      if (upcoming && (upcoming.inserted || upcoming.updated))
+        log(
+          `upcoming earnings: ${upcoming.inserted} new, ${upcoming.updated} updated ` +
+            `across ${upcoming.tickers} ticker(s)`,
+        );
     }
     // Backfill missing company names (SEC ticker->name) so the UI and GDELT
     // auto-queries have real names to work with. Cheap; the SEC file is cached.

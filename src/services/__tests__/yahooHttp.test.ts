@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { barsFromChart, summaryFieldsFromQuoteSummary } from "../yahooHttp";
+import {
+  barsFromChart,
+  nextEarningsDateFromCalendarEvents,
+  summaryFieldsFromQuoteSummary,
+} from "../yahooHttp";
 
 // Pure mappers over Yahoo's JSON endpoints (quoteSummary / v8 chart).
 
@@ -90,5 +94,39 @@ describe("barsFromChart", () => {
     expect(barsFromChart({})).toEqual([]);
     expect(barsFromChart({ chart: { result: [{}] } })).toEqual([]);
     expect(barsFromChart(null)).toEqual([]);
+  });
+});
+
+describe("nextEarningsDateFromCalendarEvents", () => {
+  const now = new Date("2026-07-06T12:00:00Z");
+  const at = (iso: string) => ({ raw: Math.floor(Date.parse(iso) / 1000) });
+  const payload = (dates: unknown[]) => ({
+    quoteSummary: { result: [{ calendarEvents: { earnings: { earningsDate: dates } } }] },
+  });
+
+  it("returns a single upcoming date as ISO YYYY-MM-DD", () => {
+    expect(nextEarningsDateFromCalendarEvents(payload([at("2026-08-20T13:30:00Z")]), now)).toBe(
+      "2026-08-20",
+    );
+  });
+
+  it("returns the earliest when Yahoo gives an unconfirmed date range", () => {
+    const range = payload([at("2026-08-25T13:30:00Z"), at("2026-08-20T13:30:00Z")]);
+    expect(nextEarningsDateFromCalendarEvents(range, now)).toBe("2026-08-20");
+  });
+
+  it("ignores a just-passed date Yahoo hasn't rolled over", () => {
+    const mixed = payload([at("2026-07-01T13:30:00Z"), at("2026-10-30T13:30:00Z")]);
+    expect(nextEarningsDateFromCalendarEvents(mixed, now)).toBe("2026-10-30");
+  });
+
+  it("returns null when every date is in the past", () => {
+    expect(nextEarningsDateFromCalendarEvents(payload([at("2026-04-30T13:30:00Z")]), now)).toBeNull();
+  });
+
+  it("returns null on missing/malformed payloads", () => {
+    expect(nextEarningsDateFromCalendarEvents({}, now)).toBeNull();
+    expect(nextEarningsDateFromCalendarEvents(payload([]), now)).toBeNull();
+    expect(nextEarningsDateFromCalendarEvents(null, now)).toBeNull();
   });
 });
