@@ -7,6 +7,7 @@ import {
   latestSnapshot,
 } from "@/lib/queries";
 import { effectiveConfig } from "@/lib/config";
+import { integrationsStatus } from "@/services/integrations";
 import { currentAccountValue } from "@/services/marketData";
 import { suggestPositionSize } from "@/services/riskManagement";
 import { fmtDate, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
@@ -26,12 +27,9 @@ export default function SwingPage() {
   const journal = journalEntries().slice(0, 25);
   const accountValue = currentAccountValue();
 
-  const alpacaConfigured = Boolean(process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET);
-  const alpacaMode: "paper" | "live" | null = alpacaConfigured
-    ? process.env.ALPACA_MODE === "live"
-      ? "live"
-      : "paper"
-    : null;
+  const integrations = integrationsStatus();
+  const alpacaConfigured = integrations.alpacaConfigured;
+  const alpacaMode = alpacaConfigured ? integrations.alpacaMode : null;
 
   const exitWatch = trades.filter((t) => {
     const price = t.currentPrice;

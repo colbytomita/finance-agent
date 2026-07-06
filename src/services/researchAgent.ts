@@ -1,6 +1,7 @@
 import { getDb, schema } from "@/db";
 import { latestDrawdown, latestScore, tickerCatalysts } from "@/lib/queries";
 import { desc, eq } from "drizzle-orm";
+import { nowIso } from "@/lib/util";
 import { completeJson, getProvider } from "./llm";
 
 // Research briefs: LLM-generated when a provider is configured, rule-based
@@ -119,14 +120,14 @@ function persistBrief(brief: ResearchBrief): void {
   db.insert(schema.researchNotes)
     .values({
       ticker: brief.ticker,
-      title: `Research brief ${new Date().toISOString().slice(0, 10)}`,
+      title: `Research brief ${nowIso().slice(0, 10)}`,
       summary: brief.summary,
       bullCase: brief.bullCase,
       bearCase: brief.bearCase,
       risks: brief.keyRisks.join("; "),
       sourcesJson: JSON.stringify({ generatedBy: brief.generatedBy }),
       generatedBy: brief.generatedBy,
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso(),
     })
     .run();
 }

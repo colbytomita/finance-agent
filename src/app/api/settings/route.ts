@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { loadConfig, saveConfig } from "@/lib/config";
+import { integrationsStatus } from "@/services/integrations";
 
 const settingsSchema = z
   .object({
@@ -53,15 +54,7 @@ const settingsSchema = z
 export async function GET() {
   // Secrets are never returned — only whether they are configured.
   const cfg = loadConfig();
-  return NextResponse.json({
-    config: cfg,
-    integrations: {
-      alpacaConfigured: Boolean(process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET),
-      alpacaMode: process.env.ALPACA_MODE === "live" ? "live" : "paper",
-      llmConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
-      llmProvider: process.env.LLM_PROVIDER ?? "anthropic",
-    },
-  });
+  return NextResponse.json({ config: cfg, integrations: integrationsStatus() });
 }
 
 export async function POST(req: Request) {

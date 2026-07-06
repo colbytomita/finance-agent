@@ -139,6 +139,7 @@ export function summaryFieldsFromQuoteSummary(
     marketState: toMarketState(price.marketState),
     fiftyTwoWeekHigh: rawNum(detail.fiftyTwoWeekHigh as RawNum),
     fiftyTwoWeekLow: rawNum(detail.fiftyTwoWeekLow as RawNum),
+    source: "yahoo",
     sourceUrl: `https://finance.yahoo.com/quote/${ticker.toUpperCase()}/`,
     capturedAt: now.toISOString(),
     extractionErrors: [],

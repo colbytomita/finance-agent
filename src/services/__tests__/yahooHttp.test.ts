@@ -38,6 +38,7 @@ describe("summaryFieldsFromQuoteSummary", () => {
       marketState: "PRE",
       fiftyTwoWeekHigh: 212.19,
       fiftyTwoWeekLow: 86.62,
+      source: "yahoo",
       extractionErrors: [],
     });
     // Fractional change percents are scaled to percent points.

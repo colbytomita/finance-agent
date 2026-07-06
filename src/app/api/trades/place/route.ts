@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { AlpacaService, AlpacaError } from "@/services/alpaca";
-import { errorMessage } from "@/lib/util";
+import { errorMessage, nowIso } from "@/lib/util";
 
 // User-initiated order placement. The user fills in the trade dialog and submits;
 // this sends ONE order to Alpaca (paper by default; live requires explicit
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
   let tradeId: number | null = null;
   if (d.logTrade) {
     const db = getDb();
-    const now = new Date().toISOString();
+    const now = nowIso();
     const entryPrice = order.filledAvgPrice ?? d.limitPrice ?? d.referencePrice;
     const broker = `alpaca-${mode}`;
     const thesis = [d.thesis?.trim(), `[${broker} ${d.orderType} order ${order.id} · ${order.status}]`]

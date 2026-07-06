@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
+import { nowIso } from "@/lib/util";
 
 // Daily SQLite backup (roadmap #14): a consistent `VACUUM INTO` copy of the
 // database written by daily maintenance into data/backups/, one file per day,
@@ -41,7 +42,7 @@ export function listBackups(): { file: string; bytes: number; modifiedAt: string
 export function runBackup(): BackupResult {
   const dir = backupDir();
   fs.mkdirSync(dir, { recursive: true });
-  const day = new Date().toISOString().slice(0, 10);
+  const day = nowIso().slice(0, 10);
   const file = path.join(dir, `finance-agent-${day}.db`);
 
   let created = false;

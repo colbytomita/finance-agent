@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Bar } from "@/lib/types";
+import { nowIso } from "@/lib/util";
 import { AlpacaService } from "./alpaca";
 import { ensureBarsCover } from "./entityMentions";
 import { getBars, saveBars } from "./marketData";
@@ -442,7 +443,7 @@ export async function runPerformanceBacktest(): Promise<PerformanceReport> {
   const score = await runScoreCalibration(alpaca);
   const picks = await runPickPerformance(alpaca);
   const report: PerformanceReport = {
-    generatedAt: new Date().toISOString(),
+    generatedAt: nowIso(),
     score,
     picks,
   };

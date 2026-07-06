@@ -18,6 +18,8 @@ export interface YahooSummaryFields {
   marketState: MarketState;
   fiftyTwoWeekHigh: number | null;
   fiftyTwoWeekLow: number | null;
+  /** Which transport produced these fields — plain HTTP or the headless browser. */
+  source: "yahoo" | "yahoo-browser";
   sourceUrl: string;
   capturedAt: string;
   extractionErrors: string[];
@@ -140,6 +142,7 @@ export function parseYahooQuoteHtml(
     marketState: safe("marketState", () => detectMarketState(html), "UNKNOWN" as MarketState),
     fiftyTwoWeekHigh: safe("fiftyTwoWeekHigh", () => extractRangeValue(html, "fiftyTwoWeekHigh"), null),
     fiftyTwoWeekLow: safe("fiftyTwoWeekLow", () => extractRangeValue(html, "fiftyTwoWeekLow"), null),
+    source: "yahoo-browser",
     sourceUrl,
     capturedAt: now.toISOString(),
     extractionErrors: errors,
@@ -326,24 +329,29 @@ export class YahooFinanceBrowserService {
     return fields;
   }
 
-  toQuote(fields: YahooSummaryFields): Quote {
-    return {
-      ticker: fields.ticker,
-      regularPrice: fields.regularPrice,
-      preMarketPrice: fields.preMarketPrice,
-      afterHoursPrice: fields.afterHoursPrice,
-      dayChangePercent: fields.regularChangePercent,
-      marketState: fields.marketState,
-      source: "yahoo-browser",
-      sourceUrl: fields.sourceUrl,
-      capturedAt: fields.capturedAt,
-    };
-  }
-
   async close(): Promise<void> {
     await this.browser?.close().catch(() => {});
     this.browser = null;
   }
+}
+
+/**
+ * Map summary fields to a Quote. Pure; the quote's `source` reflects which
+ * transport actually produced the fields (plain HTTP vs headless browser), so
+ * snapshots stay honest about provenance now that HTTP is the primary path.
+ */
+export function quoteFromSummaryFields(fields: YahooSummaryFields): Quote {
+  return {
+    ticker: fields.ticker,
+    regularPrice: fields.regularPrice,
+    preMarketPrice: fields.preMarketPrice,
+    afterHoursPrice: fields.afterHoursPrice,
+    dayChangePercent: fields.regularChangePercent,
+    marketState: fields.marketState,
+    source: fields.source,
+    sourceUrl: fields.sourceUrl,
+    capturedAt: fields.capturedAt,
+  };
 }
 
 let _singleton: YahooFinanceBrowserService | null = null;

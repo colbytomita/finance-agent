@@ -5,7 +5,8 @@
 //     PowerShell WinRT toast (roadmap #15); no setup on either
 //   - ntfy:    POST to https://ntfy.sh/<topic>; subscribe on your phone/browser
 // Both are best-effort and never throw — a notification failure must never
-// break alert generation. emitAlert() calls notifyAlert() on every new insert.
+// break alert generation. emitAlert() queues every new insert through
+// queueAlertNotification(), which digests bursts into one notification.
 
 import { execFile } from "node:child_process";
 import { loadConfig, type AppConfig } from "@/lib/config";
@@ -133,22 +134,6 @@ function sendDesktop(severity: AlertSeverity, message: string, subtitle: string)
     /* best effort — a missing binary or WinRT failure must never surface */
   });
   return true;
-}
-
-/**
- * Push one alert through every configured channel. Fire-and-forget from
- * emitAlert (sync insert path) — never throws, never blocks.
- */
-export async function notifyAlert(
-  severity: AlertSeverity,
-  message: string,
-  ticker: string | null = null,
-  cfg: AppConfig = loadConfig(),
-): Promise<{ desktop: boolean; ntfy: boolean }> {
-  if (!shouldNotify(severity, cfg)) return { desktop: false, ntfy: false };
-  const desktop = sendDesktop(severity, message, `${severity.toUpperCase()}${ticker ? ` · ${ticker}` : ""}`);
-  const ntfy = await sendNtfy(cfg, severity, message, ticker);
-  return { desktop, ntfy };
 }
 
 // --- Burst digest ------------------------------------------------------------

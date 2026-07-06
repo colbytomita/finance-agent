@@ -2,6 +2,7 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { freshness } from "@/lib/format";
+import { nowIso } from "@/lib/util";
 import { getLatestSnapshot } from "./marketData";
 import { queueAlertNotification } from "./notifications";
 
@@ -51,7 +52,7 @@ function emit(
       severity,
       message,
       acknowledged: false,
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso(),
     })
     .run();
   // Push out-of-app (desktop/ntfy) when configured — best effort, non-blocking.
