@@ -73,14 +73,21 @@ env `YAHOO_BROWSER_ENABLED` gates only the headless-browser fallback layer.
 `loadConfig()` still honors the legacy key from an existing database and drops
 it on the next save.
 
-Remaining ideas, none urgent:
+**Roadmap v2 exists (2026-07-06): `docs/ROADMAP.md`, items #15–#28.** It was
+written from a fresh codebase pass with per-item Why/What/Accept so any agent
+can pick up the top unchecked item and execute it. Highest-value first: #15
+Windows desktop notifications (the current `sendDesktop` is macOS-only on a
+Windows machine), #16 auto-fetch upcoming earnings dates (the
+`avoidEarningsWithinDays` guard currently has no data source), #17 setup
+outcome backtest (detected setups are never measured).
 
-- Roadmap #12 (split `marketData.ts`) only if it starts growing again.
+Still-parked notes:
+
 - Bulk import caps at 50 tickers per request and runs 5 in flight; fine for
   pastes, revisit if used for large lists.
 - The dependabot moderate alert is esbuild via drizzle-kit's dev-only
   dependency chain — no runtime exposure; wait for upstream rather than
-  downgrade drizzle-kit.
+  downgrade drizzle-kit (tracked as roadmap #28).
 
 ## Standard Commands
 
