@@ -23,6 +23,7 @@ import { runEventIngestion } from "@/services/eventIngestion";
 import { backfillCompanyNames } from "@/services/companyNames";
 import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers } from "@/services/earnings";
+import { runPerformanceBacktest } from "@/services/signalPerformance";
 
 const log = (msg: string) => console.log(`[jobs ${new Date().toISOString()}] ${msg}`);
 
@@ -191,6 +192,16 @@ async function dailyMaintenance(): Promise<void> {
           `entity edge: ${edge.catalystsWritten} catalyst(s), ${edge.tickersRecomputed} score(s) recomputed`,
         );
     }
+    // Refresh the Signal Performance report so the Sector Scout industry
+    // strip reads today's picks/scores instead of a stale manual run.
+    const perf = await runPerformanceBacktest().catch((e) => {
+      log(`performance backtest failed: ${errorMessage(e)}`);
+      return null;
+    });
+    if (perf)
+      log(
+        `performance backtest: ${perf.score.analyzed} score event(s), ${perf.picks.analyzed} pick event(s) analyzed`,
+      );
     generateAlerts();
     log("daily maintenance done");
   } catch (e) {
