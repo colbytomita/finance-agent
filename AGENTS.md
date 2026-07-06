@@ -8,8 +8,10 @@ decision-support tool, not a demo app and not an autonomous trader.
 - Stack: Next.js App Router, React, strict TypeScript, Tailwind, SQLite via
   `better-sqlite3` + Drizzle, Vitest.
 - Core services live in `src/services/*`.
-- DB schema is split across `src/db/schema.ts` and the DDL string in
-  `src/db/index.ts`.
+- DB schema lives once, in `src/db/schema.ts`; `npm run db:generate`
+  (drizzle-kit) emits SQL migrations into `drizzle/`, applied by `getDb()` on
+  open. `src/db/legacyBaseline.ts` is a frozen pre-migration snapshot — never
+  edit it.
 - Pages and JSON routes live under `src/app/*`.
 - Non-secret settings live in the DB through `src/lib/config.ts`; secrets stay in
   `.env`.
@@ -29,8 +31,9 @@ decision-support tool, not a demo app and not an autonomous trader.
 - Validate API input with `zod`; return `{ error }` with an appropriate status
   on failure.
 - Long-running API routes should use `export const maxDuration = 300`.
-- New DB tables/columns need both Drizzle schema and SQLite DDL/additive
-  migration coverage.
+- New DB tables/columns go in `src/db/schema.ts` followed by
+  `npm run db:generate -- --name <slug>`; commit the generated files in
+  `drizzle/`. Do not hand-edit applied migrations or the legacy baseline.
 - New app settings need updates in config, settings API validation, and settings
   UI.
 

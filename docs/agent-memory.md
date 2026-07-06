@@ -1,46 +1,42 @@
 # Agent Memory
 
-Last updated: 2026-06-26.
+Last updated: 2026-07-05.
 
 ## Current State
 
 `finance-agent` is a market-research and swing-trading decision-support
 dashboard. It tracks portfolio/watchlist/trades, pulls market data, scores
 stocks and trades, detects swing setups, monitors catalysts, proposes Agent
-Picks, tracks earnings surprises, and runs Catalyst Edge event studies.
+Picks and Sector Scout picks, tracks earnings surprises, runs Catalyst Edge
+event studies, and backtests its own signals (Signal Performance).
 
-The work described in `docs/build-prompt-event-catalyst-engine.md` has largely
-been implemented:
+On 2026-07-05 the entire `docs/ROADMAP.md` was completed (except the
+conditional #12), including:
 
-- `entity_mentions` exists in both Drizzle schema and SQLite DDL.
-- `/events` exists as the Catalyst Edge page.
-- Event-study math lives in `src/services/eventStudy.ts`.
-- Entity mention CRUD and analysis/backfill orchestration live in
-  `src/services/entityMentions.ts`.
-- Event ingestion lives in `src/services/eventIngestion.ts`, with SEC EDGAR,
-  GDELT, and IR RSS connectors under `src/services/sources/*`.
-- Event extraction uses Haiku by default when Anthropic is configured and has a
-  deterministic fallback in `src/services/eventExtraction.ts`.
-- Edge-to-scoring catalyst creation lives in `src/services/catalystEdge.ts`.
-- Scheduler wiring exists in `src/jobs/scheduler.ts`.
-- Settings for ingestion sources/caps/confidence exist in config, API
-  validation, and settings UI.
-- Tests currently cover event-study math, extraction fallback, ingestion helpers,
-  ticker/CIK resolution, and edge impact mapping.
+- **Data path:** Yahoo quotes/earnings/daily bars now go over plain HTTP
+  (`src/services/yahooHttp.ts`, cookie+crumb session); the headless browser is
+  only a fallback and the news-page scanner. Discovery works without Alpaca
+  keys (Yahoo chart bars).
+- **Trade lifecycle:** broker order sync reconciles fills, cancels phantoms,
+  and auto-closes trades when a bracket stop/target leg fills (shared
+  `closeTrade` in `src/services/trades.ts` pre-fills the journal).
+- **Ops:** `job_runs` heartbeat + header badge, `/status` page, retention
+  pruning for append-only tables, daily `VACUUM INTO` backups (`data/backups/`,
+  keeps 7), scheduled Signal Performance backtest, desktop/ntfy alert
+  notifications (off by default; Settings).
+- **Schema:** written once in `src/db/schema.ts`; drizzle-kit migrations in
+  `drizzle/` are applied by `getDb()`; pre-migration DBs are baselined via the
+  frozen `src/db/legacyBaseline.ts`. Migration 0001 added
+  `ingestion_runs.skipped_json`.
+- **Tests:** 307 across 29 files — pure logic plus an in-memory-SQLite harness
+  (`src/services/__tests__/dbHarness.ts`) covering persistence write paths and
+  direct route-handler smoke tests (`src/app/api/__tests__/routes.test.ts`).
 
-## Recent Review Note
-
-On 2026-06-26, Catalyst Edge and ingestion were reviewed. A stale-edge drift risk
-was fixed: edge catalysts are now only created and surfaced for mentions inside
-the configured `catalystFreshnessDays` window. Historical analysis remains
-available on `/events`, but old mentions should not reappear as current scoring
-signals or Agent Picks rationale.
-
-Later on 2026-06-26, the Catalyst Edge source configuration was made editable in
-Settings: `gdeltQueries` are edited one query per line, and `irFeeds` are edited
-as `TICKER, URL` lines. The `/events` ingestion button now shows a richer run
-summary with source counts, extraction mode, skipped count, catalyst writes, and
-source/extraction errors.
+The 2026-06-26 "Likely Next Work" items are all done (2026-07-05): per-item
+skipped reasons in ingestion results (returned, stored, and shown on `/events`),
+a same-day duplicate guard for manually added mentions (`findSameDayMention` +
+`duplicate: true` from `POST /api/events`), stale-catalyst labeling on the
+stock-detail timeline, and the route smoke tests.
 
 ## Important Constraints
 
@@ -51,21 +47,27 @@ source/extraction errors.
   advice or prediction.
 - Social platforms are not scraped directly; ingest news coverage or official
   sources instead.
-- Alpaca bars are expected to be ascending, oldest to newest.
-- `getDb()` caches the connection and runs DDL once per process, so schema/table
-  changes require restarting the dev server.
+- Alpaca bars are expected to be ascending, oldest to newest (the Yahoo chart
+  helper returns the same shape/order).
+- `getDb()` caches the connection and runs migrations once per process; schema
+  changes require a dev-server restart. Tests get a fresh in-memory DB via
+  `useTestDb()` from `src/services/__tests__/dbHarness.ts`.
+- Schema changes: edit `src/db/schema.ts`, then
+  `npm run db:generate -- --name <slug>`, commit the `drizzle/` output. Never
+  edit applied migrations or `src/db/legacyBaseline.ts`.
 
 ## Likely Next Work
 
-- Consider adding per-item skipped reasons to ingestion results. The UI now shows
-  aggregate skipped counts and source/extraction errors, but the service does not
-  yet return one reason per skipped item.
-- Add stronger duplicate controls for manually added mentions if duplicate
-  entries become noisy.
-- Consider filtering or labeling stale catalysts on stock detail timelines, not
-  just scoring and Catalyst Edge surfaces.
-- Add end-to-end route smoke tests or lightweight API tests if the project starts
-  accepting broader changes.
+- Roadmap #12 (split `marketData.ts`) only if it starts growing again.
+- The Yahoo news scanner (`scanYahooNews`) still drives the headless browser
+  and is layout-fragile — consider an HTTP/RSS replacement like the quote path.
+- Notifications currently fire on every new alert insert from any process;
+  consider batching or digesting if they get noisy at market open.
+- `refreshPrices` stores bars only via Alpaca (`fullRefresh`); tracked tickers
+  without Alpaca get quotes but no stored bars — could reuse
+  `getYahooDailyBars` in the bar-refresh path for keyless setups.
+- Bulk import caps at 50 tickers per request and runs serially per batch of 5;
+  fine for pastes, revisit if used for large lists.
 
 ## Standard Commands
 
@@ -74,5 +76,5 @@ npm run typecheck
 npm test
 npm run dev
 npm run jobs
+npm run db:generate -- --name <slug>
 ```
-
