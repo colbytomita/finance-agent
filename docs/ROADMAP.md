@@ -25,7 +25,7 @@ work, then Tier 3 by taste.
   last N days of snapshots/drawdowns; **thin, don't truncate** `stock_scores` —
   Signal Performance uses the score history as its event source).
 
-- [ ] **3. Schedule the Signal Performance backtest** *(small)*
+- [x] **3. Schedule the Signal Performance backtest** *(small — done)*
   It's manual-only ("Run backtest") with a cached report — the
   industry-performance strip in Sector Scout silently shows stale data. Run it
   in daily maintenance after the refresh.
