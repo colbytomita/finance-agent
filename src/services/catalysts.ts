@@ -204,17 +204,16 @@ export function rollCatalystStatuses(): void {
   }
 }
 
-/** Best-effort Yahoo Finance news scan for tracked tickers (browser connector). */
+/**
+ * Best-effort Yahoo Finance news scan for tracked tickers. Primary source is
+ * Yahoo's public per-ticker RSS feed (plain HTTP; real article links and
+ * publish dates); the layout-fragile browser page-scrape remains only as a
+ * fallback for tickers whose feed comes back empty.
+ */
 export async function scanYahooNews(tickers: string[]): Promise<number> {
-  const { getYahooService } = await import("./yahooFinanceBrowser");
-  const yahoo = getYahooService();
   const db = getDb();
   let added = 0;
   for (const ticker of tickers) {
-    const page = await yahoo.getQuotePage(ticker).catch(() => null);
-    if (!page) continue;
-    // Headlines appear as <a ...><h3>Title</h3></a> or section[data-testid=news] links.
-    const headlineRe = /<h3[^>]*>([^<]{20,200})<\/h3>/gi;
     const existing = new Set(
       db
         .select({ title: schema.catalysts.title })
@@ -223,20 +222,35 @@ export async function scanYahooNews(tickers: string[]): Promise<number> {
         .all()
         .map((r) => r.title),
     );
+    const record = (title: string, sourceUrl: string, eventDate: string | null): boolean => {
+      if (!title || existing.has(title)) return false;
+      existing.add(title);
+      addCatalyst({ ticker, title, sourceName: "yahoo-news", sourceUrl, eventDate, status: "occurred" });
+      added++;
+      return true;
+    };
+
+    const { getYahooHeadlines } = await import("./yahooHttp");
+    const entries = await getYahooHeadlines(ticker);
+    if (entries.length > 0) {
+      // Only the top of the feed: examining (not adding) up to 5 entries keeps
+      // repeated scans from crawling ever deeper and ingesting the whole feed.
+      for (const e of entries.filter((x) => x.title.length >= 20).slice(0, 5)) {
+        record(e.title, e.link, e.date);
+      }
+      continue;
+    }
+
+    const { getYahooService } = await import("./yahooFinanceBrowser");
+    const page = await getYahooService().getQuotePage(ticker).catch(() => null);
+    if (!page) continue;
+    // Headlines appear as <a ...><h3>Title</h3></a> or section[data-testid=news] links.
+    const headlineRe = /<h3[^>]*>([^<]{20,200})<\/h3>/gi;
     let m: RegExpExecArray | null;
     let count = 0;
     while ((m = headlineRe.exec(page.html)) !== null && count < 5) {
       const title = m[1].replace(/&amp;/g, "&").replace(/&#x27;|&apos;/g, "'").trim();
-      if (!title || existing.has(title)) continue;
-      addCatalyst({
-        ticker,
-        title,
-        sourceName: "yahoo-news",
-        sourceUrl: page.url,
-        status: "occurred",
-      });
-      added++;
-      count++;
+      if (record(title, page.url, null)) count++;
     }
   }
   return added;
