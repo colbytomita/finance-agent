@@ -215,6 +215,30 @@ export async function getYahooEarnings(ticker: string): Promise<ParsedYahooEarni
 }
 
 /**
+ * Per-ticker news headlines from Yahoo's public RSS feed (no cookies/crumb).
+ * Far more stable than scraping the quote page, and each entry carries a real
+ * article link and publish date. Returns [] on any failure.
+ */
+export async function getYahooHeadlines(
+  ticker: string,
+): Promise<import("./sources/parse").FeedEntry[]> {
+  try {
+    const url =
+      `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(ticker.toUpperCase())}` +
+      `&region=US&lang=en-US`;
+    const res = await fetch(url, {
+      headers: { "user-agent": UA },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return [];
+    const { parseFeed } = await import("./sources/parse");
+    return parseFeed(await res.text());
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Daily OHLCV bars from the crumb-free chart endpoint (ascending). Used as the
  * bar source when Alpaca isn't configured. Returns [] on any failure.
  */
