@@ -29,6 +29,10 @@ describe("eventIngestion.ingestionRunRecord", () => {
     persisted: 5,
     catalystsAdded: 2,
     skipped: 3,
+    skippedItems: [
+      { title: "Acme Corp announces widget", reason: "no ticker resolved" },
+      { title: "Old filing", reason: "duplicate of a stored mention" },
+    ],
     bySource: { "sec-edgar": 4, gdelt: 6 },
     errors: [],
     generatedBy: "mixed",
@@ -42,6 +46,7 @@ describe("eventIngestion.ingestionRunRecord", () => {
     expect(row.catalystsAdded).toBe(2);
     expect(row.generatedBy).toBe("mixed");
     expect(JSON.parse(row.bySource)).toEqual({ "sec-edgar": 4, gdelt: 6 });
+    expect(JSON.parse(row.skippedJson)).toEqual(base.skippedItems);
     expect(row.errorCount).toBe(0);
     expect(row.ranAt).toBe("2026-06-30T00:00:00Z");
   });

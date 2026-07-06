@@ -408,6 +408,7 @@ export const ingestionRuns = sqliteTable("ingestion_runs", {
   bySource: text("by_source"), // JSON: { "sec-edgar": n, gdelt: n, "ir-rss": n }
   errorCount: integer("error_count").notNull().default(0),
   errorsJson: text("errors_json"), // JSON array of error strings (capped)
+  skippedJson: text("skipped_json"), // JSON array of { title, reason } (capped)
   ranAt: text("ran_at").notNull(),
 }, (t) => [index("idx_ingestion_runs_time").on(t.ranAt)]);
 

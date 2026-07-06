@@ -27,6 +27,19 @@ function bySourceSummary(json: string | null): string {
   }
 }
 
+/** Per-item skip reasons stored with the run (empty for pre-upgrade rows). */
+function skippedItems(json: string | null): { title: string; reason: string }[] {
+  if (!json) return [];
+  try {
+    const arr = JSON.parse(json) as { title?: unknown; reason?: unknown }[];
+    return Array.isArray(arr)
+      ? arr.map((s) => ({ title: String(s.title ?? ""), reason: String(s.reason ?? "") }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function EventsPage() {
   const mentions = listMentions();
   const entities = distinctEntities();
@@ -79,6 +92,7 @@ export default function EventsPage() {
           <ul className="space-y-1 text-xs">
             {runs.map((r) => {
               const sources = bySourceSummary(r.bySource);
+              const skips = skippedItems(r.skippedJson);
               return (
                 <li key={r.id} className="flex flex-wrap items-center gap-2">
                   <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
@@ -88,7 +102,18 @@ export default function EventsPage() {
                     {r.persisted} added{r.catalystsAdded > 0 ? ` · ${r.catalystsAdded} catalyst(s)` : ""}
                   </span>
                   <span className="text-zinc-500">
-                    {r.fetched} fetched · {r.extracted} extracted · {r.skipped} skipped · {r.generatedBy}
+                    {r.fetched} fetched · {r.extracted} extracted ·{" "}
+                    {skips.length > 0 ? (
+                      <span
+                        className="cursor-help underline decoration-dotted"
+                        title={skips.map((s) => `${s.title} — ${s.reason}`).join("\n")}
+                      >
+                        {r.skipped} skipped
+                      </span>
+                    ) : (
+                      `${r.skipped} skipped`
+                    )}{" "}
+                    · {r.generatedBy}
                   </span>
                   {sources && <span className="text-zinc-600">{sources}</span>}
                   {r.errorCount > 0 && <span className="text-amber-400">{r.errorCount} error(s)</span>}

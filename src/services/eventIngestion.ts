@@ -122,12 +122,22 @@ export interface IngestOptions {
   trigger?: "manual" | "scheduled";
 }
 
+/** One skipped extraction with why it was dropped (capped per run). */
+export interface SkippedItem {
+  title: string;
+  reason: string;
+}
+
+/** Cap on per-item skip details kept per run (the count is always exact). */
+export const MAX_SKIPPED_ITEMS = 20;
+
 export interface IngestResult {
   fetched: number;
   extracted: number;
   persisted: number;
   catalystsAdded: number;
   skipped: number;
+  skippedItems: SkippedItem[];
   bySource: Record<string, number>;
   errors: string[];
   generatedBy: "llm" | "rules" | "mixed" | "none";
@@ -157,6 +167,7 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
     persisted: 0,
     catalystsAdded: 0,
     skipped: 0,
+    skippedItems: [],
     bySource: {},
     errors: [],
     generatedBy: "none",
@@ -227,18 +238,28 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
     ),
   );
 
+  const skip = (ev: ExtractedEvent, reason: string) => {
+    result.skipped++;
+    if (result.skippedItems.length < MAX_SKIPPED_ITEMS) {
+      result.skippedItems.push({ title: (ev.claim || ev.title || "(untitled)").slice(0, 90), reason });
+    }
+  };
   for (const ev of extracted) {
-    if (!ev.entity || !ev.ticker) {
-      result.skipped++;
+    if (!ev.ticker) {
+      skip(ev, ev.entity ? "no ticker resolved" : "no entity or ticker extracted");
+      continue;
+    }
+    if (!ev.entity) {
+      skip(ev, "no entity extracted");
       continue;
     }
     if (confidenceRank(ev.confidence) < minRank) {
-      result.skipped++;
+      skip(ev, `confidence "${ev.confidence}" below the "${minConfidence}" minimum`);
       continue;
     }
     const key = dedupeKey(ev.entity, ev.ticker, ev.eventDate, ev.url || ev.claim || "");
     if (seen.has(key)) {
-      result.skipped++;
+      skip(ev, "duplicate of a stored mention");
       continue;
     }
     seen.add(key);
@@ -281,6 +302,7 @@ export function ingestionRunRecord(result: IngestResult, trigger: string, ranAt:
     persisted: result.persisted,
     catalystsAdded: result.catalystsAdded,
     skipped: result.skipped,
+    skippedJson: JSON.stringify(result.skippedItems ?? []),
     generatedBy: result.generatedBy,
     bySource: JSON.stringify(result.bySource ?? {}),
     errorCount: result.errors.length,
