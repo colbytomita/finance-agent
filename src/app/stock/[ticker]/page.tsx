@@ -9,6 +9,7 @@ import {
   tickerCatalysts,
 } from "@/lib/queries";
 import { getLatestNote } from "@/services/researchAgent";
+import { isCatalystStale } from "@/services/catalysts";
 import { edgeCatalystsForTicker } from "@/services/catalystEdge";
 import { listEarnings, classifySurprise } from "@/services/earnings";
 import { computeIndicators } from "@/services/indicators";
@@ -133,24 +134,38 @@ export default async function StockDetailPage({
               </p>
             ) : (
               <ul className="space-y-1.5 text-sm">
-                {catalysts.slice(0, 15).map((c) => (
-                  <li key={c.id} className="flex items-start gap-2">
-                    <span className="w-20 shrink-0 text-xs tabular-nums text-zinc-500">
-                      {fmtDate(c.eventDate ?? c.discoveredAt)}
-                    </span>
-                    <span
-                      className={`shrink-0 text-xs font-semibold tabular-nums ${
-                        c.impactScore > 0 ? "pos" : c.impactScore < 0 ? "neg" : "text-zinc-500"
-                      }`}
-                    >
-                      {c.impactScore > 0 ? "+" : ""}{c.impactScore}
-                    </span>
-                    <span className="text-zinc-300">
-                      {c.title}
-                      <span className="muted text-xs"> · {c.catalystType.replace(/_/g, " ")} · {c.status}</span>
-                    </span>
-                  </li>
-                ))}
+                {catalysts.slice(0, 15).map((c) => {
+                  // Match the scoring engine's freshness window: stale items stay
+                  // visible as history but are dimmed and labeled, since they no
+                  // longer count toward the catalyst/sentiment components.
+                  const stale = isCatalystStale(c, cfg.catalystFreshnessDays);
+                  return (
+                    <li key={c.id} className={`flex items-start gap-2 ${stale ? "opacity-50" : ""}`}>
+                      <span className="w-20 shrink-0 text-xs tabular-nums text-zinc-500">
+                        {fmtDate(c.eventDate ?? c.discoveredAt)}
+                      </span>
+                      <span
+                        className={`shrink-0 text-xs font-semibold tabular-nums ${
+                          c.impactScore > 0 ? "pos" : c.impactScore < 0 ? "neg" : "text-zinc-500"
+                        }`}
+                      >
+                        {c.impactScore > 0 ? "+" : ""}{c.impactScore}
+                      </span>
+                      <span className="text-zinc-300">
+                        {c.title}
+                        <span className="muted text-xs"> · {c.catalystType.replace(/_/g, " ")} · {c.status}</span>
+                        {stale && (
+                          <span
+                            className="ml-1.5 rounded border border-zinc-700 px-1 text-[10px] uppercase tracking-wide text-zinc-500"
+                            title={`Older than the ${cfg.catalystFreshnessDays}-day freshness window — no longer weighs into scores.`}
+                          >
+                            stale
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>

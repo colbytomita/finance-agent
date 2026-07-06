@@ -115,15 +115,19 @@ export function ApplyEdgeButton() {
 
 export function AddMentionForm() {
   const [open, setOpen] = useState(false);
-  const { call, busy, error } = useApiAction();
+  const { call, busy, msg, error } = useApiAction();
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     const form = e.currentTarget;
-    const ok = await call("/api/events", {
+    const ok = await call<{ duplicate?: boolean }>("/api/events", {
       body: formValues(e),
+      message: (d) =>
+        d.duplicate
+          ? "Already recorded — that entity/ticker/day mention exists, nothing was added."
+          : "Mention added.",
       errorText: "Validation failed — check the fields.",
     });
-    if (ok) form.reset();
+    if (ok && !ok.duplicate) form.reset();
   }
 
   return (
@@ -170,6 +174,7 @@ export function AddMentionForm() {
             <button className="btn btn-primary" disabled={busy}>
               {busy ? "Saving…" : "Save"}
             </button>
+            {msg && <span className="text-xs text-amber-300">{msg}</span>}
             {error && <span className="text-xs text-red-400">{error}</span>}
           </form>
         </div>

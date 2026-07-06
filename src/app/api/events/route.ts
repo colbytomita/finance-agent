@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { addMention, listMentions } from "@/services/entityMentions";
+import { addMention, findSameDayMention, listMentions } from "@/services/entityMentions";
 
 // Real-world event mentions: "who (entity) said what about which ticker, when".
 // These feed the event-study ("catalyst edge") engine.
@@ -35,14 +35,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
+  const eventDate = new Date(d.eventDate).toISOString().slice(0, 10);
+  // Manual duplicate guard: the study treats entity/ticker/day as one event,
+  // so re-adding it would only skew the pooling. Report instead of inserting.
+  const existing = findSameDayMention(d.entity, d.ticker, eventDate);
+  if (existing) {
+    return NextResponse.json({ ok: true, id: existing.id, duplicate: true });
+  }
   const id = addMention({
     entity: d.entity,
     ticker: d.ticker,
     claim: d.claim ?? null,
     direction: d.direction ?? "unknown",
-    eventDate: new Date(d.eventDate).toISOString().slice(0, 10),
+    eventDate,
     sourceName: d.sourceName ?? null,
     sourceUrl: d.sourceUrl ?? null,
   });
-  return NextResponse.json({ ok: true, id });
+  return NextResponse.json({ ok: true, id, duplicate: false });
 }

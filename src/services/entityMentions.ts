@@ -49,6 +49,32 @@ export function addMention(input: MentionInput): number {
   return Number(row.lastInsertRowid);
 }
 
+/**
+ * The mention that would make a manual add a duplicate: same entity
+ * (case-insensitive), ticker, and event day. The event study pools one event
+ * per mention, so a repeated entity/ticker/day row only skews the pooling —
+ * ingestion applies its own source-aware dedupe and doesn't use this.
+ */
+export function findSameDayMention(
+  entity: string,
+  ticker: string,
+  eventDate: string,
+): MentionRow | null {
+  return (
+    getDb()
+      .select()
+      .from(schema.entityMentions)
+      .where(
+        and(
+          sql`lower(${schema.entityMentions.entity}) = ${entity.trim().toLowerCase()}`,
+          eq(schema.entityMentions.ticker, ticker.trim().toUpperCase()),
+          eq(schema.entityMentions.eventDate, eventDate.slice(0, 10)),
+        ),
+      )
+      .get() ?? null
+  );
+}
+
 export function listMentions(filter?: { entity?: string; ticker?: string }): MentionRow[] {
   const db = getDb();
   const conds = [];
