@@ -18,7 +18,7 @@ import {
   StockComponentInsight,
   StockScoreInsight,
 } from "@/components/insights";
-import { AddWatchlistForm, DeleteButton } from "@/components/forms";
+import { AddWatchlistForm, BulkImportWatchlistForm, DeleteButton } from "@/components/forms";
 import { PortfolioRecActions } from "@/components/PortfolioRecActions";
 import { RefreshButton } from "@/components/RefreshButton";
 import { PlaceOrderButton } from "@/components/TradeOrder";
@@ -52,7 +52,10 @@ export default function WatchlistPage() {
           <RefreshButton />
         </div>
       </div>
-      <AddWatchlistForm />
+      <div className="flex flex-wrap gap-2">
+        <AddWatchlistForm />
+        <BulkImportWatchlistForm />
+      </div>
       {recs.length > 0 && (
         <section className="card">
           <h2 className="card-title">From your portfolio — not yet watched</h2>

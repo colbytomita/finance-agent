@@ -71,7 +71,7 @@ work, then Tier 3 by taste.
   trades and pre-fill the journal entry with the actual exit price — making
   realized-performance stats trustworthy without bookkeeping discipline.
 
-- [ ] **11. Watchlist bulk import** *(small)*
+- [x] **11. Watchlist bulk import** *(small — done)*
   Paste a comma/newline ticker list → validate against real data (reuse the
   Sector Scout validation path) → add.
 

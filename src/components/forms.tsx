@@ -83,6 +83,58 @@ export function AddWatchlistForm() {
   );
 }
 
+interface BulkImportResponse {
+  requested: number;
+  added: { ticker: string; companyName: string | null }[];
+  skipped: { ticker: string; reason: string }[];
+}
+
+export function BulkImportWatchlistForm() {
+  const { call, busy, msg, error } = useApiAction();
+  return (
+    <Collapsible label="Bulk import tickers">
+      <form
+        className="flex flex-col gap-2"
+        onSubmit={async (e) => {
+          const form = e.currentTarget;
+          const payload = formValues(e);
+          const res = await call<BulkImportResponse>("/api/watchlist/import", {
+            body: payload,
+            message: (r) =>
+              `Added ${r.added.length} of ${r.requested}` +
+              (r.skipped.length > 0
+                ? ` — skipped ${r.skipped
+                    .map((s) => `${s.ticker} (${s.reason})`)
+                    .join(", ")}`
+                : ""),
+            errorText: "Import failed.",
+          });
+          if (res) form.reset();
+        }}
+      >
+        <label className="text-xs text-zinc-400">
+          Paste tickers separated by commas, spaces, or new lines. Each is validated against real
+          market data before it's added; symbols without data are skipped, never guessed.
+        </label>
+        <textarea
+          name="tickers"
+          required
+          rows={3}
+          className="w-full max-w-xl font-mono uppercase"
+          placeholder={"MSFT, NVDA, RKLB\nASTS"}
+        />
+        <div className="flex items-center gap-3">
+          <button className="btn btn-primary" disabled={busy}>
+            {busy ? "Validating…" : "Import"}
+          </button>
+          {msg && <span className="text-xs text-emerald-400">{msg}</span>}
+          {error && <span className="text-xs text-red-400">{error}</span>}
+        </div>
+      </form>
+    </Collapsible>
+  );
+}
+
 export function AddHoldingForm() {
   const { submit, busy, error } = useSubmit("/api/portfolio");
   return (
