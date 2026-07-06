@@ -1,0 +1,170 @@
+import { describe, expect, it } from "vitest";
+import { getDb, schema } from "@/db";
+import { useTestDb } from "./dbHarness";
+import { upsertWatchlistItem } from "../watchlist";
+import { emitAlert } from "../alerts";
+import { closeTrade } from "../trades";
+import { recordJobRun, getJobHealth } from "../jobHealth";
+import { runRetention } from "../retention";
+import { saveConfig, loadConfig } from "@/lib/config";
+
+// Write-path integration tests against an in-memory SQLite database
+// (roadmap #6). Each test starts from a fresh, fully-migrated schema.
+
+useTestDb();
+
+const daysAgo = (d: number, hour = 12) => {
+  const t = new Date(Date.now() - d * 24 * 3600 * 1000);
+  t.setUTCHours(hour, 0, 0, 0);
+  return t.toISOString();
+};
+
+describe("watchlist upsert", () => {
+  it("inserts, then updates by ticker preserving createdAt", () => {
+    upsertWatchlistItem({ ticker: "msft", companyName: "Microsoft" });
+    const first = getDb().select().from(schema.watchlistItems).all()[0];
+    expect(first.ticker).toBe("MSFT");
+
+    upsertWatchlistItem({ ticker: "MSFT", companyName: "Microsoft Corp", targetBuyLow: 400 });
+    const rows = getDb().select().from(schema.watchlistItems).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].companyName).toBe("Microsoft Corp");
+    expect(rows[0].targetBuyLow).toBe(400);
+    expect(rows[0].createdAt).toBe(first.createdAt);
+  });
+});
+
+describe("alert emit dedupe", () => {
+  it("drops an identical type+message within 20h, allows a different message", () => {
+    expect(emitAlert("near_stop_loss", "warning", "MSFT: within 2% of stop.", "MSFT")).toBe(true);
+    expect(emitAlert("near_stop_loss", "warning", "MSFT: within 2% of stop.", "MSFT")).toBe(false);
+    expect(emitAlert("near_stop_loss", "warning", "MSFT: within 1% of stop.", "MSFT")).toBe(true);
+    expect(getDb().select().from(schema.alerts).all()).toHaveLength(2);
+  });
+});
+
+describe("closeTrade", () => {
+  it("closes the row and pre-fills the journal with computed P/L", () => {
+    const db = getDb();
+    db.insert(schema.activeTrades)
+      .values({
+        ticker: "MSFT",
+        direction: "long",
+        entryPrice: 400,
+        entryDate: daysAgo(10),
+        shares: 5,
+        positionSize: 2000,
+        status: "open",
+        thesis: "Breakout hold.",
+        tradeScore: 6.5,
+        createdAt: daysAgo(10),
+        updatedAt: daysAgo(10),
+      })
+      .run();
+    const trade = db.select().from(schema.activeTrades).all()[0];
+
+    const res = closeTrade(trade, { exitPrice: 420, exitReason: "Target reached" });
+    expect(res.profitLoss).toBeCloseTo(100);
+    expect(res.profitLossPercent).toBeCloseTo(5);
+
+    const closed = db.select().from(schema.activeTrades).all()[0];
+    expect(closed.status).toBe("closed");
+    expect(closed.exitPrice).toBe(420);
+    expect(closed.closedAt).toBeTruthy();
+
+    const journal = db.select().from(schema.tradeJournalEntries).all();
+    expect(journal).toHaveLength(1);
+    expect(journal[0]).toMatchObject({
+      tradeId: trade.id,
+      ticker: "MSFT",
+      entryReason: "Breakout hold.",
+      exitReason: "Target reached",
+      exitScore: 6.5,
+    });
+    expect(journal[0].holdingPeriodDays).toBeCloseTo(10, 0);
+  });
+
+  it("shorts profit when price falls", () => {
+    const db = getDb();
+    db.insert(schema.activeTrades)
+      .values({
+        ticker: "XYZ",
+        direction: "short",
+        entryPrice: 100,
+        entryDate: daysAgo(3),
+        shares: 10,
+        positionSize: 1000,
+        status: "open",
+        createdAt: daysAgo(3),
+        updatedAt: daysAgo(3),
+      })
+      .run();
+    const trade = db.select().from(schema.activeTrades).all()[0];
+    const res = closeTrade(trade, { exitPrice: 90 });
+    expect(res.profitLoss).toBeCloseTo(100);
+    expect(res.profitLossPercent).toBeCloseTo(10);
+  });
+});
+
+describe("job heartbeat", () => {
+  it("upserts one row per job and computes staleness", () => {
+    expect(getJobHealth().stale).toBe(true); // never ran
+
+    recordJobRun("heartbeat");
+    recordJobRun("refresh", "error", "boom");
+    recordJobRun("refresh"); // recovers
+    const health = getJobHealth();
+    expect(health.jobs).toHaveLength(2);
+    expect(health.jobs.find((j) => j.job === "refresh")?.status).toBe("ok");
+    expect(health.heartbeatAgeMinutes).toBe(0);
+    expect(health.stale).toBe(false);
+  });
+});
+
+describe("retention", () => {
+  it("prunes old rows but keeps each ticker's latest, and thins old scores per day", () => {
+    const db = getDb();
+    for (const [ticker, at] of [
+      ["AAPL", daysAgo(30)],
+      ["AAPL", daysAgo(1)],
+      ["GHOST", daysAgo(40)],
+      ["GHOST", daysAgo(20)],
+    ] as const)
+      db.insert(schema.marketPriceSnapshots).values({ ticker, source: "manual", capturedAt: at }).run();
+
+    const score = (at: string) => ({
+      ticker: "AAPL",
+      overallScore: 5,
+      valuationScore: 5,
+      momentumScore: 5,
+      catalystScore: 5,
+      riskScore: 5,
+      sentimentScore: 5,
+      recommendation: "hold",
+      calculatedAt: at,
+    });
+    for (const at of [daysAgo(45, 9), daysAgo(45, 15), daysAgo(2, 9)])
+      db.insert(schema.stockScores).values(score(at)).run();
+
+    const res = runRetention();
+    expect(res.snapshotsDeleted).toBe(2); // AAPL@30d and GHOST@40d
+    expect(res.scoresThinned).toBe(1); // old day thinned to its last row
+
+    const snaps = db.select().from(schema.marketPriceSnapshots).all();
+    expect(snaps.map((s) => s.ticker).sort()).toEqual(["AAPL", "GHOST"]); // latest per ticker survives
+    const scores = db.select().from(schema.stockScores).all();
+    expect(scores).toHaveLength(2);
+    expect(scores.some((s) => s.calculatedAt === daysAgo(45, 15))).toBe(true); // kept the day's last
+  });
+});
+
+describe("config round-trip", () => {
+  it("persists partial saves merged over defaults", () => {
+    expect(loadConfig().notifyEnabled).toBe(false);
+    saveConfig({ notifyEnabled: true, ntfyTopic: "my-topic" });
+    const cfg = loadConfig();
+    expect(cfg.notifyEnabled).toBe(true);
+    expect(cfg.ntfyTopic).toBe("my-topic");
+    expect(cfg.riskProfile).toBe("balanced"); // untouched default survives
+  });
+});
