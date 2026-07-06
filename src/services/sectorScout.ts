@@ -9,7 +9,7 @@ import {
   type CandidateAnalysis,
 } from "./discoveryAgent";
 import { completeJson, extractJson, getProvider } from "./llm";
-import { errorMessage, nowIso } from "@/lib/util";
+import { errorMessage, mapPool, nowIso } from "@/lib/util";
 import { edgeCatalystsForTicker } from "./catalystEdge";
 import {
   generateCompanyThesisReport,
@@ -295,6 +295,9 @@ function thesisAdjustedScore(marketScore: number, thesisScore: number | null | u
   return thesisScore == null ? marketScore : marketScore * 0.65 + thesisScore * 0.35;
 }
 
+/** Candidate analyses in flight at once (matches the price-refresh pool size). */
+const SCAN_CONCURRENCY = 5;
+
 /**
  * Scan an industry end-to-end and persist the picks. Re-running an industry
  * refreshes its un-acted ("new") picks while preserving any you've already
@@ -341,9 +344,21 @@ export async function runSectorScan(opts: {
     thesis: CompanyThesisReport | null;
     thesisReportId: number | null;
   }[] = [];
-  for (const ticker of expansion.tickers) {
+  // Analyze in parallel (bars/price fetches dominate scan time), then gate and
+  // research sequentially in expansion order so the thesis budget still goes to
+  // the most pure-play names first.
+  const analyses = await mapPool(expansion.tickers, SCAN_CONCURRENCY, async (ticker) => {
     try {
-      const a = await analyzeTicker(ticker, alpaca, cfg);
+      return await analyzeTicker(ticker, alpaca, cfg);
+    } catch (e) {
+      result.errors.push(`${ticker}: ${errorMessage(e)}`);
+      return null;
+    }
+  });
+  for (let i = 0; i < expansion.tickers.length; i++) {
+    const ticker = expansion.tickers[i];
+    try {
+      const a = analyses[i];
       if (!a) continue; // no real bars/price -> validation drop
       result.scanned++;
 

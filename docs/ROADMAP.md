@@ -49,7 +49,7 @@ work, then Tier 3 by taste.
   flows). `better-sqlite3` supports `:memory:`; make `getDb()` injectable and
   add a suite for the write paths.
 
-- [ ] **7. Parallelize Sector Scout scans** *(small)*
+- [x] **7. Parallelize Sector Scout scans** *(small — done)*
   `runSectorScan` analyzes tickers sequentially — 24 candidates × network
   fetches makes scans slow. `mapPool` already exists in `marketData.ts`; move it
   to `lib/util.ts` and use it (respect the thesis budget).

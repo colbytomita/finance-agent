@@ -11,7 +11,7 @@ import { evaluateTrade } from "./tradeScoring";
 import { detectSetups } from "./setupDetection";
 import { isCatalystStale } from "./catalysts";
 import { earningsSignalForTicker } from "./earnings";
-import { errorMessage, nowIso } from "@/lib/util";
+import { errorMessage, mapPool, nowIso } from "@/lib/util";
 import { latestSnapshot } from "@/lib/queries";
 
 // Orchestrates: fetch prices/bars -> persist snapshots -> recompute
@@ -88,26 +88,6 @@ export interface RefreshResult {
 // extended-hours data this round rather than blocking the whole refresh.
 const PRICE_REFRESH_CONCURRENCY = 5;
 const YAHOO_PHASE_BUDGET_MS = 75_000;
-
-/** Run `fn` over `items` with at most `limit` in flight; preserves input order. */
-async function mapPool<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const idx = next++;
-      results[idx] = await fn(items[idx]);
-    }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
-  );
-  return results;
-}
 
 export async function refreshPrices(opts: { useYahoo?: boolean } = {}): Promise<RefreshResult[]> {
   const cfg = loadConfig();
