@@ -32,25 +32,27 @@ export default function RootLayout({
       <body className="min-h-screen">
         <header className="sticky top-0 z-20 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
           <div className="mx-auto flex max-w-screen-2xl items-center gap-6 px-4 py-2">
-            <Link href="/" className="text-sm font-bold tracking-tight text-zinc-100">
+            <Link
+              href="/"
+              className="shrink-0 whitespace-nowrap text-sm font-bold tracking-tight text-zinc-100"
+            >
               Colby <span className="text-sky-400">Tomita</span>
             </Link>
-            <nav className="flex gap-4 text-sm">
+            {/* min-w-0 + overflow-x-auto lets the nav scroll horizontally when it's
+                too wide for the row, so tabs never wrap onto a second line. */}
+            <nav className="flex min-w-0 flex-1 gap-4 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {NAV.map((n) => (
                 <Link
                   key={n.href}
                   href={n.href}
-                  className="text-zinc-400 hover:text-zinc-100"
+                  className="shrink-0 whitespace-nowrap text-zinc-400 hover:text-zinc-100"
                 >
                   {n.label}
                 </Link>
               ))}
             </nav>
-            <span className="ml-auto flex items-center gap-4">
+            <span className="flex shrink-0 items-center gap-4">
               <JobHealthBadge />
-              <span className="text-[11px] text-zinc-600">
-                Decision support only · Not financial advice · No auto-trading
-              </span>
             </span>
           </div>
         </header>
