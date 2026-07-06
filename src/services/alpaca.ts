@@ -80,6 +80,8 @@ export interface AlpacaOrder {
   filledAvgPrice: number | null;
   filledQty: number | null;
   submittedAt: string | null;
+  /** Bracket/OTO exit legs (stop-loss / take-profit), when fetched nested. */
+  legs: AlpacaOrder[] | null;
 }
 
 export class AlpacaError extends Error {
@@ -322,6 +324,9 @@ export class AlpacaService {
       filledAvgPrice: num(o.filled_avg_price),
       filledQty: num(o.filled_qty),
       submittedAt: (o.submitted_at as string) ?? null,
+      legs: Array.isArray(o.legs)
+        ? (o.legs as Record<string, unknown>[]).map((leg) => this.parseOrder(leg))
+        : null,
     };
   }
 
@@ -343,11 +348,11 @@ export class AlpacaService {
     };
   }
 
-  /** Fetch a single order's current state (fill price/qty, status). */
+  /** Fetch a single order's current state (fill price/qty, status), with bracket legs. */
   async getOrder(orderId: string): Promise<AlpacaOrder> {
     const o = await this.request<Record<string, unknown>>(
       this.tradingBase,
-      `/v2/orders/${encodeURIComponent(orderId)}`,
+      `/v2/orders/${encodeURIComponent(orderId)}?nested=true`,
     );
     return this.parseOrder(o);
   }

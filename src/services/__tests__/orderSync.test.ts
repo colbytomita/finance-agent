@@ -18,6 +18,7 @@ function order(overrides: Partial<AlpacaOrder>): AlpacaOrder {
     filledAvgPrice: null,
     filledQty: null,
     submittedAt: "2026-07-01T14:00:00Z",
+    legs: null,
     ...overrides,
   };
 }
@@ -105,5 +106,58 @@ describe("planOrderSync", () => {
     // Shouldn't happen per the API, but must not crash or invent numbers.
     const action = planOrderSync(trade(), order({ status: "filled" }));
     expect(action).toEqual({ kind: "status", orderStatus: "filled" });
+  });
+
+  describe("bracket exit legs", () => {
+    const filledParent = (legs: AlpacaOrder[]) =>
+      order({ status: "filled", filledAvgPrice: 400, filledQty: 10, orderClass: "bracket", legs });
+
+    it("closes the trade when the stop-loss leg fills", () => {
+      const action = planOrderSync(
+        trade({ brokerOrderStatus: "filled" }),
+        filledParent([
+          order({ id: "leg-tp", type: "limit", status: "canceled", filledAvgPrice: null }),
+          order({ id: "leg-sl", type: "stop", status: "filled", filledAvgPrice: 380.25, filledQty: 10 }),
+        ]),
+      );
+      expect(action).toEqual({ kind: "close", exitPrice: 380.25, legType: "stop_loss" });
+    });
+
+    it("closes the trade when the take-profit leg fills", () => {
+      const action = planOrderSync(
+        trade({ brokerOrderStatus: "filled" }),
+        filledParent([
+          order({ id: "leg-tp", type: "limit", status: "filled", filledAvgPrice: 440.5, filledQty: 10 }),
+          order({ id: "leg-sl", type: "stop", status: "new", filledAvgPrice: null }),
+        ]),
+      );
+      expect(action).toEqual({ kind: "close", exitPrice: 440.5, legType: "take_profit" });
+    });
+
+    it("stays quiet while exit legs are still working", () => {
+      const action = planOrderSync(
+        trade({ brokerOrderStatus: "filled" }),
+        filledParent([
+          order({ id: "leg-tp", type: "limit", status: "new" }),
+          order({ id: "leg-sl", type: "stop", status: "held" }),
+        ]),
+      );
+      expect(action).toEqual({ kind: "none" });
+    });
+
+    it("reconciles the entry fill before acting on a filled leg", () => {
+      // Entry correction takes priority; the close happens on the next poll.
+      const action = planOrderSync(
+        trade(),
+        order({
+          status: "filled",
+          filledAvgPrice: 399.5,
+          filledQty: 10,
+          orderClass: "bracket",
+          legs: [order({ id: "leg-sl", type: "stop", status: "filled", filledAvgPrice: 380, filledQty: 10 })],
+        }),
+      );
+      expect(action).toEqual({ kind: "fill", orderStatus: "filled", entryPrice: 399.5, shares: 10 });
+    });
   });
 });
