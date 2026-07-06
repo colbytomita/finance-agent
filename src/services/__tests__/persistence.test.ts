@@ -5,6 +5,7 @@ import { upsertWatchlistItem } from "../watchlist";
 import { emitAlert } from "../alerts";
 import { closeTrade } from "../trades";
 import { recordJobRun, getJobHealth } from "../jobHealth";
+import { addMention, findSameDayMention } from "../entityMentions";
 import { runRetention } from "../retention";
 import { saveConfig, loadConfig } from "@/lib/config";
 
@@ -155,6 +156,15 @@ describe("retention", () => {
     const scores = db.select().from(schema.stockScores).all();
     expect(scores).toHaveLength(2);
     expect(scores.some((s) => s.calculatedAt === daysAgo(45, 15))).toBe(true); // kept the day's last
+  });
+});
+
+describe("mention duplicate lookup", () => {
+  it("finds a same entity/ticker/day mention case-insensitively", () => {
+    addMention({ entity: "Donald Trump", ticker: "djt", eventDate: "2026-07-01" });
+    expect(findSameDayMention("donald trump", "DJT", "2026-07-01")?.entity).toBe("Donald Trump");
+    expect(findSameDayMention("Donald Trump", "DJT", "2026-07-02")).toBeNull();
+    expect(findSameDayMention("Elon Musk", "DJT", "2026-07-01")).toBeNull();
   });
 });
 
