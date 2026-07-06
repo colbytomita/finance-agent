@@ -78,5 +78,5 @@ work, then Tier 3 by taste.
 ## Tier 4 — When bored
 
 - [ ] **12. Split `marketData.ts`** (only if it keeps growing)
-- [ ] **13. `/status` page** — integrations health, last job runs, DB size, bar coverage per ticker
-- [ ] **14. Backup story** — daily `VACUUM INTO` copy of the SQLite file in maintenance
+- [x] **13. `/status` page** — integrations health, last job runs, DB size, bar coverage per ticker *(done)*
+- [x] **14. Backup story** — daily `VACUUM INTO` copy of the SQLite file in maintenance *(done)*

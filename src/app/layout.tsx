@@ -20,6 +20,7 @@ const NAV = [
   { href: "/catalysts", label: "Catalysts" },
   { href: "/events", label: "Catalyst Edge" },
   { href: "/universe", label: "Research Universe" },
+  { href: "/status", label: "Status" },
   { href: "/settings", label: "Settings" },
 ];
 
