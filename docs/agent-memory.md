@@ -58,16 +58,25 @@ stock-detail timeline, and the route smoke tests.
 
 ## Likely Next Work
 
+All of the 2026-07-05 follow-ups landed the same day: Yahoo news now comes
+from the public per-ticker RSS feed (browser scrape is the fallback; top-5
+entries only, so repeated scans don't crawl the feed), `refreshBars` and
+`ensureBarsCover` fall back to Yahoo chart bars (source "yahoo") so keyless
+setups get indicators/setups/event studies, and alert notifications queue
+into a 3s burst digest (`queueAlertNotification`/`buildDigest`;
+`flushQueuedNotifications` for tests/shutdown).
+
+Remaining ideas, none urgent:
+
 - Roadmap #12 (split `marketData.ts`) only if it starts growing again.
-- The Yahoo news scanner (`scanYahooNews`) still drives the headless browser
-  and is layout-fragile — consider an HTTP/RSS replacement like the quote path.
-- Notifications currently fire on every new alert insert from any process;
-  consider batching or digesting if they get noisy at market open.
-- `refreshPrices` stores bars only via Alpaca (`fullRefresh`); tracked tickers
-  without Alpaca get quotes but no stored bars — could reuse
-  `getYahooDailyBars` in the bar-refresh path for keyless setups.
-- Bulk import caps at 50 tickers per request and runs serially per batch of 5;
-  fine for pastes, revisit if used for large lists.
+- Bulk import caps at 50 tickers per request and runs 5 in flight; fine for
+  pastes, revisit if used for large lists.
+- The dependabot moderate alert is esbuild via drizzle-kit's dev-only
+  dependency chain — no runtime exposure; wait for upstream rather than
+  downgrade drizzle-kit.
+- The earnings fetch and news scan still run only when `yahooBrowserEnabled`
+  is on (scheduler gates), even though both are HTTP-first now — the setting
+  could be renamed/split into a general "Yahoo connector" toggle.
 
 ## Standard Commands
 
