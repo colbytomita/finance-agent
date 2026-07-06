@@ -17,6 +17,7 @@ interface IngestResult {
   persisted: number;
   catalystsAdded: number;
   skipped: number;
+  skippedItems: { title: string; reason: string }[];
   bySource: Record<string, number>;
   errors: string[];
   generatedBy: "llm" | "rules" | "mixed" | "none";
@@ -64,6 +65,23 @@ export function IngestButton() {
                 .map(([source, count]) => `${source} ${count}`)
                 .join(" · ")}
             </div>
+          )}
+          {result.skippedItems?.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-zinc-400">
+                Why {result.skipped} skipped
+                {result.skipped > result.skippedItems.length
+                  ? ` (first ${result.skippedItems.length})`
+                  : ""}
+              </summary>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {result.skippedItems.map((s, i) => (
+                  <li key={i}>
+                    <span className="text-zinc-400">{s.title}</span> — {s.reason}
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
           {result.errors.length > 0 && (
             <details className="mt-1">
