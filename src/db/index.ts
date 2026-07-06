@@ -358,6 +358,12 @@ CREATE TABLE IF NOT EXISTS ingestion_runs (
   ran_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_ingestion_runs_time ON ingestion_runs (ran_at DESC);
+CREATE TABLE IF NOT EXISTS job_runs (
+  job TEXT PRIMARY KEY,
+  last_run_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ok',
+  message TEXT
+);
 `;
 
 let _db: BetterSQLite3Database<typeof schema> | null = null;

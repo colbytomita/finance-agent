@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { JobHealthBadge } from "@/components/JobHealthBadge";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -44,8 +45,11 @@ export default function RootLayout({
                 </Link>
               ))}
             </nav>
-            <span className="ml-auto text-[11px] text-zinc-600">
-              Decision support only · Not financial advice · No auto-trading
+            <span className="ml-auto flex items-center gap-4">
+              <JobHealthBadge />
+              <span className="text-[11px] text-zinc-600">
+                Decision support only · Not financial advice · No auto-trading
+              </span>
             </span>
           </div>
         </header>
