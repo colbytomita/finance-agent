@@ -1,7 +1,8 @@
 // Outbound alert notifications (roadmap #9): the alerts feed only shows when
 // you look at it, so high-severity alerts (stop-loss proximity, exit
 // recommendations) are also pushed out-of-app. Two zero-to-low-setup channels:
-//   - desktop: native macOS notification via osascript (no setup at all)
+//   - desktop: native notification — macOS via osascript, Windows via a
+//     PowerShell WinRT toast (roadmap #15); no setup on either
 //   - ntfy:    POST to https://ntfy.sh/<topic>; subscribe on your phone/browser
 // Both are best-effort and never throw — a notification failure must never
 // break alert generation. emitAlert() calls notifyAlert() on every new insert.
@@ -48,15 +49,88 @@ async function sendNtfy(
   }
 }
 
+/** XML-escape text bound for a toast <text> node (also strips PS-quote hazards). */
+const xmlEscape = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+
+// An AppUserModelID that exists on every Windows install (powershell.exe's
+// Start-Menu entry) — toasts need a registered AUMID to display, and reusing
+// this one avoids any per-app registration. The toast shows as "Windows
+// PowerShell"; the first <text> line carries the real app name.
+const WINDOWS_TOAST_APP_ID =
+  "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe";
+
+export interface DesktopCommand {
+  file: string;
+  args: string[];
+}
+
+/**
+ * Build the platform-native desktop-notification command, or null when the
+ * platform has none. Pure — unit-tested; sendDesktop just executes the result.
+ */
+export function desktopCommandFor(
+  platform: NodeJS.Platform,
+  severity: AlertSeverity,
+  message: string,
+  subtitle: string,
+): DesktopCommand | null {
+  if (platform === "darwin") {
+    // JSON.stringify gives AppleScript-compatible quoting for quotes/backslashes.
+    const script =
+      `display notification ${JSON.stringify(message)} ` +
+      `with title "Finance Agent" subtitle ${JSON.stringify(subtitle)}` +
+      (severity === "critical" ? ` sound name "Sosumi"` : "");
+    return { file: "osascript", args: ["-e", script] };
+  }
+  if (platform === "win32") {
+    // Windows PowerShell 5.1 (always present) — pwsh 7 dropped the WinRT
+    // projection this relies on. All dynamic text is XML-escaped, which leaves
+    // no quote characters, so the single-quoted PS string below can't be broken
+    // out of; -EncodedCommand sidesteps shell quoting entirely.
+    const toastXml =
+      `<toast><visual><binding template="ToastGeneric">` +
+      `<text>Finance Agent</text>` +
+      `<text>${xmlEscape(subtitle)}</text>` +
+      `<text>${xmlEscape(message)}</text>` +
+      `</binding></visual>` +
+      (severity === "critical"
+        ? `<audio src="ms-winsoundevent:Notification.Default"/>`
+        : `<audio silent="true"/>`) +
+      `</toast>`;
+    const script = [
+      `[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null`,
+      `[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null`,
+      `$xml = New-Object Windows.Data.Xml.Dom.XmlDocument`,
+      `$xml.LoadXml('${toastXml}')`,
+      `$toast = New-Object Windows.UI.Notifications.ToastNotification $xml`,
+      `[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('${WINDOWS_TOAST_APP_ID}').Show($toast)`,
+    ].join("; ");
+    return {
+      file: "powershell.exe",
+      args: [
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
+        "-EncodedCommand",
+        Buffer.from(script, "utf16le").toString("base64"),
+      ],
+    };
+  }
+  return null;
+}
+
 function sendDesktop(severity: AlertSeverity, message: string, subtitle: string): boolean {
-  if (process.platform !== "darwin") return false;
-  // JSON.stringify gives AppleScript-compatible quoting for quotes/backslashes.
-  const script =
-    `display notification ${JSON.stringify(message)} ` +
-    `with title "Finance Agent" subtitle ${JSON.stringify(subtitle)}` +
-    (severity === "critical" ? ` sound name "Sosumi"` : "");
-  execFile("osascript", ["-e", script], () => {
-    /* best effort */
+  const cmd = desktopCommandFor(process.platform, severity, message, subtitle);
+  if (!cmd) return false;
+  execFile(cmd.file, cmd.args, () => {
+    /* best effort — a missing binary or WinRT failure must never surface */
   });
   return true;
 }

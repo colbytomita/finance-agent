@@ -30,7 +30,7 @@ operational resilience, then Tier 3 features by taste.
 
 ## Tier 1 — Make existing features real
 
-- [ ] **15. Windows desktop notifications** *(small)*
+- [x] **15. Windows desktop notifications** *(small — done)*
   **Why:** `sendDesktop` in `src/services/notifications.ts` bails unless
   `process.platform === "darwin"` — but this app runs on Windows 11, so the
   "desktop" half of alert notifications (roadmap #9) silently does nothing on

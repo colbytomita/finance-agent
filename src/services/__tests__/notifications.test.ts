@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDigest, shouldNotify, type QueuedAlert } from "../notifications";
+import { buildDigest, desktopCommandFor, shouldNotify, type QueuedAlert } from "../notifications";
 
 describe("shouldNotify", () => {
   it("is off when notifications are disabled", () => {
@@ -51,5 +51,42 @@ describe("buildDigest", () => {
     expect(lines).toHaveLength(9); // 8 alerts + overflow line
     expect(lines.at(-1)).toBe("…and 4 more");
     expect(d.subtitle).toBe("12 alerts");
+  });
+});
+
+describe("desktopCommandFor", () => {
+  const decodeEncodedCommand = (args: string[]): string => {
+    const b64 = args[args.indexOf("-EncodedCommand") + 1];
+    return Buffer.from(b64, "base64").toString("utf16le");
+  };
+
+  it("darwin: osascript with quoted message, sound only when critical", () => {
+    const cmd = desktopCommandFor("darwin", "critical", 'stop "hit"', "CRITICAL · MSFT");
+    expect(cmd?.file).toBe("osascript");
+    expect(cmd?.args[1]).toContain('display notification "stop \\"hit\\""');
+    expect(cmd?.args[1]).toContain("Sosumi");
+    expect(desktopCommandFor("darwin", "warning", "near stop", "s")?.args[1]).not.toContain("Sosumi");
+  });
+
+  it("win32: powershell toast with all dynamic text XML-escaped", () => {
+    const hostile = `<b>&'break"out`;
+    const cmd = desktopCommandFor("win32", "warning", hostile, "WARNING · NVDA");
+    expect(cmd?.file).toBe("powershell.exe");
+    expect(cmd?.args).toContain("-EncodedCommand");
+    const script = decodeEncodedCommand(cmd!.args);
+    expect(script).toContain("ToastNotificationManager");
+    expect(script).toContain("&lt;b&gt;&amp;&apos;break&quot;out");
+    expect(script).not.toContain(hostile); // raw text never lands in the script
+    expect(script).toContain('<audio silent="true"/>'); // no sound below critical
+  });
+
+  it("win32: critical toast plays a sound", () => {
+    const script = decodeEncodedCommand(desktopCommandFor("win32", "critical", "stop hit", "CRITICAL")!.args);
+    expect(script).toContain("ms-winsoundevent:Notification.Default");
+    expect(script).not.toContain('silent="true"');
+  });
+
+  it("returns null on platforms without a desktop channel", () => {
+    expect(desktopCommandFor("linux", "critical", "m", "s")).toBeNull();
   });
 });
