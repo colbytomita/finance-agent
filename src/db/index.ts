@@ -367,14 +367,18 @@ CREATE TABLE IF NOT EXISTS job_runs (
 `;
 
 let _db: BetterSQLite3Database<typeof schema> | null = null;
+let _sqlite: InstanceType<typeof Database> | null = null;
 
 export function getDb(): BetterSQLite3Database<typeof schema> {
   if (_db) return _db;
   const dbPath = process.env.DATABASE_PATH || "./data/finance-agent.db";
-  const resolved = path.resolve(process.cwd(), dbPath);
-  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  // ":memory:" gives tests a throwaway in-process database with the full schema.
+  const inMemory = dbPath === ":memory:";
+  const resolved = inMemory ? dbPath : path.resolve(process.cwd(), dbPath);
+  if (!inMemory) fs.mkdirSync(path.dirname(resolved), { recursive: true });
   const sqlite = new Database(resolved);
-  sqlite.pragma("journal_mode = WAL");
+  _sqlite = sqlite;
+  if (!inMemory) sqlite.pragma("journal_mode = WAL");
   sqlite.exec(DDL);
   // Additive migrations for existing databases (the DDL above only creates
   // missing tables, never alters existing ones).
@@ -403,6 +407,17 @@ export function getDb(): BetterSQLite3Database<typeof schema> {
   }
   _db = drizzle(sqlite, { schema });
   return _db;
+}
+
+/**
+ * Close and forget the cached connection so the next getDb() re-opens it.
+ * Test-harness hook: with DATABASE_PATH=":memory:" each reset yields a fresh,
+ * fully-migrated database. Safe (if pointless) to call in production code.
+ */
+export function resetDbForTests(): void {
+  _sqlite?.close();
+  _sqlite = null;
+  _db = null;
 }
 
 export { schema };

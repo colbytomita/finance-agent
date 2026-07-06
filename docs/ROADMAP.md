@@ -43,7 +43,7 @@ work, then Tier 3 by taste.
   try/catch `ALTER`s for migrations. Migrate to generated migrations; write the
   schema once. Do this *before* the next feature that adds tables.
 
-- [ ] **6. Integration-test harness with in-memory SQLite** *(medium)*
+- [x] **6. Integration-test harness with in-memory SQLite** *(medium — done)*
   All tests are pure functions — zero coverage on the persistence layer
   (upserts, status preservation on re-scan, ingestion logging, accept/dismiss
   flows). `better-sqlite3` supports `:memory:`; make `getDb()` injectable and
