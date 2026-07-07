@@ -26,6 +26,9 @@ export interface AppConfig {
   // fallback (the browser layer itself is gated by env YAHOO_BROWSER_ENABLED).
   yahooEnabled: boolean;
   agentMinScore: number; // discovery agent proposes candidates scoring >= this (1–10)
+  // When on, a cautious broad-market regime (SPY below its 50-day average)
+  // raises the effective Agent Picks bar by 1 — a nudge, never a hard block.
+  regimeFilterEnabled: boolean;
   portfolioWatchlistRecLimit: number; // max "add to watchlist" suggestions from holdings shown at once (0 hides)
   // Sector Scout scheduled auto-scan. When enabled, daily maintenance re-scans
   // each favorite industry (reusing agentMinScore as the threshold).
@@ -83,6 +86,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   refreshIntervalClosedSec: 2400,
   yahooEnabled: true,
   agentMinScore: 7,
+  regimeFilterEnabled: false,
   portfolioWatchlistRecLimit: 3,
   sectorScoutScanEnabled: false,
   sectorScoutIndustries: [],

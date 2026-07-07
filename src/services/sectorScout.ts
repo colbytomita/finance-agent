@@ -17,6 +17,7 @@ import {
 } from "./companyThesisScout";
 import { scoreRowValues } from "./scoring";
 import { upsertWatchlistItem } from "./watchlist";
+import { getMarketRegime } from "./marketRegime";
 
 // Sector Scout: on-demand, industry-targeted discovery.
 //
@@ -402,6 +403,7 @@ export async function runSectorScan(opts: {
   // Refresh: drop this industry's un-acted picks, then upsert the current set.
   // Existing "added"/"dismissed" rows survive (their status is preserved on conflict).
   const now = nowIso();
+  const regime = getMarketRegime(); // shared broad-market context, appended per pick
   db.delete(schema.sectorScoutPicks)
     .where(and(eq(schema.sectorScoutPicks.industry, industry), eq(schema.sectorScoutPicks.status, "new")))
     .run();
@@ -416,7 +418,7 @@ export async function runSectorScan(opts: {
       drawdownPercent: a.drawdown?.drawdownFrom52wHighPercent ?? null,
       suggestedBuyLow: low,
       suggestedBuyHigh: high,
-      summary: brief.summary,
+      summary: `${brief.summary} Market regime: ${regime.headline}.`,
       bullCase: brief.bullCase,
       bearCase: brief.bearCase,
       keyCatalysts: JSON.stringify(brief.keyCatalysts),

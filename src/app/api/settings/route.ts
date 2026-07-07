@@ -20,6 +20,7 @@ const settingsSchema = z
     refreshIntervalClosedSec: z.coerce.number().min(300).max(86400),
     yahooEnabled: z.coerce.boolean(),
     agentMinScore: z.coerce.number().min(1).max(10),
+    regimeFilterEnabled: z.coerce.boolean(),
     portfolioWatchlistRecLimit: z.coerce.number().int().min(0).max(50),
     sectorScoutScanEnabled: z.coerce.boolean(),
     sectorScoutIndustries: z.array(z.string().trim().min(1).max(80)).max(20),

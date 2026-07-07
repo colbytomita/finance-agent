@@ -14,6 +14,7 @@ import { fmtMoney, fmtPct, fmtScore } from "@/lib/format";
 import { Freshness, Pct, SeverityDot } from "@/components/badges";
 import { BuyZoneInsight, SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { RefreshButton } from "@/components/RefreshButton";
+import { MarketRegimeBanner } from "@/components/MarketRegimeBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,8 @@ export default function SummaryPage() {
           Data freshness: <Freshness capturedAt={newestSnapshot} staleMinutes={cfg.staleDataMinutes} />
         </span>
       </div>
+
+      <MarketRegimeBanner />
 
       {empty && (
         <div className="card text-sm text-zinc-400">
