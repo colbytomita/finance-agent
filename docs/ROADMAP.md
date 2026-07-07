@@ -203,7 +203,7 @@ operational resilience, then Tier 3 features by taste.
   one alert; unwatched → none; second identical run → no duplicate. Live:
   star an entity, run ingestion, see the alert in the feed.
 
-- [ ] **25. Sector Scout industry trend history** *(medium)*
+- [x] **25. Sector Scout industry trend history** *(medium — done)*
   **Why:** `sector_scans` logs every run (industry, timestamp, counts) and
   picks carry scores, but nothing shows how an industry's scan results move
   across time — "is this theme heating up?" is exactly what a re-scanned

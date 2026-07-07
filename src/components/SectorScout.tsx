@@ -3,9 +3,64 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { IndustryGuide } from "@/services/sectorScout";
+import type { IndustryGuide, IndustryScanPoint } from "@/services/sectorScout";
 import type { IndustryPerformanceResult } from "@/services/signalPerformance";
 import { useApiAction } from "./useApiAction";
+
+/**
+ * Mean-pick-score-over-time sparkline for a focused industry (roadmap #25). With
+ * fewer than two scored runs there's no trend to draw yet, so it says so instead
+ * of over-reading one point.
+ */
+function ScanTrend({ trend }: { trend: IndustryScanPoint[] }) {
+  const pts = trend.filter((p): p is IndustryScanPoint & { meanPickScore: number } => p.meanPickScore != null);
+  const w = 140;
+  const h = 30;
+  const header = (
+    <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-300">Scan trend</span>
+  );
+  if (pts.length < 2) {
+    return (
+      <div className="rounded border border-zinc-800 bg-zinc-950/40 p-2">
+        {header}
+        <p className="mt-1 text-xs text-zinc-500">
+          {trend.length === 0
+            ? "No scans recorded yet — re-scan to start a history."
+            : `${trend.length} run${trend.length === 1 ? "" : "s"} so far — need at least 2 scored runs to show a trend.`}
+        </p>
+      </div>
+    );
+  }
+  const vals = pts.map((p) => p.meanPickScore);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const span = hi - lo || 1;
+  const x = (i: number) => (i / (pts.length - 1)) * (w - 4) + 2;
+  const y = (v: number) => h - 3 - ((v - lo) / span) * (h - 6);
+  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.meanPickScore).toFixed(1)}`).join(" ");
+  const first = vals[0];
+  const latest = vals[vals.length - 1];
+  const up = latest >= first;
+  return (
+    <div className="rounded border border-zinc-800 bg-zinc-950/40 p-2">
+      <div className="flex items-center gap-2">
+        {header}
+        <span className="text-[10px] text-zinc-600">mean pick score · {pts.length} scored runs</span>
+        <span className={`ml-auto text-xs tabular-nums ${up ? "pos" : "neg"}`}>
+          {latest.toFixed(1)} {up ? "▲" : "▼"}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="mt-1 h-8 w-36" role="img" aria-label="mean pick score trend">
+        <path d={line} fill="none" stroke={up ? "#34d399" : "#f87171"} strokeWidth={1.5} />
+        {pts.map((p, i) => (
+          <circle key={i} cx={x(i)} cy={y(p.meanPickScore)} r={1.4} fill={up ? "#34d399" : "#f87171"}>
+            <title>{`${p.ranAt.slice(0, 10)} · mean ${p.meanPickScore.toFixed(2)} · ${p.proposed} pick(s)`}</title>
+          </circle>
+        ))}
+      </svg>
+    </div>
+  );
+}
 
 /** Response shape of POST /api/sector-scout, as far as the widgets need it. */
 interface ScanResponse {
@@ -105,6 +160,7 @@ export function IndustryExplorer({
   autoScanEnabled,
   performance,
   performanceGeneratedAt,
+  trend = [],
 }: {
   guides: IndustryGuide[];
   selected: string; // "" = all industries (no focus)
@@ -112,6 +168,7 @@ export function IndustryExplorer({
   autoScanEnabled: boolean;
   performance: IndustryPerformanceResult | null; // focused theme's backtest row
   performanceGeneratedAt: string | null;
+  trend?: IndustryScanPoint[]; // focused theme's historical scans (oldest first)
 }) {
   const router = useRouter();
   const [navigating, startNav] = useTransition();
@@ -284,6 +341,8 @@ export function IndustryExplorer({
               </p>
             )}
           </div>
+
+          <ScanTrend trend={trend} />
 
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-300">What shows up here</div>
