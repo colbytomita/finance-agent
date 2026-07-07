@@ -24,7 +24,7 @@ import { backfillCompanyNames } from "@/services/companyNames";
 import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers, fetchUpcomingEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
-import { runRetention } from "@/services/retention";
+import { runRetention, runSqliteHousekeeping } from "@/services/retention";
 import { recordJobRun } from "@/services/jobHealth";
 import { runBackup } from "@/services/backup";
 
@@ -227,6 +227,18 @@ async function dailyMaintenance(): Promise<void> {
         );
     } catch (e) {
       log(`retention failed: ${errorMessage(e)}`);
+    }
+    // SQLite upkeep after pruning: refresh planner stats and flush/truncate the
+    // WAL so it doesn't grow unbounded between backups.
+    try {
+      const hk = runSqliteHousekeeping();
+      log(
+        `sqlite housekeeping: optimize ${hk.optimized ? "ok" : "skipped"}, ` +
+          `wal checkpoint ${hk.walCheckpointed ? "ok" : "busy"}` +
+          (hk.walPages != null ? ` (${hk.walPages} page(s))` : ""),
+      );
+    } catch (e) {
+      log(`sqlite housekeeping failed: ${errorMessage(e)}`);
     }
     // Refresh the Signal Performance report so the Sector Scout industry
     // strip reads today's picks/scores instead of a stale manual run.

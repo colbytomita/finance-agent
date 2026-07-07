@@ -129,7 +129,7 @@ operational resilience, then Tier 3 features by taste.
   newer migrations — verify that path), original DB preserved as
   pre-restore copy.
 
-- [ ] **20. SQLite housekeeping in maintenance** *(small)*
+- [x] **20. SQLite housekeeping in maintenance** *(small — done)*
   **Why:** WAL mode plus append-heavy tables: nothing ever runs
   `PRAGMA optimize` or `wal_checkpoint(TRUNCATE)`, so the `-wal` file can grow
   unbounded between backups and query plans go unrefreshed.

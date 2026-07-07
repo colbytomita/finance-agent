@@ -6,7 +6,7 @@ import { emitAlert } from "../alerts";
 import { closeTrade } from "../trades";
 import { recordJobRun, getJobHealth } from "../jobHealth";
 import { addMention, findSameDayMention } from "../entityMentions";
-import { runRetention } from "../retention";
+import { runRetention, runSqliteHousekeeping } from "../retention";
 import {
   addCatalyst,
   upsertUpcomingEarningsCatalyst,
@@ -165,6 +165,17 @@ describe("retention", () => {
     const scores = db.select().from(schema.stockScores).all();
     expect(scores).toHaveLength(2);
     expect(scores.some((s) => s.calculatedAt === daysAgo(45, 15))).toBe(true); // kept the day's last
+  });
+});
+
+describe("sqlite housekeeping (roadmap #20)", () => {
+  it("runs PRAGMA optimize + wal_checkpoint without error on the in-memory DB", () => {
+    const hk = runSqliteHousekeeping();
+    expect(hk.optimized).toBe(true);
+    // A :memory: DB isn't in WAL mode, so the checkpoint no-ops harmlessly —
+    // the point is it doesn't throw and returns the expected shape.
+    expect(typeof hk.walCheckpointed).toBe("boolean");
+    expect(hk).toHaveProperty("walPages");
   });
 });
 
