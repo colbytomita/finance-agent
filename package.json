@@ -9,6 +9,7 @@
     "start": "next start",
     "jobs": "tsx src/jobs/scheduler.ts",
     "db:seed": "tsx src/db/seed.ts",
+    "db:restore": "tsx src/db/restore.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

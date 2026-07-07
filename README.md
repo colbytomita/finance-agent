@@ -84,6 +84,7 @@ This is a **single-user, localhost tool** — it has no authentication or CSRF p
 | `npm test` | vitest suite (pure logic + in-memory-SQLite persistence tests — 297 tests) |
 | `npm run typecheck` | strict TypeScript check |
 | `npm run db:generate` | generate a SQL migration in `drizzle/` after editing `src/db/schema.ts` |
+| `npm run db:restore -- <file>` | restore the database from a `data/backups/` file (see below); snapshots the current DB first |
 | `npm run db:seed` | optional demo data — not required; the app is designed to run on your real data |
 | `scripts/install-jobs-task.ps1` | (Windows, opt-in) register a Scheduled Task so `npm run jobs` starts at logon and restarts on failure; `uninstall-jobs-task.ps1` removes it |
 
@@ -105,6 +106,26 @@ Output is appended to `data/logs/jobs.log` (git-ignored). The task runs as your
 user with your environment (so it finds `node`/`npm` and reads `.env`). If you
 already have `npm run jobs` in a terminal, stop that one so you don't run two
 schedulers against the same database.
+
+### Restoring a backup
+
+Daily maintenance writes a `VACUUM INTO` snapshot to `data/backups/` (keeps 7).
+To roll back to one:
+
+```bash
+# 1. Stop the app first — restore refuses while the database is open.
+#    (Ctrl+C the `npm run dev` and `npm run jobs` terminals.)
+# 2. List backups and restore one (a bare filename resolves in data/backups/):
+npm run db:restore                                  # prints available backups
+npm run db:restore -- finance-agent-2026-07-05.db   # restore that day's copy
+# 3. Start the app again — it applies any newer migrations to the restored file on open.
+npm run dev
+```
+
+Before swapping the file in, the restore saves your *current* database to
+`data/backups/pre-restore-<timestamp>.db`, so a restore is always reversible.
+Restoring a backup taken before a schema change is safe: the app replays any
+newer migrations automatically the next time it opens the database.
 
 ## Architecture
 

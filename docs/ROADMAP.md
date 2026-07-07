@@ -115,7 +115,7 @@ operational resilience, then Tier 3 features by taste.
   task and letting it restart), the header badge goes green without opening a
   terminal. Uninstall removes the task cleanly.
 
-- [ ] **19. Backup restore path** *(small)*
+- [x] **19. Backup restore path** *(small — done)*
   **Why:** Daily `VACUUM INTO` backups exist (`src/services/backup.ts`, keeps
   7) but there is no documented or scripted way back — a restore under stress
   is when mistakes happen.
