@@ -229,10 +229,21 @@ interface Analysis {
   skipped: { id: number; ticker: string; eventDate: string; reason: string }[];
 }
 
-export function EntityAnalyzer({ entities }: { entities: { entity: string; count: number }[] }) {
+export function EntityAnalyzer({
+  entities,
+  watched = [],
+}: {
+  entities: { entity: string; count: number }[];
+  watched?: string[];
+}) {
   const [entity, setEntity] = useState(entities[0]?.entity ?? "");
   const { call, busy, error } = useApiAction();
+  const watchAction = useApiAction();
   const [data, setData] = useState<Analysis | null>(null);
+  const [watchedSet, setWatchedSet] = useState<Set<string>>(
+    () => new Set(watched.map((w) => w.toLowerCase())),
+  );
+  const isWatched = entity ? watchedSet.has(entity.toLowerCase()) : false;
 
   function analyze() {
     if (!entity) return;
@@ -241,6 +252,23 @@ export function EntityAnalyzer({ entities }: { entities: { entity: string; count
       refresh: false, // pure read — nothing server-rendered changes
       errorText: "analysis failed",
       onSuccess: setData,
+    });
+  }
+
+  function toggleWatch() {
+    if (!entity) return;
+    const next = !isWatched;
+    void watchAction.call("/api/events/watch", {
+      body: { entity, watched: next },
+      refresh: false,
+      errorText: "could not update watch",
+      onSuccess: () =>
+        setWatchedSet((prev) => {
+          const s = new Set(prev);
+          if (next) s.add(entity.toLowerCase());
+          else s.delete(entity.toLowerCase());
+          return s;
+        }),
     });
   }
 
@@ -263,6 +291,23 @@ export function EntityAnalyzer({ entities }: { entities: { entity: string; count
         </select>
         <button className="btn btn-primary" onClick={analyze} disabled={busy || !entity}>
           {busy ? "Analyzing…" : "Analyze"}
+        </button>
+        <button
+          type="button"
+          onClick={toggleWatch}
+          disabled={watchAction.busy || !entity}
+          title={
+            isWatched
+              ? "Watching — you'll be alerted when ingestion finds new mentions. Click to stop."
+              : "Watch — get an alert when event ingestion finds new mentions of this entity."
+          }
+          className={`rounded border px-2 py-1 text-xs ${
+            isWatched
+              ? "border-amber-700 bg-amber-950/60 text-amber-300"
+              : "border-zinc-700 text-zinc-400 hover:text-zinc-100"
+          }`}
+        >
+          {isWatched ? "★ Watching" : "☆ Watch"}
         </button>
         {error && <span className="text-xs text-red-400">{error}</span>}
       </div>

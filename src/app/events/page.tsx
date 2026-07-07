@@ -1,4 +1,5 @@
 import { listMentions, distinctEntities } from "@/services/entityMentions";
+import { listWatchedEntities } from "@/services/watchedEntities";
 import { listIngestionRuns } from "@/services/eventIngestion";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { DeleteButton } from "@/components/forms";
@@ -43,6 +44,7 @@ function skippedItems(json: string | null): { title: string; reason: string }[] 
 export default function EventsPage() {
   const mentions = listMentions();
   const entities = distinctEntities();
+  const watched = listWatchedEntities();
   const runs = listIngestionRuns();
 
   return (
@@ -127,7 +129,7 @@ export default function EventsPage() {
 
       <AddMentionForm />
 
-      <EntityAnalyzer entities={entities} />
+      <EntityAnalyzer entities={entities} watched={watched} />
 
       <section className="space-y-2">
         <h2 className="card-title">Mentions</h2>

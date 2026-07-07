@@ -8,6 +8,13 @@ import { recordJobRun, getJobHealth } from "../jobHealth";
 import { addMention, findSameDayMention } from "../entityMentions";
 import { runRetention, runSqliteHousekeeping } from "../retention";
 import {
+  watchEntity,
+  unwatchEntity,
+  isEntityWatched,
+  alertWatchedEntities,
+  type EntityMentionBatch,
+} from "../watchedEntities";
+import {
   addCatalyst,
   upsertUpcomingEarningsCatalyst,
   EARNINGS_CALENDAR_SOURCE,
@@ -165,6 +172,40 @@ describe("retention", () => {
     const scores = db.select().from(schema.stockScores).all();
     expect(scores).toHaveLength(2);
     expect(scores.some((s) => s.calculatedAt === daysAgo(45, 15))).toBe(true); // kept the day's last
+  });
+});
+
+describe("watched entities (roadmap #24)", () => {
+  const batch = (entries: [string, number, string[]][]): Map<string, EntityMentionBatch> =>
+    new Map(entries.map(([e, count, tickers]) => [e, { count, tickers: new Set(tickers) }]));
+
+  it("alerts a watched entity once, ignores unwatched, and dedupes reruns", () => {
+    watchEntity("Elon Musk");
+    const b = batch([
+      ["Elon Musk", 2, ["TSLA", "DJT"]],
+      ["Nancy Pelosi", 1, ["NVDA"]], // not watched → no alert
+    ]);
+
+    expect(alertWatchedEntities(b)).toBe(1);
+    const alerts = getDb().select().from(schema.alerts).all();
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].message).toBe("Elon Musk: 2 new mentions — DJT, TSLA");
+
+    // An identical re-run is deduped by emitAlert's 20h window.
+    expect(alertWatchedEntities(b)).toBe(0);
+    expect(getDb().select().from(schema.alerts).all()).toHaveLength(1);
+  });
+
+  it("emits nothing when no entities are watched", () => {
+    expect(alertWatchedEntities(batch([["Someone", 3, ["AAPL"]]]))).toBe(0);
+    expect(getDb().select().from(schema.alerts).all()).toHaveLength(0);
+  });
+
+  it("watch/unwatch is case-insensitive", () => {
+    watchEntity("Jerome Powell");
+    expect(isEntityWatched("JEROME POWELL")).toBe(true);
+    unwatchEntity("jerome powell");
+    expect(isEntityWatched("Jerome Powell")).toBe(false);
   });
 });
 

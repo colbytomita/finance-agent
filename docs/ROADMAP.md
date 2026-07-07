@@ -188,7 +188,7 @@ operational resilience, then Tier 3 features by taste.
   **Accept:** Stock page renders volume + markers for a real ticker; chart
   stays readable with zero events; hover shows event titles; no new deps.
 
-- [ ] **24. Entity watch + new-mention alerts** *(medium)*
+- [x] **24. Entity watch + new-mention alerts** *(medium — done)*
   **Why:** Catalyst Edge computes per-entity edge, but discovering that "an
   entity you care about said something new" still requires opening `/events`.
   The alerts + notifications rails (roadmap #9) are already there.
