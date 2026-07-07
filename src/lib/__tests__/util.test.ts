@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { clamp, errorMessage, mapPool } from "../util";
+import { clamp, errorMessage, mapPool, toCsvRow } from "../util";
+
+describe("toCsvRow", () => {
+  it("leaves simple fields unquoted and joins with commas", () => {
+    expect(toCsvRow(["AAPL", 12.5, "long"])).toBe("AAPL,12.5,long");
+  });
+
+  it("quotes fields with commas, quotes, or newlines and doubles inner quotes", () => {
+    expect(toCsvRow(["a,b", 'he said "hi"', "line1\nline2"])).toBe('"a,b","he said ""hi""","line1\nline2"');
+  });
+
+  it("renders null/undefined as empty fields", () => {
+    expect(toCsvRow(["x", null, undefined, 0, false])).toBe("x,,,0,false");
+  });
+});
 
 describe("clamp", () => {
   it("clamps into the range", () => {
