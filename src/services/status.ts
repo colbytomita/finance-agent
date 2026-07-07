@@ -26,6 +26,7 @@ export interface StatusReport {
   db: {
     path: string;
     bytes: number;
+    walBytes: number; // size of the -wal sidecar (checkpointed nightly)
     tables: { name: string; rows: number }[];
   };
   barCoverage: BarCoverage[];
@@ -66,6 +67,7 @@ export function getStatusReport(yahooEnabled: boolean): StatusReport {
   ].sort((a, b) => a.ticker.localeCompare(b.ticker));
 
   const p = dbPath();
+  const sizeOf = (f: string) => (fs.existsSync(f) ? fs.statSync(f).size : 0);
   return {
     integrations: {
       ...integrationsStatus(),
@@ -74,7 +76,7 @@ export function getStatusReport(yahooEnabled: boolean): StatusReport {
       yahooBrowserFallback: process.env.YAHOO_BROWSER_ENABLED !== "false",
     },
     jobs: getJobHealth(),
-    db: { path: p, bytes: fs.existsSync(p) ? fs.statSync(p).size : 0, tables },
+    db: { path: p, bytes: sizeOf(p), walBytes: sizeOf(`${p}-wal`), tables },
     barCoverage,
     backups: listBackups(),
   };

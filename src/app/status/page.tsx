@@ -76,8 +76,12 @@ export default function StatusPage() {
           <h2 className="card-title">Database</h2>
           <p className="text-sm text-zinc-300">
             {fmtBytes(s.db.bytes)} · {totalRows.toLocaleString()} rows
+            <span className="text-zinc-500"> · WAL {fmtBytes(s.db.walBytes)}</span>
           </p>
-          <p className="mb-2 text-[11px] text-zinc-600">{s.db.path}</p>
+          <p className="mb-2 text-[11px] text-zinc-600">
+            {s.db.path}
+            <span className="ml-1 text-zinc-700">· WAL flushed nightly (wal_checkpoint)</span>
+          </p>
           <div className="max-h-56 overflow-y-auto">
             <table className="data-table">
               <thead>

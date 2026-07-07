@@ -75,3 +75,46 @@ export function runRetention(): RetentionResult {
 
   return { snapshotsDeleted, drawdownsDeleted, scoreHistoryDeleted, scoresThinned };
 }
+
+export interface HousekeepingResult {
+  optimized: boolean;
+  walCheckpointed: boolean;
+  walPages: number | null; // pages that were in the WAL before the checkpoint
+  walPagesCheckpointed: number | null;
+}
+
+/**
+ * SQLite upkeep run after pruning (roadmap #20). `PRAGMA optimize` refreshes the
+ * query planner's statistics; `wal_checkpoint(TRUNCATE)` flushes the write-ahead
+ * log into the main database and shrinks the `-wal` file, which otherwise grows
+ * unbounded between backups at the refresh cadence. Best effort — never throws,
+ * and no-ops harmlessly on a non-WAL (in-memory) database.
+ */
+export function runSqliteHousekeeping(): HousekeepingResult {
+  const db = getDb();
+  let optimized = false;
+  try {
+    db.run(sql`PRAGMA optimize`);
+    optimized = true;
+  } catch {
+    /* best effort */
+  }
+  let walCheckpointed = false;
+  let walPages: number | null = null;
+  let walPagesCheckpointed: number | null = null;
+  try {
+    // Returns one row: busy (0 = fully checkpointed), log (pages in the WAL),
+    // checkpointed (pages moved into the main db).
+    const row = db.get(sql`PRAGMA wal_checkpoint(TRUNCATE)`) as
+      | { busy?: number; log?: number; checkpointed?: number }
+      | undefined;
+    if (row) {
+      walCheckpointed = (row.busy ?? 1) === 0;
+      walPages = row.log ?? null;
+      walPagesCheckpointed = row.checkpointed ?? null;
+    }
+  } catch {
+    /* best effort — e.g. a non-WAL in-memory database */
+  }
+  return { optimized, walCheckpointed, walPages, walPagesCheckpointed };
+}
