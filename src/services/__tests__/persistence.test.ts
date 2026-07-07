@@ -88,7 +88,10 @@ describe("closeTrade", () => {
       exitReason: "Target reached",
       exitScore: 6.5,
     });
-    expect(journal[0].holdingPeriodDays).toBeCloseTo(10, 0);
+    // entryDate is noon-snapped 10 days ago, so the holding period lands in
+    // [9.5, 10.5] depending on the wall-clock hour — assert the range, not an exact day.
+    expect(journal[0].holdingPeriodDays).toBeGreaterThanOrEqual(9.4);
+    expect(journal[0].holdingPeriodDays).toBeLessThanOrEqual(10.6);
   });
 
   it("shorts profit when price falls", () => {

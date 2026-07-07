@@ -15,6 +15,13 @@
       "when": 1783330525986,
       "tag": "0001_ingestion-skipped-reasons",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783382981126,
+      "tag": "0002_agent-candidate-fundamentals",
+      "breakpoints": true
     }
   ]
 }

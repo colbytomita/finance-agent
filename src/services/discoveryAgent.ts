@@ -11,7 +11,15 @@ import { upsertWatchlistItem } from "./watchlist";
 import { getCatalystInputs } from "./marketData";
 import { getProvider } from "./llm";
 import { edgeCatalystsForTicker } from "./catalystEdge";
-import { errorMessage, nowIso } from "@/lib/util";
+import {
+  fundamentalsScore,
+  fundamentalsSummary,
+  getYahooFundamentals,
+  type Fundamentals,
+} from "./fundamentals";
+import { earningsNudgeFromParsed } from "./earnings";
+import { getYahooEarnings } from "./yahooHttp";
+import { errorMessage, mapPool, nowIso } from "@/lib/util";
 
 // Discovery / "scout" agent. Scans a universe of liquid stocks, scores each with
 // the same engine used for tracked tickers, and proposes those that pass the
@@ -50,11 +58,15 @@ export interface CandidateAnalysis {
   indicators: IndicatorSnapshot | null;
   drawdown: DrawdownReport | null;
   score: StockScoreResult;
+  /** Company fundamentals read (null when unavailable). */
+  fundamentals: Fundamentals | null;
+  fundamentalsScore: number | null;
 }
 
 /**
- * Pure scoring core: turn bars + price into a scored candidate. No IO, so this
- * is unit-testable. `analyzeTicker` wraps it with the network fetches.
+ * Pure scoring core: turn bars + price (+ optional fundamentals/earnings) into a
+ * scored candidate. No IO, so this is unit-testable. `analyzeTicker` wraps it
+ * with the network fetches.
  */
 export function buildCandidate(input: {
   ticker: string;
@@ -63,6 +75,8 @@ export function buildCandidate(input: {
   companyName?: string | null;
   catalysts?: CatalystInput[];
   weights?: StockScoreWeights;
+  fundamentals?: Fundamentals | null;
+  earnings?: { impact: number; reason: string } | null;
 }): CandidateAnalysis | null {
   const { ticker, bars } = input;
   if (input.price == null && bars.length === 0) return null;
@@ -71,17 +85,34 @@ export function buildCandidate(input: {
   const drawdown = price != null && bars.length > 0 ? computeDrawdown(bars, price) : null;
   const catalysts = input.catalysts ?? [];
 
-  // Untracked names have no catalysts, so the catalyst/sentiment components would
-  // sit at their neutral (~5) and structurally cap the blended score below the
-  // "Buy Candidate" range. For discovery we score on the components we can
-  // actually measure from price — momentum, valuation-by-range, risk —
-  // re-normalizing the weights. (combineStockScore divides by the weight sum.)
+  // Untracked names have no catalysts, so the catalyst/sentiment components sit at
+  // their neutral (~5); scoreStock drops them from the technical blend. The
+  // overall score is led by fundamentals (company quality/value) when available,
+  // with the technical blend (momentum, valuation-by-range, risk) as a
+  // supporting/timing signal, plus the earnings-surprise nudge.
   const base = input.weights ?? DEFAULT_STOCK_WEIGHTS;
   const weights =
     catalysts.length === 0 ? { ...base, catalyst: 0, sentiment: 0 } : base;
+  const fund = input.fundamentals ? fundamentalsScore(input.fundamentals) : null;
 
-  const score = scoreStock({ indicators, drawdown, catalysts, weights });
-  return { ticker, companyName: input.companyName ?? null, price, indicators, drawdown, score };
+  const score = scoreStock({
+    indicators,
+    drawdown,
+    catalysts,
+    weights,
+    earnings: input.earnings ?? null,
+    fundamentals: fund,
+  });
+  return {
+    ticker,
+    companyName: input.companyName ?? null,
+    price,
+    indicators,
+    drawdown,
+    score,
+    fundamentals: input.fundamentals ?? null,
+    fundamentalsScore: fund?.score ?? null,
+  };
 }
 
 /** Does a candidate clear the score "test"? */
@@ -116,6 +147,17 @@ export async function analyzeTicker(
     }
   }
 
+  // Fundamentals + latest earnings surprise drive the fundamentals-led score.
+  // Both are Yahoo HTTP calls, best effort — a failure just degrades to the
+  // technical read for that name (and respects the Yahoo connector toggle).
+  let fundamentals: Fundamentals | null = null;
+  let earnings: { impact: number; reason: string } | null = null;
+  if (cfg.yahooEnabled) {
+    fundamentals = await getYahooFundamentals(ticker).catch(() => null);
+    const earn = await getYahooEarnings(ticker).catch(() => []);
+    earnings = earningsNudgeFromParsed(earn, { freshnessDays: cfg.catalystFreshnessDays });
+  }
+
   return buildCandidate({
     ticker,
     bars,
@@ -123,6 +165,8 @@ export async function analyzeTicker(
     companyName,
     catalysts: getCatalystInputs(ticker), // usually empty for untracked tickers
     weights: cfg.stockScoreWeights,
+    fundamentals,
+    earnings,
   });
 }
 
@@ -143,16 +187,19 @@ export function suggestBuyZone(a: CandidateAnalysis): { low: number | null; high
 
 function ruleBasedRationale(a: CandidateAnalysis): string {
   const parts: string[] = [];
-  parts.push(`Scores ${a.score.overallScore.toFixed(1)}/10 (${a.score.recommendation}).`);
+  if (a.fundamentalsScore != null) {
+    parts.push(`Fundamentals ${a.fundamentalsScore.toFixed(1)}/10: ${fundamentalsSummary(a.fundamentals)}`);
+  }
+  const earn = a.score.reasoning.earnings?.[0];
+  if (earn) parts.push(earn);
   const mom = a.score.reasoning.momentum?.[0];
-  if (mom) parts.push(mom);
+  if (mom) parts.push(`Chart: ${mom}`);
   if (a.drawdown?.drawdownFrom52wHighPercent != null) {
     parts.push(
       `Trading ${Math.abs(a.drawdown.drawdownFrom52wHighPercent).toFixed(1)}% below its 52-week high.`,
     );
   }
-  const risk = a.score.reasoning.risk?.find((r) => /volatility/i.test(r));
-  if (risk) parts.push(risk);
+  parts.push(`Overall ${a.score.overallScore.toFixed(1)}/10 (${a.score.recommendation}).`);
   return parts.join(" ");
 }
 
@@ -160,17 +207,26 @@ async function buildRationale(a: CandidateAnalysis): Promise<{ text: string; by:
   const fallback = ruleBasedRationale(a);
   const provider = getProvider();
   if (!provider) return { text: fallback, by: "rules" };
-  const prompt = `You are a cautious swing-trading scout. Using ONLY the data below, write ONE concise sentence (max 40 words) explaining why ${a.ticker} may be worth watching. Hedge, never guarantee returns, never give financial advice.
+  // A grounded, research-style verdict — fundamentals-first, like a cautious
+  // analyst read, using ONLY the fetched data.
+  const upside =
+    a.fundamentals?.targetMeanPrice != null && a.price != null && a.price > 0
+      ? `${(((a.fundamentals.targetMeanPrice - a.price) / a.price) * 100).toFixed(0)}%`
+      : "n/a";
+  const prompt = `You are a cautious equity research analyst screening a stock as a potential swing-trade buy. Using ONLY the data below, write a 2-sentence verdict: sentence 1 gives a verdict label (e.g. "Buy candidate", "Accumulate on pullbacks", "Wait", "Pass") and the core fundamental reason; sentence 2 names the main risk or what would confirm the thesis. Be specific with the numbers. Hedge, never guarantee returns, never give financial advice.
 
-DATA:
-Overall score: ${a.score.overallScore}/10 (${a.score.recommendation}, confidence ${a.score.confidence})
-Components: ${JSON.stringify(a.score.components)}
-Reasoning: ${JSON.stringify(a.score.reasoning)}
-Drawdown from 52w high: ${a.drawdown?.drawdownFrom52wHighPercent?.toFixed(1) ?? "n/a"}%
+TICKER: ${a.ticker}${a.companyName ? ` (${a.companyName})` : ""}
+FUNDAMENTALS (${a.fundamentalsScore?.toFixed(1) ?? "n/a"}/10): ${fundamentalsSummary(a.fundamentals)}
+SECTOR/INDUSTRY: ${a.fundamentals?.sector ?? "n/a"}${a.fundamentals?.industry ? ` / ${a.fundamentals.industry}` : ""}
+EARNINGS: ${a.score.reasoning.earnings?.[0] ?? "no recent surprise data"}
+ANALYST TARGET UPSIDE: ${upside}
+CHART: ${a.score.reasoning.momentum?.join(" ") ?? "n/a"}; drawdown from 52w high ${a.drawdown?.drawdownFrom52wHighPercent?.toFixed(1) ?? "n/a"}%
+RISK: ${a.score.reasoning.risk?.join(" ") ?? "n/a"}
+OVERALL SCORE: ${a.score.overallScore}/10 (${a.score.recommendation}, fundamentals-led)
 
-Respond with the sentence only, no preamble.`;
+Respond with the two sentences only, no preamble.`;
   try {
-    const raw = (await provider.complete(prompt, { maxTokens: 120 })).trim();
+    const raw = (await provider.complete(prompt, { maxTokens: 200 })).trim();
     return { text: raw.replace(/^["']|["']$/g, "") || fallback, by: "llm" };
   } catch {
     return { text: fallback, by: "rules" };
@@ -206,6 +262,9 @@ export interface ScanResult {
   errors: string[];
 }
 
+/** Bounded concurrency for the scan's per-ticker network fetches (bars + fundamentals + earnings). */
+const DISCOVERY_CONCURRENCY = 5;
+
 /** Scan the universe and persist new pending candidates that pass the score test. */
 export async function runDiscoveryScan(opts: { universe?: string[]; minScore?: number } = {}): Promise<ScanResult> {
   const cfg = loadConfig();
@@ -216,48 +275,83 @@ export async function runDiscoveryScan(opts: { universe?: string[]; minScore?: n
   const db = getDb();
   const result: ScanResult = { scanned: 0, proposed: 0, candidates: [], errors: [] };
 
-  for (const ticker of universe) {
+  // Analyze in parallel — each ticker is several network fetches (bars,
+  // fundamentals, earnings), so bounded concurrency keeps a ~60-name scan quick.
+  const analyzed = await mapPool(universe, DISCOVERY_CONCURRENCY, async (ticker) => {
     try {
-      const a = await analyzeTicker(ticker, alpaca, cfg);
-      result.scanned++;
-      if (!a || !passesTest(a, minScore)) continue;
-
-      const { low, high } = suggestBuyZone(a);
-      const rationale = await buildRationale(a);
-      // Surface any entity catalyst edge for this ticker in the rationale.
-      const edges = edgeCatalystsForTicker(a.ticker);
-      let rationaleText = rationale.text;
-      if (edges.length > 0) {
-        const top = [...edges].sort((x, y) => Math.abs(y.impactScore) - Math.abs(x.impactScore))[0];
-        rationaleText += ` Entity edge: ${top.title} (impact ${top.impactScore > 0 ? "+" : ""}${top.impactScore}).`;
-      }
-      const now = nowIso();
-      const values = {
-        ticker: a.ticker,
-        companyName: a.companyName,
-        price: a.price,
-        ...scoreRowValues(a.score),
-        drawdownPercent: a.drawdown?.drawdownFrom52wHighPercent ?? null,
-        suggestedBuyLow: low,
-        suggestedBuyHigh: high,
-        rationale: rationaleText,
-        generatedBy: rationale.by,
-        status: "pending" as const,
-        proposedAt: now,
-        decidedAt: null,
-      };
-      // Upsert: refresh an existing *pending* row, insert if new. Decided rows are
-      // excluded above, so onConflict only ever updates a stale pending row.
-      db.insert(schema.agentCandidates)
-        .values(values)
-        .onConflictDoUpdate({ target: schema.agentCandidates.ticker, set: values })
-        .run();
-      result.proposed++;
-      result.candidates.push({ ticker: a.ticker, score: a.score.overallScore });
+      return { ticker, a: await analyzeTicker(ticker, alpaca, cfg), error: null as string | null };
     } catch (e) {
-      result.errors.push(`${ticker}: ${errorMessage(e)}`);
+      return { ticker, a: null as CandidateAnalysis | null, error: errorMessage(e) };
     }
+  });
+
+  const proposedTickers = new Set<string>();
+  // Persist passers sequentially: the LLM verdict is only run for names that
+  // clear the bar (few), keeping the research call off the full universe.
+  for (const { ticker, a, error } of analyzed) {
+    if (error) {
+      result.errors.push(`${ticker}: ${error}`);
+      continue;
+    }
+    result.scanned++;
+    if (!a) continue;
+    // Fundamentals-led contract: never propose a name we couldn't actually
+    // research. Without a fundamentals read the score is a momentum-only read,
+    // which is exactly what this scan is meant to move past — skip it.
+    if (a.fundamentalsScore == null) continue;
+    if (!passesTest(a, minScore)) continue;
+    proposedTickers.add(a.ticker);
+
+    const { low, high } = suggestBuyZone(a);
+    const rationale = await buildRationale(a);
+    // Surface any entity catalyst edge for this ticker in the rationale.
+    const edges = edgeCatalystsForTicker(a.ticker);
+    let rationaleText = rationale.text;
+    if (edges.length > 0) {
+      const top = [...edges].sort((x, y) => Math.abs(y.impactScore) - Math.abs(x.impactScore))[0];
+      rationaleText += ` Entity edge: ${top.title} (impact ${top.impactScore > 0 ? "+" : ""}${top.impactScore}).`;
+    }
+    const now = nowIso();
+    const values = {
+      ticker: a.ticker,
+      companyName: a.companyName,
+      price: a.price,
+      ...scoreRowValues(a.score),
+      fundamentalsScore: a.fundamentalsScore,
+      drawdownPercent: a.drawdown?.drawdownFrom52wHighPercent ?? null,
+      suggestedBuyLow: low,
+      suggestedBuyHigh: high,
+      rationale: rationaleText,
+      generatedBy: rationale.by,
+      status: "pending" as const,
+      proposedAt: now,
+      decidedAt: null,
+    };
+    // Upsert: refresh an existing *pending* row, insert if new. Decided rows are
+    // excluded above, so onConflict only ever updates a stale pending row.
+    db.insert(schema.agentCandidates)
+      .values(values)
+      .onConflictDoUpdate({ target: schema.agentCandidates.ticker, set: values })
+      .run();
+    result.proposed++;
+    result.candidates.push({ ticker: a.ticker, score: a.score.overallScore });
   }
+
+  // Prune stale pending picks: a name that was scanned this run but no longer
+  // qualifies (dropped below the bar, or lost fundamentals) shouldn't linger as
+  // a suggestion. Only touches pending rows for tickers we actually re-scanned;
+  // accepted/declined rows are untouched.
+  const universeSet = new Set(universe.map((t) => t.toUpperCase()));
+  const stale = db
+    .select({ id: schema.agentCandidates.id, ticker: schema.agentCandidates.ticker })
+    .from(schema.agentCandidates)
+    .where(eq(schema.agentCandidates.status, "pending"))
+    .all()
+    .filter((r) => universeSet.has(r.ticker) && !proposedTickers.has(r.ticker));
+  for (const r of stale) {
+    db.delete(schema.agentCandidates).where(eq(schema.agentCandidates.id, r.id)).run();
+  }
+
   result.candidates.sort((x, y) => y.score - x.score);
   return result;
 }

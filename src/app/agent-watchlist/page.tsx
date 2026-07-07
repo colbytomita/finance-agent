@@ -28,8 +28,11 @@ export default function AgentWatchlistPage() {
       <p className="text-xs text-zinc-500">
         The discovery agent scans {DEFAULT_UNIVERSE.length} liquid stocks and proposes any scoring{" "}
         <span className="text-zinc-300">≥ {cfg.agentMinScore.toFixed(1)}</span> (set in{" "}
-        <Link href="/settings" className="text-sky-300 hover:underline">Settings</Link>). Accept to add
-        a pick to your watchlist with a suggested buy zone, or decline to dismiss it.
+        <Link href="/settings" className="text-sky-300 hover:underline">Settings</Link>). Each name is
+        researched on <span className="text-zinc-300">fundamentals</span> (revenue/earnings growth,
+        margins, valuation, analyst view), its latest <span className="text-zinc-300">earnings</span>{" "}
+        surprise, and the <span className="text-zinc-300">chart</span> — with fundamentals leading the
+        score. Accept to add a pick to your watchlist with a suggested buy zone, or decline to dismiss it.
       </p>
 
       <div className="overflow-x-auto">
@@ -41,6 +44,7 @@ export default function AgentWatchlistPage() {
               <th>Price</th>
               <th>DD from 52w</th>
               <th>Suggested buy zone</th>
+              <th>Fundamentals</th>
               <th>Momentum</th>
               <th>Risk</th>
               <th>Score</th>
@@ -54,7 +58,7 @@ export default function AgentWatchlistPage() {
           <tbody>
             {pending.length === 0 && (
               <tr>
-                <td colSpan={13} className="py-6 text-center text-zinc-500">
+                <td colSpan={14} className="py-6 text-center text-zinc-500">
                   No pending picks. Click <span className="text-zinc-300">Run agent scan</span> to look
                   for candidates.
                 </td>
@@ -75,6 +79,7 @@ export default function AgentWatchlistPage() {
                     ? `${fmtMoney(c.suggestedBuyLow)}–${fmtMoney(c.suggestedBuyHigh)}`
                     : "—"}
                 </td>
+                <td><ScoreBadge score={c.fundamentalsScore} /></td>
                 <td><ScoreBadge score={c.momentumScore} /></td>
                 <td><ScoreBadge score={c.riskScore} /></td>
                 <td><ScoreBadge score={c.overallScore} /></td>
@@ -113,9 +118,10 @@ export default function AgentWatchlistPage() {
       )}
 
       <p className="text-[11px] text-zinc-600">
-        Agent picks are heuristic interpretations of price/technical data — not financial advice, not a
-        guarantee. Catalyst/sentiment inputs are usually neutral for untracked names, so picks lean on
-        momentum, valuation-by-range, and risk. Always review before accepting.
+        Agent picks are heuristic interpretations of fundamental + technical data — not financial advice,
+        not a guarantee. The fundamentals read (growth, margins, valuation, analyst consensus) leads the
+        score; the chart provides supporting/timing signal. Fundamentals come from Yahoo and may be stale
+        or incomplete. Always review before accepting.
       </p>
     </div>
   );

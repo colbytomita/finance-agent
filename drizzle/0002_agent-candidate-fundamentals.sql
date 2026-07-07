@@ -1,0 +1,1 @@
+ALTER TABLE `agent_candidates` ADD `fundamentals_score` real;

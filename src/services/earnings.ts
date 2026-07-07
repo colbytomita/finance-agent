@@ -236,6 +236,32 @@ export async function fetchUpcomingEarningsForTickers(
   return result;
 }
 
+/**
+ * Earnings-surprise nudge from freshly-fetched Yahoo earnings history (for
+ * discovery candidates, which aren't in the DB). Picks the most recent report,
+ * derives the surprise %, and reuses the same decay/impact mapping as tracked
+ * scoring. Returns { impact, reason } for scoreStock, or null when not usable.
+ */
+export function earningsNudgeFromParsed(
+  rows: { reportDate: string; fiscalPeriod?: string; epsEstimate: number | null; epsActual: number | null }[],
+  opts: { now?: number; freshnessDays?: number } = {},
+): { impact: number; reason: string } | null {
+  const latest = [...rows].sort((a, b) => b.reportDate.localeCompare(a.reportDate))[0];
+  if (!latest) return null;
+  const surprisePercent = computeSurprisePercent(latest.epsEstimate, latest.epsActual);
+  const input = earningsCatalystInput(
+    {
+      reportDate: latest.reportDate,
+      surprisePercent,
+      fiscalPeriod: latest.fiscalPeriod ?? null,
+      epsEstimate: latest.epsEstimate,
+      epsActual: latest.epsActual,
+    },
+    opts,
+  );
+  return input ? { impact: input.impactScore, reason: input.title ?? "Earnings surprise" } : null;
+}
+
 /** The latest report's scoring signal for a ticker (null when none/old/in-line). */
 export function earningsSignalForTicker(
   ticker: string,
