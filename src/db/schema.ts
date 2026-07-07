@@ -260,6 +260,12 @@ export const entityMentions = sqliteTable("entity_mentions", {
   index("idx_entity_mentions_ticker_date").on(t.ticker, t.eventDate),
 ]);
 
+export const watchedEntities = sqliteTable("watched_entities", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  entity: text("entity").notNull().unique(), // starred speaker/source; new mentions raise an alert
+  createdAt: text("created_at").notNull(),
+});
+
 export const scoreHistory = sqliteTable("score_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ticker: text("ticker").notNull(),

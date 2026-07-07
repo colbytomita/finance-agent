@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { addMention, listMentions, distinctEntities, type MentionDirection } from "./entityMentions";
 import { addCatalyst } from "./catalysts";
+import { alertWatchedEntities, type EntityMentionBatch } from "./watchedEntities";
 import { extractEvents, type ExtractedEvent } from "./eventExtraction";
 import type { RawEventItem } from "./sources/types";
 import { fetchEdgarFilings } from "./sources/secEdgar";
@@ -244,6 +245,8 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
       result.skippedItems.push({ title: (ev.claim || ev.title || "(untitled)").slice(0, 90), reason });
     }
   };
+  // Track new mentions per entity so watched entities can raise one alert each.
+  const newByEntity = new Map<string, EntityMentionBatch>();
   for (const ev of extracted) {
     if (!ev.ticker) {
       skip(ev, ev.entity ? "no ticker resolved" : "no entity or ticker extracted");
@@ -274,6 +277,10 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
       sourceUrl: ev.url || null,
     });
     result.persisted++;
+    const batch = newByEntity.get(ev.entity) ?? { count: 0, tickers: new Set<string>() };
+    batch.count++;
+    batch.tickers.add(ev.ticker.toUpperCase());
+    newByEntity.set(ev.entity, batch);
 
     if (opts.alsoCreateCatalysts) {
       addCatalyst({
@@ -289,6 +296,9 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
       result.catalystsAdded++;
     }
   }
+
+  // Alert on watched entities that got new mentions this run (deduped by emitAlert).
+  alertWatchedEntities(newByEntity);
 
   return result;
 }
