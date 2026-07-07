@@ -1,8 +1,8 @@
 "use client";
 
 // Dependency-free interactive SVG line chart for daily closes with optional
-// level lines, axis labels, an area fill, a hover crosshair + tooltip, and
-// client-side time-range filtering (1M / 3M / 6M / 1Y).
+// level lines, a volume sub-band, event markers, axis labels, an area fill, a
+// hover crosshair + tooltip, and client-side range filtering (1M / 3M / 6M / 1Y).
 
 import { useRef, useState, type MouseEvent } from "react";
 
@@ -12,6 +12,14 @@ interface Level {
   color: string; // stroke color
 }
 
+export type ChartEventType = "earnings" | "catalyst" | "mention";
+
+export interface ChartEvent {
+  date: string; // ISO
+  type: ChartEventType;
+  title: string;
+}
+
 const RANGES: { label: string; days: number }[] = [
   { label: "1M", days: 21 },
   { label: "3M", days: 63 },
@@ -19,16 +27,26 @@ const RANGES: { label: string; days: number }[] = [
   { label: "1Y", days: 252 },
 ];
 
+const EVENT_STYLE: Record<ChartEventType, { glyph: string; color: string; label: string }> = {
+  earnings: { glyph: "▲", color: "#fbbf24", label: "earnings" },
+  catalyst: { glyph: "●", color: "#38bdf8", label: "catalyst" },
+  mention: { glyph: "◆", color: "#a78bfa", label: "mention" },
+};
+
 export function PriceChart({
   closes,
   dates,
   levels = [],
+  volumes,
+  events = [],
   width = 760,
-  height = 280,
+  height = 300,
 }: {
   closes: number[];
   dates: string[];
   levels?: Level[];
+  volumes?: number[];
+  events?: ChartEvent[];
   width?: number;
   height?: number;
 }) {
@@ -44,12 +62,24 @@ export function PriceChart({
   const count = Math.min(closes.length, rangeDays);
   const vCloses = closes.slice(-count);
   const vDates = dates.slice(-count);
+  const hasVol = Array.isArray(volumes) && volumes.length === closes.length;
+  const vVols = hasVol ? volumes!.slice(-count) : null;
+  const hasEvents = events.length > 0;
 
-  // Margins leave gutters for the y-axis (left) and x-axis (bottom) labels so
-  // text never overlaps the plotted line.
+  // Margins leave gutters for the y-axis (left) and x-axis (bottom) labels.
   const m = { top: 14, right: 16, bottom: 26, left: 52 };
   const innerW = width - m.left - m.right;
   const innerH = height - m.top - m.bottom;
+
+  // Split the inner height into (price pane) + (event marker row) + (volume band).
+  const volH = hasVol ? 42 : 0;
+  const volGap = hasVol ? 6 : 0;
+  const eventsRowH = hasEvents ? 14 : 0;
+  const priceH = innerH - volH - volGap - eventsRowH;
+  const priceBottom = m.top + priceH;
+  const markerY = priceBottom + eventsRowH / 2;
+  const volBottom = m.top + innerH;
+  const volTop = volBottom - volH;
 
   // Scale to the visible closes; only draw levels that fall in view so a distant
   // stop/target can't squash the price action when zoomed in.
@@ -63,12 +93,12 @@ export function PriceChart({
   const visibleLevels = levels.filter((l) => l.value >= lo && l.value <= hi);
 
   const x = (i: number) => m.left + (i / (vCloses.length - 1)) * innerW;
-  const y = (v: number) => m.top + (1 - (v - lo) / span) * innerH;
+  const y = (v: number) => m.top + (1 - (v - lo) / span) * priceH;
 
   const line = vCloses
     .map((c, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(c).toFixed(1)}`)
     .join(" ");
-  const baseY = (m.top + innerH).toFixed(1);
+  const baseY = priceBottom.toFixed(1);
   const area = `${line} L${x(vCloses.length - 1).toFixed(1)},${baseY} L${x(0).toFixed(1)},${baseY} Z`;
 
   const last = vCloses[vCloses.length - 1];
@@ -82,6 +112,30 @@ export function PriceChart({
     Math.round((i / 4) * (vCloses.length - 1)),
   );
   const fmtDay = (d?: string) => (d ? d.slice(5, 10) : ""); // MM-DD
+
+  // Volume bars scaled to the visible max.
+  const maxVol = vVols && vVols.length > 0 ? Math.max(...vVols, 1) : 1;
+  const barW = Math.max(1, (innerW / Math.max(vCloses.length, 1)) * 0.7);
+
+  // Map each event to the nearest visible bar, dropping events outside the window.
+  const firstT = Date.parse(vDates[0]);
+  const lastT = Date.parse(vDates[vDates.length - 1]);
+  const tol = 3 * 86400000;
+  const markers = events
+    .map((ev) => ({ ev, t: Date.parse(ev.date) }))
+    .filter((e) => Number.isFinite(e.t) && e.t >= firstT - tol && e.t <= lastT + tol)
+    .map(({ ev, t }) => {
+      let best = 0;
+      let bestDiff = Infinity;
+      for (let i = 0; i < vDates.length; i++) {
+        const diff = Math.abs(Date.parse(vDates[i]) - t);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          best = i;
+        }
+      }
+      return { ev, idx: best };
+    });
 
   const onMove = (e: MouseEvent<SVGSVGElement>) => {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -146,7 +200,7 @@ export function PriceChart({
           </linearGradient>
         </defs>
 
-        {/* Y gridlines + price labels */}
+        {/* Y gridlines + price labels (price pane only) */}
         {yTicks.map((v, i) => (
           <g key={`y${i}`}>
             <line x1={m.left} x2={width - m.right} y1={y(v)} y2={y(v)} stroke="#27272a" strokeWidth={1} />
@@ -162,6 +216,29 @@ export function PriceChart({
             {fmtDay(vDates[idx])}
           </text>
         ))}
+
+        {/* Volume sub-band */}
+        {hasVol && vVols && (
+          <g>
+            {vVols.map((vol, i) => {
+              const h = Math.max(0, (vol / maxVol) * volH);
+              const barUp = i === 0 || vCloses[i] >= vCloses[i - 1];
+              return (
+                <rect
+                  key={`v${i}`}
+                  x={x(i) - barW / 2}
+                  y={volBottom - h}
+                  width={barW}
+                  height={h}
+                  fill={barUp ? "#14532d" : "#4c1d1d"}
+                />
+              );
+            })}
+            <text x={m.left} y={volTop - 2} fontSize={9} fill="#52525b">
+              volume
+            </text>
+          </g>
+        )}
 
         {/* Area + line */}
         <path d={area} fill={`url(#${fillId})`} stroke="none" />
@@ -186,13 +263,32 @@ export function PriceChart({
           </g>
         ))}
 
+        {/* Event markers on the date axis (native <title> tooltip on hover) */}
+        {markers.map((mk, i) => {
+          const s = EVENT_STYLE[mk.ev.type];
+          return (
+            <text
+              key={`e${i}`}
+              x={x(mk.idx)}
+              y={markerY + 4}
+              textAnchor="middle"
+              fontSize={10}
+              fill={s.color}
+              style={{ cursor: "help" }}
+            >
+              {s.glyph}
+              <title>{`${mk.ev.date.slice(0, 10)} · ${s.label}: ${mk.ev.title}`}</title>
+            </text>
+          );
+        })}
+
         {/* Last price marker */}
         <circle cx={x(vCloses.length - 1)} cy={y(last)} r={2.5} fill={lineColor} />
 
-        {/* Hover crosshair + tooltip */}
+        {/* Hover crosshair + tooltip (price pane) */}
         {hover != null && hv != null && (
           <g>
-            <line x1={hx} x2={hx} y1={m.top} y2={m.top + innerH} stroke="#52525b" strokeWidth={1} />
+            <line x1={hx} x2={hx} y1={m.top} y2={priceBottom} stroke="#52525b" strokeWidth={1} />
             <circle cx={hx} cy={hy} r={3.5} fill={lineColor} stroke="#0a0a0a" strokeWidth={1.5} />
             <rect x={tipX} y={m.top + 2} width={tipW} height={18} rx={3} fill="#18181b" stroke="#3f3f46" />
             <text x={tipX + tipW / 2} y={m.top + 14} textAnchor="middle" fontSize={10.5} fill="#fafafa">

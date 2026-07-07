@@ -12,12 +12,13 @@ import { getLatestNote } from "@/services/researchAgent";
 import { isCatalystStale } from "@/services/catalysts";
 import { edgeCatalystsForTicker } from "@/services/catalystEdge";
 import { listEarnings, classifySurprise } from "@/services/earnings";
+import { listMentions } from "@/services/entityMentions";
 import { computeIndicators } from "@/services/indicators";
 import { daysToNextEarnings } from "@/services/marketData";
 import { effectiveConfig, loadConfig } from "@/lib/config";
 import { fmtDate, fmtMoney, fmtNum, fmtScore } from "@/lib/format";
 import { EarningsBadge, Freshness, Pct, RecBadge, ScoreBadge } from "@/components/badges";
-import { PriceChart } from "@/components/PriceChart";
+import { PriceChart, type ChartEvent } from "@/components/PriceChart";
 import { GenerateBriefButton } from "@/components/GenerateBriefButton";
 import { RefreshButton } from "@/components/RefreshButton";
 import { AddEarningsForm, FetchEarningsButton, DeleteButton } from "@/components/forms";
@@ -50,7 +51,25 @@ export default async function StockDetailPage({
   const catalysts = tickerCatalysts(ticker);
   const edges = edgeCatalystsForTicker(ticker);
   const earnings = listEarnings(ticker, 6);
+  const mentions = listMentions({ ticker });
   const daysToEarnings = daysToNextEarnings(ticker);
+
+  // Event markers for the price chart: earnings, catalysts, and entity mentions.
+  const chartEvents: ChartEvent[] = [
+    ...earnings
+      .filter((e) => e.reportDate)
+      .map((e) => ({
+        date: e.reportDate,
+        type: "earnings" as const,
+        title: `${e.fiscalPeriod ?? "Earnings"}${e.surprisePercent != null ? ` (${e.surprisePercent >= 0 ? "+" : ""}${e.surprisePercent.toFixed(1)}% surprise)` : ""}`,
+      })),
+    ...catalysts
+      .filter((c) => c.eventDate ?? c.discoveredAt)
+      .map((c) => ({ date: (c.eventDate ?? c.discoveredAt) as string, type: "catalyst" as const, title: c.title })),
+    ...mentions
+      .filter((mn) => mn.eventDate)
+      .map((mn) => ({ date: mn.eventDate as string, type: "mention" as const, title: `${mn.entity}: ${mn.claim ?? "mentioned"}` })),
+  ];
   const note = getLatestNote(ticker);
   const trade = openTrades().find((t) => t.ticker === ticker) ?? null;
   const reasoning: Record<string, unknown> = score?.reasoningJson
@@ -97,6 +116,8 @@ export default async function StockDetailPage({
             closes={bars.map((b) => b.close)}
             dates={bars.map((b) => b.date)}
             levels={levels}
+            volumes={bars.map((b) => b.volume)}
+            events={chartEvents}
           />
 
           {/* Technicals (raw data) */}
