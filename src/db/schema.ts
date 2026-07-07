@@ -290,6 +290,8 @@ export const sectorScans = sqliteTable("sector_scans", {
   thesisReports: integer("thesis_reports").notNull().default(0), // deeper company-claim reports generated
   minScore: real("min_score").notNull(), // threshold used for this run
   expandedBy: text("expanded_by").notNull().default("rules"), // llm | rules (how tickers were sourced)
+  meanPickScore: real("mean_pick_score"), // mean overall score of picks that cleared the test
+  maxPickScore: real("max_pick_score"), // best pick score this run
   ranAt: text("ran_at").notNull(),
 }, (t) => [index("idx_sector_scans_industry_time").on(t.industry, t.ranAt)]);
 

@@ -3,6 +3,7 @@ import {
   listIndustryGuides,
   listSectorPicks,
   listSectorScans,
+  industryScanTrend,
   normalizeIndustryLabel,
   type SectorPick,
 } from "@/services/sectorScout";
@@ -211,6 +212,7 @@ export default async function SectorScoutPage({
     selectedIndustry && perfReport
       ? perfReport.picks.byIndustry?.find((r) => r.industry === selectedIndustry) ?? null
       : null;
+  const selectedTrend = selectedIndustry ? industryScanTrend(selectedIndustry) : [];
 
   return (
     <div className="space-y-4">
@@ -241,6 +243,7 @@ export default async function SectorScoutPage({
           autoScanEnabled={cfg.sectorScoutScanEnabled}
           performance={selectedPerformance}
           performanceGeneratedAt={perfReport?.generatedAt ?? null}
+          trend={selectedTrend}
         />
       )}
 

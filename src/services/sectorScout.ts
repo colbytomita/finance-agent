@@ -450,6 +450,13 @@ export async function runSectorScan(opts: {
   }
   result.picks.sort((x, y) => y.score - x.score);
 
+  const pickScores = result.picks.map((p) => p.score);
+  const meanPickScore =
+    pickScores.length > 0
+      ? Math.round((pickScores.reduce((s, v) => s + v, 0) / pickScores.length) * 100) / 100
+      : null;
+  const maxPickScore = pickScores.length > 0 ? Math.max(...pickScores) : null;
+
   db.insert(schema.sectorScans)
     .values({
       industry,
@@ -459,6 +466,8 @@ export async function runSectorScan(opts: {
       thesisReports: result.thesisReports,
       minScore,
       expandedBy: result.expandedBy,
+      meanPickScore,
+      maxPickScore,
       ranAt: now,
     })
     .run();
@@ -649,6 +658,31 @@ export function listIndustryGuides(cfg: AppConfig = loadConfig()): IndustryGuide
       };
     })
     .sort((a, b) => (b.lastScannedAt ?? "").localeCompare(a.lastScannedAt ?? ""));
+}
+
+export interface IndustryScanPoint {
+  ranAt: string;
+  meanPickScore: number | null;
+  proposed: number;
+}
+
+/**
+ * An industry's historical scans (chronological, oldest first) with the mean
+ * pick score per run — the series behind the trend sparkline (roadmap #25).
+ */
+export function industryScanTrend(industry: string, limit = 12): IndustryScanPoint[] {
+  const rows = getDb()
+    .select({
+      ranAt: schema.sectorScans.ranAt,
+      meanPickScore: schema.sectorScans.meanPickScore,
+      proposed: schema.sectorScans.proposed,
+    })
+    .from(schema.sectorScans)
+    .where(eq(schema.sectorScans.industry, industry))
+    .orderBy(desc(schema.sectorScans.ranAt))
+    .limit(limit)
+    .all();
+  return rows.reverse();
 }
 
 /** Promote a pick into the real watchlist and mark it added. */

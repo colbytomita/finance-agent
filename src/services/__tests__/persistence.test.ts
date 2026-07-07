@@ -20,6 +20,7 @@ import {
   EARNINGS_CALENDAR_SOURCE,
 } from "../catalysts";
 import { daysToNextEarnings, getCatalystInputs } from "../marketData";
+import { industryScanTrend } from "../sectorScout";
 import { saveConfig, loadConfig } from "@/lib/config";
 
 // Write-path integration tests against an in-memory SQLite database
@@ -172,6 +173,33 @@ describe("retention", () => {
     const scores = db.select().from(schema.stockScores).all();
     expect(scores).toHaveLength(2);
     expect(scores.some((s) => s.calculatedAt === daysAgo(45, 15))).toBe(true); // kept the day's last
+  });
+});
+
+describe("sector scout scan trend (roadmap #25)", () => {
+  it("returns an industry's scans oldest-first with mean pick scores, isolated per industry", () => {
+    const db = getDb();
+    const row = (industry: string, ranAt: string, mean: number | null, proposed: number) => ({
+      industry,
+      considered: 10,
+      scanned: 8,
+      proposed,
+      thesisReports: 0,
+      minScore: 7,
+      expandedBy: "rules",
+      meanPickScore: mean,
+      maxPickScore: mean,
+      ranAt,
+    });
+    db.insert(schema.sectorScans).values(row("space", daysAgo(3), 7.2, 2)).run();
+    db.insert(schema.sectorScans).values(row("space", daysAgo(2), null, 0)).run(); // a run with no picks
+    db.insert(schema.sectorScans).values(row("space", daysAgo(1), 7.8, 3)).run();
+    db.insert(schema.sectorScans).values(row("energy", daysAgo(1), 5, 1)).run();
+
+    const trend = industryScanTrend("space");
+    expect(trend).toHaveLength(3); // energy excluded
+    expect(trend.map((p) => p.meanPickScore)).toEqual([7.2, null, 7.8]); // chronological, oldest first
+    expect(trend[0].proposed).toBe(2);
   });
 });
 
