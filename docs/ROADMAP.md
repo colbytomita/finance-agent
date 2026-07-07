@@ -75,7 +75,7 @@ operational resilience, then Tier 3 features by taste.
   report shows the badge, and `riskManagement` warnings fire inside the
   window.
 
-- [ ] **17. Setup outcome backtest — Signal Performance section 4** *(medium)*
+- [x] **17. Setup outcome backtest — Signal Performance section 4** *(medium — done)*
   **Why:** `trade_setups` (schema.ts, `detectedAt`, entry range, `stopLoss`,
   `targetPrice1/2`, `status`) accumulates every detected swing setup, but no
   code ever measures whether they worked. Signal Performance covers scores,
