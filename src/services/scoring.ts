@@ -263,6 +263,12 @@ export interface StockScoreResult {
 const EARNINGS_SCALE = 0.25; // score points per impact point
 const MAX_EARNINGS_ADJ = 1.2; // cap the nudge either way
 
+// When a fundamentals read is supplied (discovery / Sector Scout), the overall
+// score is fundamentals-LED: company quality/value dominates and the technical
+// blend becomes a supporting/timing signal. So a strong chart on a weak or
+// declining business won't surface as a buy. Tunable.
+const FUNDAMENTALS_WEIGHT = 0.6;
+
 export function scoreStock(input: {
   indicators: IndicatorSnapshot | null;
   drawdown: DrawdownReport | null;
@@ -270,6 +276,8 @@ export function scoreStock(input: {
   weights?: StockScoreWeights;
   /** Latest earnings surprise as a -5..+5 impact plus a human reason. */
   earnings?: { impact: number; reason: string } | null;
+  /** Fundamentals read (1–10 quality/value) — when present, it leads the score. */
+  fundamentals?: { score: number; reasons: string[] } | null;
 }): StockScoreResult {
   const m = momentumScore(input.indicators);
   const v = valuationScore(input.drawdown);
@@ -294,7 +302,20 @@ export function scoreStock(input: {
   const weightsUsed: StockScoreWeights = hasCatalysts
     ? baseWeights
     : { ...baseWeights, catalyst: 0, sentiment: 0 };
-  const blended = combineStockScore(components, weightsUsed);
+  const technicalBlend = combineStockScore(components, weightsUsed);
+
+  // Fundamentals lead the blend when supplied; otherwise the score is the
+  // technical blend alone (unchanged behavior for tracked-stock refresh).
+  const hasFundamentals = input.fundamentals != null;
+  const blended = hasFundamentals
+    ? clampScore(
+        Math.round(
+          (FUNDAMENTALS_WEIGHT * input.fundamentals!.score +
+            (1 - FUNDAMENTALS_WEIGHT) * technicalBlend) *
+            10,
+        ) / 10,
+      )
+    : technicalBlend;
 
   // Apply the earnings-surprise nudge on top of the blend (bounded, monotonic).
   const earnAdj =
@@ -314,6 +335,7 @@ export function scoreStock(input: {
     input.indicators != null,
     input.drawdown != null,
     input.catalysts.length > 0,
+    hasFundamentals,
   ].filter(Boolean).length;
   const confidence: Confidence =
     dataPoints >= 3 ? "high" : dataPoints === 2 ? "medium" : "low";
@@ -333,6 +355,16 @@ export function scoreStock(input: {
       sentiment: hasCatalysts
         ? s.reasons
         : ["No current catalysts — sentiment excluded from the blend."],
+      ...(hasFundamentals
+        ? {
+            fundamentals: [
+              `Fundamentals ${input.fundamentals!.score.toFixed(1)}/10 (leads the score at ${Math.round(
+                FUNDAMENTALS_WEIGHT * 100,
+              )}%).`,
+              ...input.fundamentals!.reasons,
+            ],
+          }
+        : {}),
       ...(earningsReasons.length > 0 ? { earnings: earningsReasons } : {}),
     },
     weightsUsed,

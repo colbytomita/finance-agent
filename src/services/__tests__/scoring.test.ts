@@ -222,6 +222,45 @@ describe("scoreStock — earnings surprise nudge (monotonic, bounded)", () => {
   });
 });
 
+describe("scoreStock — fundamentals lead the score when supplied", () => {
+  // A strong, healthy uptrend chart.
+  const bars = barsFromCloses(trendCloses(100, 200, 260));
+  const ind = computeIndicators(bars);
+  const dd = computeDrawdown(bars, 198);
+  const score = (fund: number | null) =>
+    scoreStock({
+      indicators: ind,
+      drawdown: dd,
+      catalysts: [],
+      fundamentals: fund == null ? null : { score: fund, reasons: [`Fundamentals ${fund}.`] },
+    }).overallScore;
+
+  it("weak fundamentals veto a strong chart; strong fundamentals make it a buy", () => {
+    const weak = score(2.5);
+    const strong = score(9);
+    expect(strong).toBeGreaterThanOrEqual(7); // strong fundamentals → buy candidate
+    expect(weak).toBeLessThan(7); // same chart, weak fundamentals → not a buy
+    expect(weak).toBeLessThan(strong);
+    expect(weak).toBeLessThan(score(null)); // and below the technical-only read
+  });
+
+  it("strong fundamentals lift the score above the technical-only read", () => {
+    expect(score(9)).toBeGreaterThan(score(null));
+    expect(score(9)).toBeGreaterThan(score(5));
+  });
+
+  it("surfaces fundamentals in the reasoning and confidence", () => {
+    const r = scoreStock({
+      indicators: ind,
+      drawdown: dd,
+      catalysts: [],
+      fundamentals: { score: 8, reasons: ["Revenue +16% YoY."] },
+    });
+    expect(r.reasoning.fundamentals?.join(" ")).toMatch(/leads the score/i);
+    expect(r.reasoning.fundamentals?.join(" ")).toMatch(/Revenue \+16%/);
+  });
+});
+
 describe("valuationScore + sentimentScore", () => {
   it("treats moderate drawdowns as better value than near-highs", () => {
     const bars = barsFromCloses(trendCloses(100, 200, 260));

@@ -80,6 +80,19 @@ async function quoteSummary(ticker: string, modules: string): Promise<unknown> {
   return res.ok ? res.json() : null;
 }
 
+/**
+ * Fetch arbitrary quoteSummary modules for a ticker over the crumb session
+ * (e.g. "financialData,defaultKeyStatistics,summaryDetail,assetProfile").
+ * Returns the raw JSON, or null on any failure. Used by the fundamentals module.
+ */
+export async function fetchQuoteSummary(ticker: string, modules: string): Promise<unknown> {
+  try {
+    return await quoteSummary(ticker, modules);
+  } catch {
+    return null;
+  }
+}
+
 // --- Pure mappers (unit-tested) ---------------------------------------------
 
 type RawNum = { raw?: number } | number | null | undefined;

@@ -229,6 +229,7 @@ export const agentCandidates = sqliteTable("agent_candidates", {
   catalystScore: real("catalyst_score"),
   riskScore: real("risk_score"),
   sentimentScore: real("sentiment_score"),
+  fundamentalsScore: real("fundamentals_score"), // company fundamentals read (1–10), leads the pick score
   recommendation: text("recommendation"),
   confidence: text("confidence").notNull().default("low"),
   drawdownPercent: real("drawdown_percent"),
