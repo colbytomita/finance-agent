@@ -13,6 +13,7 @@ import {
   type WindowEdge,
 } from "./eventStudy";
 import { stockRecommendationLabel } from "./scoring";
+import { runSetupPerformance, type SetupPerformance } from "./setupPerformance";
 import type { StockRecommendationLabel } from "@/lib/types";
 
 // Signal-performance ("does any of this actually work?") backtest.
@@ -84,6 +85,7 @@ export interface PerformanceReport {
   generatedAt: string;
   score: ScoreCalibration;
   picks: PickPerformance;
+  setups?: SetupPerformance; // optional so an older cached report still parses
 }
 
 /**
@@ -437,15 +439,17 @@ async function runPickPerformance(alpaca: AlpacaService | null): Promise<PickPer
   };
 }
 
-/** Run both backtests (score calibration + pick performance) and cache the report. */
+/** Run all backtests (score calibration + pick + setup performance) and cache the report. */
 export async function runPerformanceBacktest(): Promise<PerformanceReport> {
   const alpaca = AlpacaService.fromEnv();
   const score = await runScoreCalibration(alpaca);
   const picks = await runPickPerformance(alpaca);
+  const setups = await runSetupPerformance(alpaca);
   const report: PerformanceReport = {
     generatedAt: nowIso(),
     score,
     picks,
+    setups,
   };
   writeCachedReport(report);
   return report;

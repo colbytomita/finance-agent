@@ -71,6 +71,7 @@ export default function PerformancePage() {
   const trades = getTradePerformance();
   const score = report?.score;
   const picks = report?.picks;
+  const setups = report?.setups;
 
   return (
     <div className="space-y-5">
@@ -85,8 +86,9 @@ export default function PerformancePage() {
       <p className="text-xs text-zinc-500">
         Does any of this actually work? This backtests the app&apos;s own calls against what happened next —
         stock scores (by recommendation band) and discovery picks (by source) measured as forward return vs SPY
-        over 1 / 5 / 20 trading days, plus the realized results of your closed trades. Historical correlation
-        across past calls — <span className="text-zinc-400">not a prediction and not advice</span>.
+        over 1 / 5 / 20 trading days, the realized results of your closed trades, and whether detected swing
+        setups reached their target before their stop. Historical correlation across past calls —{" "}
+        <span className="text-zinc-400">not a prediction and not advice</span>.
       </p>
 
       {/* 1. Score calibration */}
@@ -241,10 +243,80 @@ export default function PerformancePage() {
         )}
       </section>
 
+      {/* 4. Setup outcomes */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold text-zinc-200">Setup outcomes</h2>
+        <p className="text-[11px] text-zinc-500">
+          Did detected swing setups reach their target before their stop? Each detection is walked forward over{" "}
+          {setups?.horizonDays ?? 20} trading days: the trade only counts if price actually traded into its entry
+          zone (else &quot;no fill&quot;), then target-first is a win, stop-first a loss, neither an expired
+          (mark-to-market) outcome. R = reward in units of the initial entry→stop risk.
+        </p>
+        {!setups ? (
+          <p className="py-4 text-center text-sm text-zinc-500">
+            Run the backtest to evaluate detected setups.
+          </p>
+        ) : setups.overall.triggered === 0 ? (
+          <>
+            <p className="py-4 text-center text-sm text-zinc-500">
+              {setups.totalSetups === 0
+                ? "No setups detected yet."
+                : `No triggered setups yet (${setups.pending} pending${setups.overall.noFill ? `, ${setups.overall.noFill} no-fill` : ""}).`}
+            </p>
+            <Notes notes={setups.notes} />
+          </>
+        ) : (
+          <>
+            <p className="text-[11px] text-zinc-500">
+              {setups.overall.triggered} triggered · {setups.overall.wins}W / {setups.overall.losses}L
+              {setups.overall.expired ? ` / ${setups.overall.expired} expired` : ""}
+              {setups.overall.noFill ? ` · ${setups.overall.noFill} no-fill` : ""}
+              {setups.pending ? ` · ${setups.pending} pending` : ""}
+            </p>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Setup type</th>
+                    <th className="text-right">Triggered</th>
+                    <th className="text-right">Win rate</th>
+                    <th className="text-right">Avg R (expectancy)</th>
+                    <th className="text-right">W / L / exp.</th>
+                    <th className="text-right">No-fill</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...setups.byType, setups.overall].map((s, i) => (
+                    <tr key={s.setupType} className={i === setups.byType.length ? "border-t border-zinc-700" : ""}>
+                      <td className="font-semibold capitalize text-zinc-200">
+                        {s.setupType.replace(/_/g, " ")}
+                      </td>
+                      <td className="text-right tabular-nums">{s.triggered}</td>
+                      <td className="text-right tabular-nums">
+                        {s.winRate == null ? "—" : `${s.winRate.toFixed(0)}%`}
+                      </td>
+                      <td className={`text-right tabular-nums ${(s.avgR ?? 0) > 0 ? "pos" : (s.avgR ?? 0) < 0 ? "neg" : "text-zinc-400"}`}>
+                        {s.avgR == null ? "—" : `${s.avgR > 0 ? "+" : ""}${s.avgR.toFixed(2)}R`}
+                      </td>
+                      <td className="text-right tabular-nums text-zinc-500">
+                        {s.wins} / {s.losses} / {s.expired}
+                      </td>
+                      <td className="text-right tabular-nums text-zinc-600">{s.noFill}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Notes notes={setups.notes} />
+          </>
+        )}
+      </section>
+
       <p className="text-[11px] text-zinc-600">
         Abnormal return = the ticker&apos;s return minus SPY&apos;s over the same window. Score/pick figures are a
-        calibration check (overlapping windows, finite samples), not a tradeable backtest. Realized-trade stats
-        cover only trades you closed in the app. Past behavior never guarantees future results.
+        calibration check (overlapping windows, finite samples), not a tradeable backtest. Realized-trade and
+        setup-outcome stats are historical results of past calls, conservatively scored (same-bar stop+target
+        counts as a stop). Past behavior never guarantees future results.
       </p>
     </div>
   );
