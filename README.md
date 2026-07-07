@@ -85,6 +85,26 @@ This is a **single-user, localhost tool** — it has no authentication or CSRF p
 | `npm run typecheck` | strict TypeScript check |
 | `npm run db:generate` | generate a SQL migration in `drizzle/` after editing `src/db/schema.ts` |
 | `npm run db:seed` | optional demo data — not required; the app is designed to run on your real data |
+| `scripts/install-jobs-task.ps1` | (Windows, opt-in) register a Scheduled Task so `npm run jobs` starts at logon and restarts on failure; `uninstall-jobs-task.ps1` removes it |
+
+### Keeping the scheduler running (Windows)
+
+`npm run jobs` normally lives and dies with its terminal, so a reboot silently
+stops the background refreshes and daily maintenance until you notice the header
+badge go red. To keep it running unattended, register it as a Scheduled Task
+(opt-in — nothing installs it for you):
+
+```powershell
+# from the project root, in PowerShell
+scripts\install-jobs-task.ps1          # register: runs `npm run jobs` at logon, restarts on failure
+Start-ScheduledTask -TaskName FinanceAgentJobs   # start it now without logging off
+scripts\uninstall-jobs-task.ps1        # remove it
+```
+
+Output is appended to `data/logs/jobs.log` (git-ignored). The task runs as your
+user with your environment (so it finds `node`/`npm` and reads `.env`). If you
+already have `npm run jobs` in a terminal, stop that one so you don't run two
+schedulers against the same database.
 
 ## Architecture
 

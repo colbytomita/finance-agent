@@ -14,3 +14,4 @@ data/*.db-shm
 playwright-report/
 test-results/
 data/backups/
+data/logs/

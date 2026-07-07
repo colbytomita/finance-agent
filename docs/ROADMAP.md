@@ -101,7 +101,7 @@ operational resilience, then Tier 3 features by taste.
 
 ## Tier 2 — Operational resilience
 
-- [ ] **18. Keep the jobs runner alive across reboots** *(small–medium)*
+- [x] **18. Keep the jobs runner alive across reboots** *(small–medium — done)*
   **Why:** `npm run jobs` lives and dies with a terminal window. The health
   badge (roadmap #4) tells you it's dead, but nothing brings it back; every
   reboot silently stops refreshes/maintenance until noticed.
