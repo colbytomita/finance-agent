@@ -51,7 +51,10 @@ export default function SwingPage() {
           Risk profile: {cfg.riskProfile} · {cfg.riskPerTradePercent}% risk/trade · min R/R{" "}
           {cfg.minRiskReward}:1 · account {fmtMoney(accountValue, 0)}
         </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <a href="/api/trades/export" download className="btn text-xs" title="Download closed trades + journal as CSV">
+            Export CSV
+          </a>
           <RefreshButton />
         </div>
       </div>

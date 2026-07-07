@@ -6,6 +6,7 @@ import * as tradesIdRoute from "../trades/[id]/route";
 import * as eventsRoute from "../events/route";
 import * as jobsRoute from "../jobs/route";
 import * as settingsRoute from "../settings/route";
+import * as tradesExportRoute from "../trades/export/route";
 
 // Route-handler smoke tests (agent-memory "likely next work"): call the JSON
 // handlers directly against the in-memory database — no server, no network.
@@ -128,5 +129,55 @@ describe("settings API", () => {
     expect(got.config.ntfyTopic).toBe("t-1");
     // Only booleans/labels about integrations — never key material.
     expect(JSON.stringify(got.integrations)).not.toMatch(/key|secret/i);
+  });
+});
+
+describe("GET /api/trades/export", () => {
+  it("returns a CSV header row and one row per closed trade, escaped", async () => {
+    const db = getDb();
+    const now = new Date().toISOString();
+    const inserted = db
+      .insert(schema.activeTrades)
+      .values({
+        ticker: "MSFT",
+        direction: "long",
+        entryPrice: 400,
+        entryDate: now,
+        shares: 10,
+        stopLoss: 380,
+        exitPrice: 440, // R = (440-400)/(400-380) = 2
+        status: "closed",
+        unrealizedGainLoss: 400,
+        unrealizedGainLossPercent: 10,
+        thesis: "Breakout, needs escaping",
+        createdAt: now,
+        updatedAt: now,
+        closedAt: now,
+      })
+      .run();
+    db.insert(schema.tradeJournalEntries)
+      .values({
+        tradeId: Number(inserted.lastInsertRowid),
+        ticker: "MSFT",
+        exitReason: 'Target, "hit"',
+        holdingPeriodDays: 5,
+        thesisPlayedOut: true,
+        profitLoss: 400,
+        profitLossPercent: 10,
+        createdAt: now,
+      })
+      .run();
+
+    const res = tradesExportRoute.GET();
+    expect(res.headers.get("content-type")).toMatch(/text\/csv/);
+    const text = await res.text();
+    const lines = text.trim().split(/\r\n/);
+    expect(lines).toHaveLength(2); // header + one closed trade
+    expect(lines[0].startsWith("ticker,direction,entry_date")).toBe(true);
+    expect(lines[1]).toContain("MSFT,long,");
+    expect(lines[1]).toContain(",2,"); // r_multiple
+    // Fields with commas/quotes are RFC-4180 escaped.
+    expect(text).toContain('"Breakout, needs escaping"');
+    expect(text).toContain('"Target, ""hit"""');
   });
 });

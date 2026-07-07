@@ -161,7 +161,7 @@ operational resilience, then Tier 3 features by taste.
   pure scoring reuse is tested, and with the toggle on a sub-threshold pick
   shows the raised bar in its rationale. Decision-support framing throughout.
 
-- [ ] **22. Trade & journal CSV export** *(small)*
+- [x] **22. Trade & journal CSV export** *(small — done)*
   **Why:** Realized trades and journal entries (entry/exit reasons, R
   multiples) are the user's tax/record data, and the only way out today is
   the SQLite file itself.

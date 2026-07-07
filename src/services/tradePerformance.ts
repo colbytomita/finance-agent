@@ -46,6 +46,22 @@ export interface TradeStats {
 
 const mean = (xs: number[]): number | null => (xs.length > 0 ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
+/** Realized R-multiple (reward vs initial entry→stop risk). Null when undefined. */
+export function tradeRMultiple(
+  entryPrice: number,
+  exitPrice: number | null,
+  stopLoss: number | null,
+  direction: string | null,
+): number | null {
+  if (exitPrice == null || stopLoss == null || !(entryPrice > 0) || !(stopLoss > 0) || stopLoss === entryPrice) {
+    return null;
+  }
+  const dir = direction === "short" ? -1 : 1;
+  const riskPerShare = Math.abs(entryPrice - stopLoss);
+  if (!(riskPerShare > 0)) return null;
+  return ((exitPrice - entryPrice) * dir) / riskPerShare;
+}
+
 /** Aggregate closed trades (+ their journal entries) into realized stats. Pure. */
 export function summarizeClosedTrades(
   trades: ClosedTradeInput[],
