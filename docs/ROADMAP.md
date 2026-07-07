@@ -225,10 +225,9 @@ operational resilience, then Tier 3 features by taste.
   and helpers), bar store/backfill (`refreshBars`, `ensureBarsCover` wiring),
   and analysis orchestration (`recomputeStockAnalysis`, tracked-ticker
   plumbing). Pure moves, no behavior change, tests stay green.
-- [ ] **27. Alerts history page** *(small)* — the dashboard shows recent
-  alerts; a `/alerts` page with filters (severity, ticker, acknowledged)
-  over the existing table would make audits of "what did it warn me about"
-  possible.
+- [x] **27. Alerts history page** *(small — done)* — `/alerts` page with
+  filters (severity, ticker, acknowledged) over the full alert history, plus
+  per-row acknowledge; linked in the nav.
 - [ ] **28. Dependency watch** — the moderate `npm audit` finding is esbuild
   via drizzle-kit's dev-only chain; no runtime exposure. Revisit when
   drizzle-kit ships a fix; don't downgrade.

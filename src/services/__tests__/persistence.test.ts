@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { useTestDb } from "./dbHarness";
 import { upsertWatchlistItem } from "../watchlist";
-import { emitAlert } from "../alerts";
+import { emitAlert, listAlerts } from "../alerts";
 import { closeTrade } from "../trades";
 import { recordJobRun, getJobHealth } from "../jobHealth";
 import { addMention, findSameDayMention } from "../entityMentions";
@@ -55,6 +56,18 @@ describe("alert emit dedupe", () => {
     expect(emitAlert("near_stop_loss", "warning", "MSFT: within 2% of stop.", "MSFT")).toBe(false);
     expect(emitAlert("near_stop_loss", "warning", "MSFT: within 1% of stop.", "MSFT")).toBe(true);
     expect(getDb().select().from(schema.alerts).all()).toHaveLength(2);
+  });
+
+  it("listAlerts filters by severity, ticker, and acknowledged (roadmap #27)", () => {
+    emitAlert("near_stop_loss", "warning", "MSFT warn", "MSFT");
+    emitAlert("exit", "critical", "NVDA exit", "NVDA");
+    emitAlert("info_note", "info", "AAPL note", "AAPL");
+    getDb().update(schema.alerts).set({ acknowledged: true }).where(eq(schema.alerts.ticker, "AAPL")).run();
+
+    expect(listAlerts({ severity: "critical" }).map((a) => a.ticker)).toEqual(["NVDA"]);
+    expect(listAlerts({ ticker: "msft" }).map((a) => a.message)).toEqual(["MSFT warn"]);
+    expect(listAlerts({ acknowledged: false })).toHaveLength(2);
+    expect(listAlerts({ acknowledged: true }).map((a) => a.ticker)).toEqual(["AAPL"]);
   });
 });
 

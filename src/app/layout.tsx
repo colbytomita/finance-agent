@@ -17,6 +17,7 @@ const NAV = [
   { href: "/sector-scout", label: "Sector Scout" },
   { href: "/performance", label: "Signal Performance" },
   { href: "/swing", label: "Swing Trading" },
+  { href: "/alerts", label: "Alerts" },
   { href: "/catalysts", label: "Catalysts" },
   { href: "/events", label: "Catalyst Edge" },
   { href: "/universe", label: "Research Universe" },

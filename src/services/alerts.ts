@@ -196,6 +196,37 @@ export function generateAlerts(): number {
   return created;
 }
 
+export interface AlertFilter {
+  severity?: string; // info | warning | critical
+  ticker?: string;
+  acknowledged?: boolean;
+}
+
+/** Filtered alert history for the /alerts page (roadmap #27), newest first. */
+export function listAlerts(filter: AlertFilter = {}, limit = 300) {
+  const conds = [];
+  if (filter.severity) conds.push(eq(schema.alerts.severity, filter.severity));
+  if (filter.ticker) conds.push(eq(schema.alerts.ticker, filter.ticker.toUpperCase()));
+  if (filter.acknowledged != null) conds.push(eq(schema.alerts.acknowledged, filter.acknowledged));
+  const where = conds.length === 1 ? conds[0] : conds.length > 1 ? and(...conds) : undefined;
+  const q = getDb().select().from(schema.alerts).orderBy(desc(schema.alerts.createdAt)).limit(limit);
+  return where ? q.where(where).all() : q.all();
+}
+
+/** Distinct tickers that have ever raised an alert (for the filter dropdown). */
+export function alertTickers(): string[] {
+  return [
+    ...new Set(
+      getDb()
+        .select({ t: schema.alerts.ticker })
+        .from(schema.alerts)
+        .all()
+        .map((r) => r.t)
+        .filter((t): t is string => !!t),
+    ),
+  ].sort();
+}
+
 export function getRecentAlerts(limit = 50) {
   const db = getDb();
   return db
