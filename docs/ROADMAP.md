@@ -174,7 +174,7 @@ operational resilience, then Tier 3 features by taste.
   **Accept:** Downloaded file opens in a spreadsheet with correct columns and
   escaping; route smoke test asserts header row + one seeded-via-API trade.
 
-- [ ] **23. Price-chart upgrades: volume + event markers** *(small–medium)*
+- [x] **23. Price-chart upgrades: volume + event markers** *(small–medium — done)*
   **Why:** `PriceChart.tsx` is a clean dependency-free SVG line chart with
   level lines, but it shows no volume (relative volume is already an input to
   setups) and no event context, while the data for both is at hand
