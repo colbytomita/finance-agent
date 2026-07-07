@@ -19,6 +19,7 @@ import {
 } from "./fundamentals";
 import { earningsNudgeFromParsed } from "./earnings";
 import { getYahooEarnings } from "./yahooHttp";
+import { getMarketRegime, isRegimeCautious } from "./marketRegime";
 import { errorMessage, mapPool, nowIso } from "@/lib/util";
 
 // Discovery / "scout" agent. Scans a universe of liquid stocks, scores each with
@@ -268,7 +269,13 @@ const DISCOVERY_CONCURRENCY = 5;
 /** Scan the universe and persist new pending candidates that pass the score test. */
 export async function runDiscoveryScan(opts: { universe?: string[]; minScore?: number } = {}): Promise<ScanResult> {
   const cfg = loadConfig();
-  const minScore = opts.minScore ?? cfg.agentMinScore;
+  const baseMinScore = opts.minScore ?? cfg.agentMinScore;
+  // Market-regime context: reuse the broad-market read. When the filter is on and
+  // the tape is cautious (SPY below its 50-day average), nudge the bar up by 1 —
+  // never a hard block. Either way the regime is noted in each pick's rationale.
+  const regime = getMarketRegime();
+  const regimeRaised = cfg.regimeFilterEnabled && isRegimeCautious(regime);
+  const minScore = regimeRaised ? Math.min(10, baseMinScore + 1) : baseMinScore;
   const alpaca = AlpacaService.fromEnv();
   const excluded = excludedTickers();
   const universe = (opts.universe ?? DEFAULT_UNIVERSE).filter((t) => !excluded.has(t.toUpperCase()));
@@ -310,6 +317,10 @@ export async function runDiscoveryScan(opts: { universe?: string[]; minScore?: n
     if (edges.length > 0) {
       const top = [...edges].sort((x, y) => Math.abs(y.impactScore) - Math.abs(x.impactScore))[0];
       rationaleText += ` Entity edge: ${top.title} (impact ${top.impactScore > 0 ? "+" : ""}${top.impactScore}).`;
+    }
+    rationaleText += ` Market regime: ${regime.headline}.`;
+    if (regimeRaised) {
+      rationaleText += ` (Regime filter raised the bar to ${minScore.toFixed(1)} in this cautious tape.)`;
     }
     const now = nowIso();
     const values = {

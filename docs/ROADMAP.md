@@ -143,7 +143,7 @@ operational resilience, then Tier 3 features by taste.
 
 ## Tier 3 — Features
 
-- [ ] **21. Market-regime context for new entries** *(medium)*
+- [x] **21. Market-regime context for new entries** *(medium — done)*
   **Why:** Open trades already get a market-condition component
   (`marketConditionScore` in `tradeScoring.ts:210` — SPY vs 50-SMA + RSI),
   but the entry-side surfaces (Agent Picks, Sector Scout, setup detection,

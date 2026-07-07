@@ -12,6 +12,7 @@ import { currentAccountValue, daysToNextEarnings } from "@/services/marketData";
 import { suggestPositionSize } from "@/services/riskManagement";
 import { fmtDate, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
 import { EarningsBadge, Freshness, Pct } from "@/components/badges";
+import { MarketRegimeBanner } from "@/components/MarketRegimeBanner";
 import { SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { AddTradeForm, CloseTradeButton } from "@/components/forms";
 import { RefreshButton } from "@/components/RefreshButton";
@@ -54,6 +55,8 @@ export default function SwingPage() {
           <RefreshButton />
         </div>
       </div>
+
+      <MarketRegimeBanner />
 
       <AddTradeForm />
 
