@@ -1,10 +1,39 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { nowIso } from "@/lib/util";
+import { loadConfig } from "@/lib/config";
+import { validateProposedTrade } from "./riskManagement";
+import { daysToNextEarnings } from "./marketData";
 
 // Shared trade-close path: record the exit on the trade row and auto-create
 // the journal entry. Used by the manual close action (trades API) and by the
 // broker order sync when a bracket exit leg fills.
+
+/**
+ * Pre-trade risk gate (roadmap #29): run the pure `validateProposedTrade`
+ * checks with the user's configured thresholds and the ticker's next
+ * earnings date. Shared by the order-placement and manual-log routes. The
+ * caller decides what to do with the problems — the app never hard-blocks a
+ * user-initiated trade, it asks for explicit acknowledgement instead.
+ */
+export function pretradeRiskProblems(input: {
+  ticker: string;
+  direction: "long" | "short";
+  entry: number;
+  stop: number | null;
+  target: number | null;
+}): string[] {
+  const cfg = loadConfig();
+  return validateProposedTrade({
+    entry: input.entry,
+    stop: input.stop,
+    target: input.target,
+    direction: input.direction,
+    minRiskReward: cfg.minRiskReward,
+    daysToEarnings: daysToNextEarnings(input.ticker.toUpperCase()),
+    avoidEarningsWithinDays: cfg.avoidEarningsWithinDays,
+  });
+}
 
 export type ActiveTrade = typeof schema.activeTrades.$inferSelect;
 

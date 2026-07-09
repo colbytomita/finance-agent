@@ -33,8 +33,8 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
 
 ## Tier 1 — Wire up the dead safety features
 
-- [ ] **29. Pre-trade risk gate: wire `validateProposedTrade` into trade
-  entry** *(medium)*
+- [x] **29. Pre-trade risk gate: wire `validateProposedTrade` into trade
+  entry** *(medium — done)*
   **Why:** `validateProposedTrade` (`src/services/riskManagement.ts:134`)
   checks exactly what a swing trader should see before entry — no stop
   defined, no target, R/R below `minRiskReward`, inside the

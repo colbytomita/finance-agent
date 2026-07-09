@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { getDb, schema } from "@/db";
 import { useTestDb } from "@/services/__tests__/dbHarness";
 import * as watchlistRoute from "../watchlist/route";
+import * as tradesRoute from "../trades/route";
 import * as tradesIdRoute from "../trades/[id]/route";
+import * as tradesPlaceRoute from "../trades/place/route";
 import * as eventsRoute from "../events/route";
 import * as jobsRoute from "../jobs/route";
 import * as settingsRoute from "../settings/route";
@@ -40,6 +42,91 @@ describe("POST /api/watchlist", () => {
     expect(res.status).toBe(200);
     const list = (await (await watchlistRoute.GET()).json()) as { ticker: string }[];
     expect(list.map((w) => w.ticker)).toEqual(["MSFT"]);
+  });
+});
+
+describe("POST /api/trades — pre-trade risk gate (roadmap #29)", () => {
+  it("400s with riskProblems when stop and target are missing", async () => {
+    const res = await tradesRoute.POST(
+      jsonReq("POST", { ticker: "MSFT", entryPrice: 100, shares: 5 }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { riskProblems?: string[] };
+    expect(body.riskProblems?.join(" ")).toMatch(/stop-loss/i);
+    expect(body.riskProblems?.join(" ")).toMatch(/no target/i);
+    expect(getDb().select().from(schema.activeTrades).all()).toHaveLength(0);
+  });
+
+  it("logs the same trade when risks are explicitly confirmed", async () => {
+    const res = await tradesRoute.POST(
+      jsonReq("POST", { ticker: "MSFT", entryPrice: 100, shares: 5, confirmRisks: true }),
+    );
+    expect(res.status).toBe(200);
+    expect(getDb().select().from(schema.activeTrades).all()).toHaveLength(1);
+  });
+
+  it("flags thin R/R; a clean trade passes without confirmation", async () => {
+    const thin = await tradesRoute.POST(
+      jsonReq("POST", {
+        ticker: "MSFT",
+        entryPrice: 100,
+        shares: 5,
+        stopLoss: 95,
+        targetPrice1: 104, // 0.8:1 vs the default 2:1 minimum
+      }),
+    );
+    expect(thin.status).toBe(400);
+    const body = (await thin.json()) as { riskProblems?: string[] };
+    expect(body.riskProblems?.join(" ")).toMatch(/minimum/i);
+
+    const clean = await tradesRoute.POST(
+      jsonReq("POST", {
+        ticker: "AAPL",
+        entryPrice: 100,
+        shares: 5,
+        stopLoss: 95,
+        targetPrice1: 111, // 2.2:1
+      }),
+    );
+    expect(clean.status).toBe(200);
+  });
+});
+
+describe("POST /api/trades/place — risk gate runs before the broker", () => {
+  it("returns riskProblems even with Alpaca unconfigured, then the broker error once confirmed", async () => {
+    // Tests never load .env; make double-sure no broker creds leak in.
+    delete process.env.ALPACA_API_KEY;
+    delete process.env.ALPACA_API_SECRET;
+
+    const gated = await tradesPlaceRoute.POST(
+      jsonReq("POST", {
+        ticker: "MSFT",
+        shares: 5,
+        orderType: "limit",
+        limitPrice: 100,
+        referencePrice: 100,
+        attachBracket: false, // no stop, no target
+      }),
+    );
+    expect(gated.status).toBe(400);
+    const gBody = (await gated.json()) as { riskProblems?: string[] };
+    expect(gBody.riskProblems?.join(" ")).toMatch(/stop-loss/i);
+
+    const confirmed = await tradesPlaceRoute.POST(
+      jsonReq("POST", {
+        ticker: "MSFT",
+        shares: 5,
+        orderType: "limit",
+        limitPrice: 100,
+        referencePrice: 100,
+        attachBracket: false,
+        confirmRisks: true,
+      }),
+    );
+    expect(confirmed.status).toBe(400);
+    const cBody = (await confirmed.json()) as { error?: string; riskProblems?: string[] };
+    expect(cBody.riskProblems).toBeUndefined();
+    expect(cBody.error).toMatch(/alpaca is not configured/i);
   });
 });
 

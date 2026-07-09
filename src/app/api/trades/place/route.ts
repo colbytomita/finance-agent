@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { AlpacaService, AlpacaError } from "@/services/alpaca";
+import { pretradeRiskProblems } from "@/services/trades";
 import { errorMessage, nowIso } from "@/lib/util";
 
 // User-initiated order placement. The user fills in the trade dialog and submits;
@@ -26,6 +27,9 @@ const placeSchema = z.object({
   logTrade: z.coerce.boolean().default(true),
   // Required to be true to send a LIVE (real-money) order.
   confirmLive: z.coerce.boolean().default(false),
+  // Required to be true to place an order that fails the pre-trade risk
+  // checks (no stop, thin R/R, inside the earnings-avoidance window).
+  confirmRisks: z.coerce.boolean().default(false),
 });
 
 export async function POST(req: Request) {
@@ -35,6 +39,36 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
+
+  if (d.orderType === "limit" && d.limitPrice == null) {
+    return NextResponse.json({ error: "A limit order needs a limit price." }, { status: 400 });
+  }
+
+  const side = d.direction === "long" ? "buy" : "sell";
+  // The price the protective legs are measured against.
+  const refPrice = d.orderType === "limit" ? (d.limitPrice as number) : d.referencePrice;
+  const stopLoss = d.attachBracket ? d.stopLoss ?? null : null;
+  const takeProfit = d.attachBracket ? d.targetPrice1 ?? null : null;
+
+  // Pre-trade risk gate (roadmap #29), before anything touches the broker: a
+  // speed bump, not a hard block — resubmitting with confirmRisks
+  // acknowledges the listed problems and proceeds.
+  const riskProblems = pretradeRiskProblems({
+    ticker: d.ticker,
+    direction: d.direction,
+    entry: refPrice,
+    stop: stopLoss,
+    target: takeProfit,
+  });
+  if (riskProblems.length > 0 && !d.confirmRisks) {
+    return NextResponse.json(
+      {
+        error: `Risk check: ${riskProblems.join(" ")}`,
+        riskProblems,
+      },
+      { status: 400 },
+    );
+  }
 
   const alpaca = AlpacaService.fromEnv();
   if (!alpaca) {
@@ -50,16 +84,6 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-
-  if (d.orderType === "limit" && d.limitPrice == null) {
-    return NextResponse.json({ error: "A limit order needs a limit price." }, { status: 400 });
-  }
-
-  const side = d.direction === "long" ? "buy" : "sell";
-  // The price the protective legs are measured against.
-  const refPrice = d.orderType === "limit" ? (d.limitPrice as number) : d.referencePrice;
-  const stopLoss = d.attachBracket ? d.stopLoss ?? null : null;
-  const takeProfit = d.attachBracket ? d.targetPrice1 ?? null : null;
 
   // Validate protective-leg placement relative to entry (long: stop below / target
   // above; short: the reverse) so we never submit a self-crossing bracket.
