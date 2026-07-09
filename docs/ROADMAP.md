@@ -230,9 +230,13 @@ operational resilience, then Tier 3 features by taste.
 - [x] **27. Alerts history page** *(small — done)* — `/alerts` page with
   filters (severity, ticker, acknowledged) over the full alert history, plus
   per-row acknowledge; linked in the nav.
-- [ ] **28. Dependency watch** — the moderate `npm audit` finding is esbuild
-  via drizzle-kit's dev-only chain; no runtime exposure. Revisit when
-  drizzle-kit ships a fix; don't downgrade.
+- [x] **28. Dependency watch** *(done 2026-07-09)* — drizzle-kit's latest
+  (0.31.10) still pulls esbuild ≤0.24.2 via `@esbuild-kit/esm-loader`, so
+  instead of waiting: a scoped npm override (`@esbuild-kit/core-utils` →
+  `esbuild ^0.25.0`) in `package.json` clears the advisory without
+  downgrading. Verified `npm audit` clean and `drizzle-kit generate` still
+  works. If a future drizzle-kit drops the `@esbuild-kit` chain, the override
+  becomes a no-op and can be removed.
 
 ## Archive — v1 (2026-07-01 review), all done 2026-07-05
 
