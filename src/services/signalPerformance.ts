@@ -4,7 +4,7 @@ import type { Bar } from "@/lib/types";
 import { nowIso } from "@/lib/util";
 import { AlpacaService } from "./alpaca";
 import { ensureBarsCover } from "./entityMentions";
-import { getBars, saveBars } from "./marketData";
+import { getBars, saveBars } from "./bars";
 import {
   eventStudy,
   aggregateEventStudies,

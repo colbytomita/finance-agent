@@ -3,7 +3,25 @@ import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { isCatalystStale } from "@/services/catalysts";
 
-// Read-side helpers used by server components. Latest-row lookups per ticker.
+// Read-side helpers used by server components and services. Latest-row
+// lookups per ticker, plus the tracked-ticker set.
+
+/** Every ticker the app tracks: holdings ∪ watchlist ∪ open trades. */
+export function getTrackedTickers(): string[] {
+  const db = getDb();
+  const set = new Set<string>();
+  for (const r of db.select({ t: schema.portfolioHoldings.ticker }).from(schema.portfolioHoldings).all())
+    set.add(r.t);
+  for (const r of db.select({ t: schema.watchlistItems.ticker }).from(schema.watchlistItems).all())
+    set.add(r.t);
+  for (const r of db
+    .select({ t: schema.activeTrades.ticker })
+    .from(schema.activeTrades)
+    .where(eq(schema.activeTrades.status, "open"))
+    .all())
+    set.add(r.t);
+  return [...set].sort();
+}
 
 export function latestScore(ticker: string) {
   return (

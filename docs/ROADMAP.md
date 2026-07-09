@@ -220,11 +220,13 @@ operational resilience, then Tier 3 features by taste.
 
 ## Tier 4 — When bored
 
-- [ ] **26. Split `marketData.ts`** *(carried from v1 #12; 630 lines and the
-  largest non-scout module)* — natural seams: quote refresh (`refreshPrices`
-  and helpers), bar store/backfill (`refreshBars`, `ensureBarsCover` wiring),
-  and analysis orchestration (`recomputeStockAnalysis`, tracked-ticker
-  plumbing). Pure moves, no behavior change, tests stay green.
+- [x] **26. Split `marketData.ts`** *(carried from v1 #12 — done)* — quote
+  refresh moved to `src/services/quotes.ts`, the bar store to
+  `src/services/bars.ts`, `getTrackedTickers` to `@/lib/queries` (both new
+  modules need it; avoids a cycle), and `marketData.ts` keeps analysis
+  orchestration (640 → ~400 lines). Pure moves, no behavior change; existing
+  `marketData` re-exports (`getTrackedTickers`, `getLatestSnapshot`) kept for
+  orchestration-side callers.
 - [x] **27. Alerts history page** *(small — done)* — `/alerts` page with
   filters (severity, ticker, acknowledged) over the full alert history, plus
   per-row acknowledge; linked in the nav.
