@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Bar } from "@/lib/types";
 import { AlpacaService } from "./alpaca";
-import { getBars, saveBars } from "./marketData";
+import { getBars, saveBars } from "./bars";
 import { getYahooDailyBars } from "./yahooHttp";
 import { errorMessage, nowIso } from "@/lib/util";
 import {

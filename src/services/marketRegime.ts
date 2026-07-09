@@ -1,6 +1,6 @@
 import { computeIndicators, type IndicatorSnapshot } from "./indicators";
 import { marketConditionScore } from "./tradeScoring";
-import { getBars } from "./marketData";
+import { getBars } from "./bars";
 
 // Broad-market regime (roadmap #21). Open trades already weigh a market-condition
 // component (SPY vs its 50-day average + RSI); this reuses that exact scoring so

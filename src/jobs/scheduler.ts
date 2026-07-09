@@ -7,12 +7,12 @@ import { loadConfig } from "@/lib/config";
 import { errorMessage, nowIso } from "@/lib/util";
 import {
   fullRefresh,
-  refreshPrices,
   recomputeStockAnalysis,
   recomputeTradeScores,
   getTrackedTickers,
   syncPortfolio,
 } from "@/services/marketData";
+import { refreshPrices } from "@/services/quotes";
 import { generateAlerts } from "@/services/alerts";
 import { syncBrokerOrders } from "@/services/orderSync";
 import { rollCatalystStatuses, scanYahooNews } from "@/services/catalysts";
