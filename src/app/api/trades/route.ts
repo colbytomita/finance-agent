@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { nowIso } from "@/lib/util";
+import { pretradeRiskProblems } from "@/services/trades";
 
 const tradeSchema = z.object({
   ticker: z.string().min(1).max(10),
@@ -13,6 +14,9 @@ const tradeSchema = z.object({
   targetPrice1: z.coerce.number().positive().nullish(),
   targetPrice2: z.coerce.number().positive().nullish(),
   thesis: z.string().nullish(),
+  // Required to be true to log a trade that fails the pre-trade risk checks
+  // (no stop, thin R/R, inside the earnings-avoidance window).
+  confirmRisks: z.coerce.boolean().default(false),
 });
 
 export async function GET() {
@@ -37,6 +41,24 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+  }
+  // Pre-trade risk gate (roadmap #29): a speed bump, not a hard block — the
+  // same problems logged with confirmRisks acknowledge them and proceed.
+  const riskProblems = pretradeRiskProblems({
+    ticker: d.ticker,
+    direction: d.direction,
+    entry: d.entryPrice,
+    stop: d.stopLoss ?? null,
+    target: d.targetPrice1 ?? null,
+  });
+  if (riskProblems.length > 0 && !d.confirmRisks) {
+    return NextResponse.json(
+      {
+        error: `Risk check: ${riskProblems.join(" ")}`,
+        riskProblems,
+      },
+      { status: 400 },
+    );
   }
   const db = getDb();
   const now = nowIso();

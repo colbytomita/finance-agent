@@ -23,6 +23,11 @@ export interface ApiCallOptions<T> {
   /** Error text when the API's { error } isn't a plain string. */
   errorText?: string;
   /**
+   * Inspect the parsed body of a failed (non-2xx) response before the error
+   * message is set — e.g. to pull structured `riskProblems` out of a 400.
+   */
+  onErrorData?: (data: unknown) => void;
+  /**
    * Leave `busy` set after success so the control stays disabled until the
    * refresh re-renders it away (accept/dismiss rows that disappear).
    */
@@ -53,6 +58,7 @@ export function useApiAction() {
       });
       const data = (await res.json().catch(() => ({}))) as T;
       if (!res.ok) {
+        opts.onErrorData?.(data);
         const err = (data as { error?: unknown }).error;
         throw new Error(typeof err === "string" ? err : (opts.errorText ?? "request failed"));
       }

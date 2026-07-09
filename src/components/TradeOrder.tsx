@@ -47,6 +47,10 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
   const [targetPrice1, setTargetPrice1] = useState(n2(props.targetPrice1));
   const [thesis, setThesis] = useState("");
   const [confirmLive, setConfirmLive] = useState(false);
+  // Pre-trade risk gate (roadmap #29): the server returns the failed checks;
+  // the user must explicitly acknowledge them to place the order anyway.
+  const [riskProblems, setRiskProblems] = useState<string[] | null>(null);
+  const [confirmRisks, setConfirmRisks] = useState(false);
 
   const configured = mode != null;
   const isLive = mode === "live";
@@ -55,6 +59,8 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
     resetAction();
     setResult(null);
     setConfirmLive(false);
+    setRiskProblems(null);
+    setConfirmRisks(false);
   }
 
   function submit() {
@@ -73,16 +79,25 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
         targetPrice1: attachBracket ? targetPrice1 : null,
         thesis: thesis || null,
         confirmLive,
+        confirmRisks,
         logTrade: true,
       },
       errorText: "Order rejected — check the fields.",
-      onSuccess: (d) =>
+      onErrorData: (data) => {
+        const rp = (data as { riskProblems?: unknown })?.riskProblems;
+        setRiskProblems(
+          Array.isArray(rp) && rp.every((p) => typeof p === "string") ? (rp as string[]) : null,
+        );
+      },
+      onSuccess: (d) => {
+        setRiskProblems(null);
         setResult({
           id: d.order.id,
           status: d.order.status,
           orderClass: d.order.orderClass,
           filledAvgPrice: d.order.filledAvgPrice,
-        }),
+        });
+      },
     });
   }
 
@@ -250,6 +265,26 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
                     : "Limit orders only fill at your price or better."}
                 </p>
 
+                {riskProblems && riskProblems.length > 0 && (
+                  <div className="space-y-1.5 rounded border border-amber-800 bg-amber-950/40 p-2 text-xs text-amber-200">
+                    <p className="font-semibold">Risk checks failed:</p>
+                    <ul className="list-disc space-y-0.5 pl-4">
+                      {riskProblems.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                    <label className="flex items-start gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        checked={confirmRisks}
+                        onChange={(e) => setConfirmRisks(e.target.checked)}
+                        className="mt-0.5 h-auto w-auto"
+                      />
+                      I've reviewed these warnings — place the order anyway.
+                    </label>
+                  </div>
+                )}
+
                 {isLive && (
                   <label className="flex items-start gap-2 rounded border border-red-800 bg-red-950/40 p-2 text-xs text-red-200">
                     <input
@@ -265,14 +300,20 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
                 <div className="flex items-center gap-2">
                   <button
                     className={`btn ${isLive ? "btn-danger" : "btn-primary"}`}
-                    disabled={busy || (isLive && !confirmLive)}
+                    disabled={
+                      busy ||
+                      (isLive && !confirmLive) ||
+                      (riskProblems != null && riskProblems.length > 0 && !confirmRisks)
+                    }
                   >
                     {busy ? "Placing…" : isLive ? "Place LIVE order" : "Place paper order"}
                   </button>
                   <button type="button" className="btn" onClick={() => setOpen(false)}>
                     Cancel
                   </button>
-                  {error && <span className="text-xs text-red-400">{error}</span>}
+                  {error && (!riskProblems || riskProblems.length === 0) && (
+                    <span className="text-xs text-red-400">{error}</span>
+                  )}
                 </div>
               </form>
             )}

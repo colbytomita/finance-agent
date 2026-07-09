@@ -131,6 +131,32 @@ describe("validateProposedTrade", () => {
     });
     expect(problems).toHaveLength(0);
   });
+
+  it("computes short R/R with the direction flag", () => {
+    // Short: stop above entry, target below — 2:1, passes.
+    const problems = validateProposedTrade({
+      entry: 100,
+      stop: 105,
+      target: 90,
+      direction: "short",
+      minRiskReward: 2,
+      avoidEarningsWithinDays: 0,
+    });
+    expect(problems).toHaveLength(0);
+  });
+
+  it("flags a short whose stop is on the wrong side", () => {
+    // A long-shaped stop (below entry) is wrong for a short.
+    const problems = validateProposedTrade({
+      entry: 100,
+      stop: 95,
+      target: 90,
+      direction: "short",
+      minRiskReward: 2,
+      avoidEarningsWithinDays: 0,
+    });
+    expect(problems.join(" ")).toMatch(/wrong side/i);
+  });
 });
 
 describe("concentrationWarnings", () => {

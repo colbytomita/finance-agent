@@ -135,6 +135,7 @@ export function validateProposedTrade(input: {
   entry: number;
   stop: number | null;
   target: number | null;
+  direction?: "long" | "short";
   minRiskReward: number;
   daysToEarnings?: number | null;
   avoidEarningsWithinDays: number;
@@ -147,7 +148,7 @@ export function validateProposedTrade(input: {
     problems.push("No target defined — risk/reward cannot be evaluated.");
   }
   if (input.stop != null && input.target != null) {
-    const rr = riskRewardRatio(input.entry, input.stop, input.target);
+    const rr = riskRewardRatio(input.entry, input.stop, input.target, input.direction ?? "long");
     if (rr == null) {
       problems.push("Stop is on the wrong side of entry.");
     } else if (rr < input.minRiskReward) {

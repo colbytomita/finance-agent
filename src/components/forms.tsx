@@ -172,14 +172,35 @@ export function AddHoldingForm() {
 }
 
 export function AddTradeForm() {
-  const { submit, busy, error } = useSubmit("/api/trades");
+  const { call, busy, error } = useApiAction();
+  // Pre-trade risk gate (roadmap #29): the API returns the failed checks; the
+  // user must explicitly acknowledge them to log the trade anyway.
+  const [riskProblems, setRiskProblems] = useState<string[] | null>(null);
+  const [confirmRisks, setConfirmRisks] = useState(false);
   return (
     <Collapsible label="Log a swing trade">
       <form
         className="flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
           const form = e.currentTarget;
-          submit(formValues(e), () => form.reset());
+          void call("/api/trades", {
+            body: { ...formValues(e), confirmRisks },
+            errorText: "Validation failed — check the fields.",
+            onErrorData: (data) => {
+              const rp = (data as { riskProblems?: unknown })?.riskProblems;
+              setRiskProblems(
+                Array.isArray(rp) && rp.every((p) => typeof p === "string")
+                  ? (rp as string[])
+                  : null,
+              );
+            },
+          }).then((ok) => {
+            if (ok) {
+              form.reset();
+              setRiskProblems(null);
+              setConfirmRisks(false);
+            }
+          });
         }}
       >
         <div className={field}>
@@ -217,10 +238,34 @@ export function AddTradeForm() {
           <label>Thesis</label>
           <input name="thesis" className="w-72" placeholder="Why this trade?" />
         </div>
-        <button className="btn btn-primary" disabled={busy}>
+        <button
+          className="btn btn-primary"
+          disabled={busy || (riskProblems != null && riskProblems.length > 0 && !confirmRisks)}
+        >
           {busy ? "Saving…" : "Save"}
         </button>
-        {error && <span className="text-xs text-red-400">{error}</span>}
+        {error && (!riskProblems || riskProblems.length === 0) && (
+          <span className="text-xs text-red-400">{error}</span>
+        )}
+        {riskProblems && riskProblems.length > 0 && (
+          <div className="w-full space-y-1.5 rounded border border-amber-800 bg-amber-950/40 p-2 text-xs text-amber-200">
+            <p className="font-semibold">Risk checks failed:</p>
+            <ul className="list-disc space-y-0.5 pl-4">
+              {riskProblems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+            <label className="flex items-start gap-2 pt-1">
+              <input
+                type="checkbox"
+                checked={confirmRisks}
+                onChange={(e) => setConfirmRisks(e.target.checked)}
+                className="mt-0.5 h-auto w-auto"
+              />
+              I&apos;ve reviewed these warnings — log the trade anyway.
+            </label>
+          </div>
+        )}
       </form>
     </Collapsible>
   );
