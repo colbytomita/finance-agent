@@ -1,5 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { buildDigest, desktopCommandFor, shouldNotify, type QueuedAlert } from "../notifications";
+import { describe, expect, it, vi } from "vitest";
+import {
+  buildDigest,
+  desktopCommandFor,
+  sendTestNotification,
+  shouldNotify,
+  type QueuedAlert,
+} from "../notifications";
+import type { AppConfig } from "@/lib/config";
+
+// Keep the channel test from firing a real OS toast during the suite.
+vi.mock("node:child_process", () => ({ execFile: vi.fn() }));
 
 describe("shouldNotify", () => {
   it("is off when notifications are disabled", () => {
@@ -88,5 +98,18 @@ describe("desktopCommandFor", () => {
 
   it("returns null on platforms without a desktop channel", () => {
     expect(desktopCommandFor("linux", "critical", "m", "s")).toBeNull();
+  });
+});
+
+describe("sendTestNotification (roadmap #34)", () => {
+  it("skips ntfy without a topic and reports the desktop channel per platform", async () => {
+    const cfg = { ntfyTopic: "" } as AppConfig; // only ntfyTopic is read
+    const r = await sendTestNotification(cfg);
+    expect(r.ntfy.attempted).toBe(false);
+    expect(r.ntfy.ok).toBe(false);
+    expect(r.ntfy.detail).toMatch(/no ntfy topic/i);
+    const hasDesktop = process.platform === "win32" || process.platform === "darwin";
+    expect(r.desktop.attempted).toBe(hasDesktop);
+    expect(r.desktop.ok).toBe(hasDesktop); // execFile is mocked — dispatch only
   });
 });

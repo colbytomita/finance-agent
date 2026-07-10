@@ -126,7 +126,7 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
 
 ## Tier 3 — Operational QoL
 
-- [ ] **34. Test-notification button in Settings** *(small)*
+- [x] **34. Test-notification button in Settings** *(small — done)*
   **Why:** Notification wiring (desktop toast + ntfy, #15/#9) can only be
   verified by lowering `notifyMinSeverity` and waiting for a real alert —
   so a broken ntfy topic or PowerShell toast path stays silent until it
