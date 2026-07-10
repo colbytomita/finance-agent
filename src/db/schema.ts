@@ -23,6 +23,20 @@ export const portfolioHoldings = sqliteTable("portfolio_holdings", {
   updatedAt: text("updated_at").notNull(),
 });
 
+// Daily account-value history (roadmap #31): one row per calendar day,
+// upserted on refresh — the equity curve the current-state holdings table
+// can't provide. Real data only; rows accumulate from the day the feature
+// ships, no backfill.
+export const portfolioSnapshots = sqliteTable("portfolio_snapshots", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  snapshotDate: text("snapshot_date").notNull().unique(), // local YYYY-MM-DD
+  holdingsValue: real("holdings_value").notNull(),
+  openTradesValue: real("open_trades_value").notNull(),
+  totalValue: real("total_value").notNull(),
+  holdingCount: integer("holding_count").notNull(),
+  capturedAt: text("captured_at").notNull(),
+});
+
 export const watchlistItems = sqliteTable("watchlist_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ticker: text("ticker").notNull().unique(),

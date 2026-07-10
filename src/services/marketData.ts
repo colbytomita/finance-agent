@@ -11,6 +11,7 @@ import { evaluateTrade } from "./tradeScoring";
 import { detectSetups } from "./setupDetection";
 import { isCatalystStale, EARNINGS_CALENDAR_SOURCE } from "./catalysts";
 import { earningsSignalForTicker } from "./earnings";
+import { upsertPortfolioSnapshot } from "./portfolioHistory";
 import { errorMessage, nowIso } from "@/lib/util";
 import { getTrackedTickers, latestSnapshot } from "@/lib/queries";
 
@@ -386,6 +387,7 @@ export async function fullRefresh(): Promise<{
   scoresRecomputed: number;
 }> {
   const prices = await refreshPrices();
+  upsertPortfolioSnapshot(); // holdings just repriced — record today's account value
   await refreshBars();
   const tickers = getTrackedTickers();
   for (const t of tickers) {

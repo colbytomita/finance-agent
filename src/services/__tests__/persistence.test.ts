@@ -22,6 +22,7 @@ import {
 } from "../catalysts";
 import { daysToNextEarnings, getCatalystInputs } from "../marketData";
 import { industryScanTrend } from "../sectorScout";
+import { portfolioHistory, upsertPortfolioSnapshot } from "../portfolioHistory";
 import { saveConfig, loadConfig } from "@/lib/config";
 
 // Write-path integration tests against an in-memory SQLite database
@@ -68,6 +69,65 @@ describe("alert emit dedupe", () => {
     expect(listAlerts({ ticker: "msft" }).map((a) => a.message)).toEqual(["MSFT warn"]);
     expect(listAlerts({ acknowledged: false })).toHaveLength(2);
     expect(listAlerts({ acknowledged: true }).map((a) => a.ticker)).toEqual(["AAPL"]);
+  });
+});
+
+describe("portfolio equity snapshots (roadmap #31)", () => {
+  const holding = (ticker: string, marketValue: number) =>
+    getDb()
+      .insert(schema.portfolioHoldings)
+      .values({
+        ticker,
+        shares: 1,
+        averageCost: marketValue,
+        marketValue,
+        source: "manual",
+        updatedAt: new Date().toISOString(),
+      })
+      .run();
+
+  it("upserts one row per day and two across days", () => {
+    holding("MSFT", 4000);
+    expect(upsertPortfolioSnapshot("2026-07-08")?.totalValue).toBe(4000);
+    // Same day again after a price move → still one row, updated value.
+    getDb().update(schema.portfolioHoldings).set({ marketValue: 4100 }).run();
+    expect(upsertPortfolioSnapshot("2026-07-08")?.totalValue).toBe(4100);
+    expect(portfolioHistory()).toHaveLength(1);
+    expect(portfolioHistory()[0].totalValue).toBe(4100);
+    // Next day → second row, oldest first.
+    upsertPortfolioSnapshot("2026-07-09");
+    expect(portfolioHistory().map((s) => s.snapshotDate)).toEqual(["2026-07-08", "2026-07-09"]);
+  });
+
+  it("writes nothing when there's no priced value to record", () => {
+    expect(upsertPortfolioSnapshot()).toBeNull();
+    expect(portfolioHistory()).toHaveLength(0);
+  });
+
+  it("adds open trades only for tickers the holdings don't already carry", () => {
+    holding("MSFT", 4000);
+    const trade = (ticker: string) =>
+      getDb()
+        .insert(schema.activeTrades)
+        .values({
+          ticker,
+          direction: "long",
+          entryPrice: 100,
+          entryDate: new Date().toISOString(),
+          shares: 10,
+          positionSize: 1000,
+          currentPrice: 100,
+          status: "open",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .run();
+    trade("MSFT"); // already held — must not double-count
+    trade("TSLA"); // not held — counts
+    const snap = upsertPortfolioSnapshot("2026-07-08");
+    expect(snap?.totalValue).toBe(5000);
+    expect(portfolioHistory()[0].holdingsValue).toBe(4000);
+    expect(portfolioHistory()[0].openTradesValue).toBe(1000);
   });
 });
 
