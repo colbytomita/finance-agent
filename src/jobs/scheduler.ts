@@ -34,7 +34,7 @@ import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers, fetchUpcomingEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
 import { runRetention, runSqliteHousekeeping } from "@/services/retention";
-import { recordJobRun } from "@/services/jobHealth";
+import { recordJobRun, getJobHealth, isDailyJobDue } from "@/services/jobHealth";
 import { integrationsStatus } from "@/services/integrations";
 import { runBackup } from "@/services/backup";
 
@@ -345,6 +345,22 @@ async function refreshLoop(): Promise<void> {
 cron.schedule("0 */4 * * 1-5", () => void catalystScan());
 // Daily maintenance at 8:00 local time (bars, setups, portfolio sync, news).
 cron.schedule("0 8 * * *", () => void dailyMaintenance());
+
+// Startup catch-up (roadmap #43): the 08:00 cron only fires while the runner
+// is alive at 08:00 — an ad-hoc terminal runner misses it routinely, which is
+// how zero daily_maintenance runs (and zero backups) accumulated. If the last
+// completed maintenance is missing or >20h old, run it shortly after boot.
+{
+  const lastMaint = getJobHealth().jobs.find((j) => j.job === "daily_maintenance")?.lastRunAt;
+  if (isDailyJobDue(lastMaint)) {
+    log(
+      lastMaint
+        ? `daily maintenance last ran ${lastMaint} — catch-up run in 30s`
+        : "daily maintenance has never completed — catch-up run in 30s",
+    );
+    setTimeout(() => void dailyMaintenance(), 30_000);
+  }
+}
 
 // Kick off the refresh loop immediately.
 void refreshLoop();
