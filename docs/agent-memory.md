@@ -1,6 +1,30 @@
 # Agent Memory
 
-Last updated: 2026-07-05.
+Last updated: 2026-07-09.
+
+## 2026-07-09 session — roadmap v2 finished, v3 written and finished
+
+- **v2 closed out:** #26 split `marketData.ts` — quote refresh now lives in
+  `src/services/quotes.ts`, the bar store in `src/services/bars.ts`,
+  `getTrackedTickers` in `@/lib/queries` (marketData re-exports it and
+  `getLatestSnapshot`); `marketData.ts` is analysis orchestration only.
+  #28 resolved via a scoped npm override (`@esbuild-kit/core-utils` →
+  `esbuild ^0.25.0`) — `npm audit` clean without downgrading drizzle-kit.
+- **Roadmap v3 (#29–#35) written from a fresh pass and fully shipped the
+  same day:** pre-trade risk gate on both trade routes (`confirmRisks`
+  bypass mirrors `confirmLive`; shared `pretradeRiskProblems` in
+  `services/trades.ts`; `useApiAction` gained `onErrorData`); account
+  concentration alerts in `generateAlerts` (holdings + non-held open
+  trades, no sector data so only position-weight fires);
+  `portfolio_snapshots` (migration 0005) + equity curve on /portfolio
+  (SPY rebased overlay, honest "collecting" state); upcoming-earnings
+  calendar card on Summary (`upcomingEarningsCalendar` in lib/queries);
+  score-history sparkline on the stock page (`scoreSeries` collapses
+  stock_scores to last-per-day); test-notification button in Settings
+  (`sendTestNotification` + POST /api/settings/test-notification);
+  acknowledge-all on /alerts (`ackAlerts` + POST /api/alerts/ack-all).
+- Suite grew 357 → 373 tests across 32 files; typecheck clean; every item
+  verified live against real data before its merge commit.
 
 ## Current State
 
@@ -73,21 +97,24 @@ env `YAHOO_BROWSER_ENABLED` gates only the headless-browser fallback layer.
 `loadConfig()` still honors the legacy key from an existing database and drops
 it on the next save.
 
-**Roadmap v2 exists (2026-07-06): `docs/ROADMAP.md`, items #15–#28.** It was
-written from a fresh codebase pass with per-item Why/What/Accept so any agent
-can pick up the top unchecked item and execute it. Highest-value first: #15
-Windows desktop notifications (the current `sendDesktop` is macOS-only on a
-Windows machine), #16 auto-fetch upcoming earnings dates (the
-`avoidEarningsWithinDays` guard currently has no data source), #17 setup
-outcome backtest (detected setups are never measured).
+**Roadmaps v1–v3 are all complete (see `docs/ROADMAP.md`).** Candidate seeds
+for a v4, spotted 2026-07-09 but not yet written up:
+
+- **Alert retention:** `runRetention` never prunes the `alerts` table — 278
+  unacked rows and counting (mostly repeated daily stale-data warnings).
+  Consider pruning acked rows after N days and auto-acking superseded
+  stale-data warnings.
+- **Sector data for holdings:** nothing stores a sector, so the sector half
+  of `concentrationWarnings` can never fire and the portfolio has no sector
+  breakdown. Yahoo `quoteSummary` `assetProfile` has it; `yahooHttp.ts` has
+  the crumb/session plumbing to add a fetcher + a `sector` column.
+- The equity curve (#31) needs a few days of runtime before it shows a
+  trend — nothing to build, just let it accumulate.
 
 Still-parked notes:
 
 - Bulk import caps at 50 tickers per request and runs 5 in flight; fine for
   pastes, revisit if used for large lists.
-- The dependabot moderate alert is esbuild via drizzle-kit's dev-only
-  dependency chain — no runtime exposure; wait for upstream rather than
-  downgrade drizzle-kit (tracked as roadmap #28).
 
 ## Standard Commands
 
