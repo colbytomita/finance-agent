@@ -96,7 +96,8 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   two. Live: after a refresh the row exists and the page states its day
   count honestly.
 
-- [ ] **32. Upcoming-earnings calendar view** *(small)*
+- [x] **32. Upcoming-earnings calendar view** *(small — done; card lives on
+  the Summary page)*
   **Why:** #16 auto-fetches upcoming-earnings dates into `catalysts`
   (type=earnings, status=upcoming, `EARNINGS_CALENDAR_SOURCE`), but they
   surface only as per-row badges. There's no single "what reports in the

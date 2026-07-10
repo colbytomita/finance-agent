@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { isCatalystStale } from "@/services/catalysts";
@@ -155,6 +155,36 @@ export function allHoldings() {
 
 export function allCatalysts() {
   return getDb().select().from(schema.catalysts).orderBy(desc(schema.catalysts.discoveredAt)).all();
+}
+
+/**
+ * Upcoming-earnings calendar (roadmap #32): tracked tickers reporting within
+ * `withinDays`, soonest first, one row per ticker (earliest date wins when a
+ * fetched and a hand-entered catalyst both exist).
+ */
+export function upcomingEarningsCalendar(
+  withinDays = 14,
+): { ticker: string; eventDate: string; daysUntil: number }[] {
+  const now = Date.now();
+  const horizon = now + withinDays * 86400000;
+  const rows = getDb()
+    .select()
+    .from(schema.catalysts)
+    .where(and(eq(schema.catalysts.catalystType, "earnings"), eq(schema.catalysts.status, "upcoming")))
+    .all();
+  const best = new Map<string, { ticker: string; eventDate: string; daysUntil: number }>();
+  for (const r of rows) {
+    if (!r.ticker || !r.eventDate) continue;
+    const t = new Date(r.eventDate).getTime();
+    // Keep reports from earlier today (still actionable until rolled to
+    // occurred); drop anything older or beyond the horizon.
+    if (isNaN(t) || t < now - 86400000 || t > horizon) continue;
+    const daysUntil = Math.max(0, Math.floor((t - now) / 86400000));
+    const prev = best.get(r.ticker);
+    if (!prev || r.eventDate < prev.eventDate)
+      best.set(r.ticker, { ticker: r.ticker, eventDate: r.eventDate, daysUntil });
+  }
+  return [...best.values()].sort((a, b) => a.eventDate.localeCompare(b.eventDate));
 }
 
 export function tickerBars(ticker: string, limit = 250) {
