@@ -13,6 +13,7 @@ import {
   syncPortfolio,
 } from "@/services/marketData";
 import { refreshPrices } from "@/services/quotes";
+import { upsertPortfolioSnapshot } from "@/services/portfolioHistory";
 import { generateAlerts } from "@/services/alerts";
 import { syncBrokerOrders } from "@/services/orderSync";
 import { rollCatalystStatuses, scanYahooNews } from "@/services/catalysts";
@@ -76,6 +77,7 @@ async function maybeRefresh(): Promise<void> {
   try {
     log(`refresh start (market ${phase})`);
     const prices = await refreshPrices();
+    upsertPortfolioSnapshot(); // keep today's account-value row current (roadmap #31)
     // Reconcile broker orders before recomputing trade scores so corrections
     // (actual fill price/size, canceled phantom trades) feed this cycle.
     const orders = await syncBrokerOrders().catch((e) => {

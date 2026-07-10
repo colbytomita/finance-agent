@@ -18,6 +18,7 @@ import {
 import { AddHoldingForm, DeleteButton } from "@/components/forms";
 import { SyncPortfolioButton } from "@/components/SyncPortfolioButton";
 import { RefreshButton } from "@/components/RefreshButton";
+import { EquityCurve } from "@/components/EquityCurve";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default function PortfolioPage() {
           <RefreshButton />
         </div>
       </div>
+      <EquityCurve />
       <AddHoldingForm />
       <div className="overflow-x-auto">
         <table className="data-table">

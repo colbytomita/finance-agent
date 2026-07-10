@@ -78,8 +78,8 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
 
 ## Tier 2 — Surface data the DB already holds
 
-- [ ] **31. Portfolio equity curve (daily account-value snapshots)**
-  *(medium)*
+- [x] **31. Portfolio equity curve (daily account-value snapshots)**
+  *(medium — done)*
   **Why:** `portfolio_holdings` is current-state only and
   `market_price_snapshots` is per-ticker — the app cannot answer "how has my
   account done over time?" even though it recomputes
