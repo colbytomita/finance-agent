@@ -46,12 +46,21 @@ $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" 
 
 try {
     # -Force makes re-running idempotent (replaces an existing registration).
+    # -ErrorAction Stop: the CIM-based cmdlet can emit a NON-terminating
+    # "Access is denied" that slips past $ErrorActionPreference and the catch,
+    # making the script report success after a failed registration.
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
         -Settings $settings -Principal $principal `
         -Description "Finance Agent background scheduler (npm run jobs). Logs to data/logs/jobs.log." `
-        -Force | Out-Null
+        -Force -ErrorAction Stop | Out-Null
 } catch {
     Write-Error "Failed to register '$TaskName': $($_.Exception.Message). Try running this from an elevated PowerShell."
+    exit 1
+}
+
+# Belt and braces: confirm the task actually exists before claiming success.
+if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) {
+    Write-Error "Registration reported no error but '$TaskName' does not exist. Run this from an elevated PowerShell."
     exit 1
 }
 
