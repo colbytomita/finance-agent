@@ -42,6 +42,17 @@ Last updated: 2026-07-09.
   untouched default paper cash; plotting equity would flatten the real
   ~$13k positions curve into noise. `portfolio_snapshots.totalValue`
   stays positions-based on purpose. Revisit only for a real-money account.
+- **2026-07-10, #41–#43 (ops-truth chain; tests 388/35, prod build clean):**
+  #41 the minute heartbeat self-reports the runner's integrations
+  (`alpaca=paper llm=on`) — `/status` shows it and warns on the
+  web-has-Alpaca/runner-doesn't mismatch; #42 header `AlertsBadge` (unacked
+  count via `GET /api/alerts/unacked-count`, red when criticals wait); #43
+  startup catch-up — `daily_maintenance` had **never completed** and no
+  backup existed, because the 08:00 cron needs the runner alive at 08:00;
+  the scheduler now runs maintenance 30s after boot when the last run is
+  missing or >20h old (`isDailyJobDue`). First backup written 2026-07-10.
+  **Still open:** the user should run `scripts/install-jobs-task.ps1`
+  (opt-in by design) so the runner survives terminal closes and reboots.
 
 ## Current State
 
