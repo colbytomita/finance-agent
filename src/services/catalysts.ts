@@ -1,7 +1,7 @@
 import { and, desc, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
-import { nowIso } from "@/lib/util";
+import { mapPool, nowIso } from "@/lib/util";
 import type { CatalystType, Confidence, ImpactDirection } from "@/lib/types";
 
 /**
@@ -227,8 +227,11 @@ export function rollCatalystStatuses(): void {
  */
 export async function scanYahooNews(tickers: string[]): Promise<number> {
   const db = getDb();
+  const { getYahooHeadlines } = await import("./yahooHttp");
   let added = 0;
-  for (const ticker of tickers) {
+  // Parallel RSS fetches with bounded concurrency (roadmap #46); each ticker's
+  // dedupe set and SQLite writes stay on the main thread, so this is safe.
+  await mapPool(tickers, 4, async (ticker) => {
     const existing = new Set(
       db
         .select({ title: schema.catalysts.title })
@@ -245,7 +248,6 @@ export async function scanYahooNews(tickers: string[]): Promise<number> {
       return true;
     };
 
-    const { getYahooHeadlines } = await import("./yahooHttp");
     const entries = await getYahooHeadlines(ticker);
     if (entries.length > 0) {
       // Only the top of the feed: examining (not adding) up to 5 entries keeps
@@ -253,12 +255,14 @@ export async function scanYahooNews(tickers: string[]): Promise<number> {
       for (const e of entries.filter((x) => x.title.length >= 20).slice(0, 5)) {
         record(e.title, e.link, e.date);
       }
-      continue;
+      return;
     }
 
+    // Layout-fragile browser fallback — sequentialized by the shared browser
+    // session anyway, so keep it inside the pooled task.
     const { getYahooService } = await import("./yahooFinanceBrowser");
     const page = await getYahooService().getQuotePage(ticker).catch(() => null);
-    if (!page) continue;
+    if (!page) return;
     // Headlines appear as <a ...><h3>Title</h3></a> or section[data-testid=news] links.
     const headlineRe = /<h3[^>]*>([^<]{20,200})<\/h3>/gi;
     let m: RegExpExecArray | null;
@@ -267,7 +271,7 @@ export async function scanYahooNews(tickers: string[]): Promise<number> {
       const title = m[1].replace(/&amp;/g, "&").replace(/&#x27;|&apos;/g, "'").trim();
       if (record(title, page.url, null)) count++;
     }
-  }
+  });
   return added;
 }
 

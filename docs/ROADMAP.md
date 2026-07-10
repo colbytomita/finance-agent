@@ -41,7 +41,7 @@ maintenance run. Items are numbered #44+.
 
 ## v4 — Tier 2: efficiency & UX
 
-- [ ] **46. Parallelize the maintenance Yahoo loops** *(small)*
+- [x] **46. Parallelize the maintenance Yahoo loops** *(small — done)*
   **Why:** `scanYahooNews`, `fetchEarningsForTickers`, and
   `fetchUpcomingEarningsForTickers` each `await` per ticker in a `for` loop
   — 3 × 45 serialized Yahoo calls per maintenance (~20s observed for the

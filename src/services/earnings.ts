@@ -2,7 +2,10 @@ import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Confidence } from "@/lib/types";
 import type { CatalystInput } from "./scoring";
-import { errorMessage, nowIso } from "@/lib/util";
+import { errorMessage, mapPool, nowIso } from "@/lib/util";
+
+/** Bounded Yahoo concurrency for the maintenance fetch loops (roadmap #46). */
+const EARNINGS_FETCH_CONCURRENCY = 4;
 
 // Quarterly earnings surprise (beat / meet / miss) as a scoring signal. The pure
 // math here (surprise %, impact mapping, recency decay) is unit-tested and feeds
@@ -177,7 +180,9 @@ export interface FetchEarningsResult {
 export async function fetchEarningsForTickers(tickers: string[]): Promise<FetchEarningsResult> {
   const { getYahooEarnings } = await import("./yahooHttp");
   const result: FetchEarningsResult = { tickers: tickers.length, saved: 0, errors: [] };
-  for (const ticker of tickers) {
+  // Parallel fetch, bounded to stay polite to Yahoo (roadmap #46); the SQLite
+  // writes are synchronous on the main thread, so shared counters are safe.
+  await mapPool(tickers, EARNINGS_FETCH_CONCURRENCY, async (ticker) => {
     try {
       const rows = await getYahooEarnings(ticker);
       for (const r of rows) {
@@ -194,7 +199,7 @@ export async function fetchEarningsForTickers(tickers: string[]): Promise<FetchE
     } catch (e) {
       result.errors.push(`${ticker}: ${errorMessage(e)}`);
     }
-  }
+  });
   return result;
 }
 
@@ -222,17 +227,17 @@ export async function fetchUpcomingEarningsForTickers(
     updated: 0,
     errors: [],
   };
-  for (const ticker of tickers) {
+  await mapPool(tickers, EARNINGS_FETCH_CONCURRENCY, async (ticker) => {
     try {
       const date = await getYahooNextEarningsDate(ticker);
-      if (!date) continue;
+      if (!date) return;
       const outcome = upsertUpcomingEarningsCatalyst(ticker, date);
       if (outcome === "inserted") result.inserted++;
       else if (outcome === "updated") result.updated++;
     } catch (e) {
       result.errors.push(`${ticker}: ${errorMessage(e)}`);
     }
-  }
+  });
   return result;
 }
 
