@@ -55,6 +55,38 @@ export function AlertFilters({
   );
 }
 
+/** Bulk-ack every unacked alert matching the page's current filters (roadmap #35). */
+export function AckAllButton({
+  severity,
+  ticker,
+  count,
+}: {
+  severity: string;
+  ticker: string;
+  count: number;
+}) {
+  const { call, busy } = useApiAction();
+  if (count === 0) return null;
+  return (
+    <button
+      type="button"
+      className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:text-zinc-100"
+      disabled={busy}
+      onClick={() =>
+        call("/api/alerts/ack-all", {
+          body: {
+            ...(severity ? { severity } : {}),
+            ...(ticker ? { ticker } : {}),
+          },
+        })
+      }
+      title="Acknowledge every unacknowledged alert matching the current filters"
+    >
+      {busy ? "…" : `Acknowledge all shown (${count})`}
+    </button>
+  );
+}
+
 export function AckAlertButton({ id }: { id: number }) {
   const { call, busy } = useApiAction();
   return (

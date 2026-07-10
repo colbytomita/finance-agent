@@ -2,7 +2,7 @@ import Link from "next/link";
 import { listAlerts, alertTickers, type AlertFilter } from "@/services/alerts";
 import { fmtDateTime } from "@/lib/format";
 import { SeverityDot } from "@/components/badges";
-import { AlertFilters, AckAlertButton } from "@/components/Alerts";
+import { AlertFilters, AckAlertButton, AckAllButton } from "@/components/Alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +29,11 @@ export default async function AlertsPage({
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-bold">Alerts</h1>
         <span className="text-[11px] text-zinc-500">{alerts.length} shown</span>
+        <AckAllButton
+          severity={severity}
+          ticker={ticker}
+          count={alerts.filter((a) => !a.acknowledged).length}
+        />
       </div>
 
       <p className="text-xs text-zinc-500">

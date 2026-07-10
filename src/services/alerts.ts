@@ -241,6 +241,23 @@ export function listAlerts(filter: AlertFilter = {}, limit = 300) {
 }
 
 /** Distinct tickers that have ever raised an alert (for the filter dropdown). */
+/**
+ * Acknowledge every currently-unacknowledged alert matching the filter
+ * (roadmap #35) — the bulk version of the per-row ack. Returns the count.
+ */
+export function ackAlerts(filter: Pick<AlertFilter, "severity" | "ticker"> = {}): number {
+  const db = getDb();
+  const conds = [eq(schema.alerts.acknowledged, false)];
+  if (filter.severity) conds.push(eq(schema.alerts.severity, filter.severity));
+  if (filter.ticker) conds.push(eq(schema.alerts.ticker, filter.ticker.toUpperCase()));
+  const res = db
+    .update(schema.alerts)
+    .set({ acknowledged: true })
+    .where(and(...conds))
+    .run();
+  return Number(res.changes);
+}
+
 export function alertTickers(): string[] {
   return [
     ...new Set(
