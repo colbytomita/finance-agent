@@ -139,7 +139,7 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   reports per-channel results in the UI; with nothing configured it says so
   instead of pretending success.
 
-- [ ] **35. Acknowledge-all on `/alerts`** *(small)*
+- [x] **35. Acknowledge-all on `/alerts`** *(small — done)*
   **Why:** The alerts page (#27) acknowledges one row at a time; after a
   noisy day (stale-data warnings across 45 tickers) that's dozens of
   clicks.

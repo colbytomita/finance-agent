@@ -9,6 +9,8 @@ import * as eventsRoute from "../events/route";
 import * as jobsRoute from "../jobs/route";
 import * as settingsRoute from "../settings/route";
 import * as tradesExportRoute from "../trades/export/route";
+import * as ackAllRoute from "../alerts/ack-all/route";
+import { emitAlert } from "@/services/alerts";
 
 // Route-handler smoke tests (agent-memory "likely next work"): call the JSON
 // handlers directly against the in-memory database — no server, no network.
@@ -266,5 +268,24 @@ describe("GET /api/trades/export", () => {
     // Fields with commas/quotes are RFC-4180 escaped.
     expect(text).toContain('"Breakout, needs escaping"');
     expect(text).toContain('"Target, ""hit"""');
+  });
+});
+
+describe("POST /api/alerts/ack-all (roadmap #35)", () => {
+  it("acks exactly the filtered set and reports the count", async () => {
+    emitAlert("near_stop_loss", "warning", "MSFT warn", "MSFT");
+    emitAlert("exit_recommended", "critical", "NVDA exit", "NVDA");
+    emitAlert("info_note", "info", "AAPL note", "AAPL");
+
+    const res = await ackAllRoute.POST(jsonReq("POST", { severity: "warning" }));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { acked: number }).acked).toBe(1);
+    const rows = getDb().select().from(schema.alerts).all();
+    expect(rows.filter((a) => a.acknowledged).map((a) => a.ticker)).toEqual(["MSFT"]);
+
+    // No filter → the rest; already-acked rows are never re-counted.
+    const all = await ackAllRoute.POST(jsonReq("POST", {}));
+    expect(((await all.json()) as { acked: number }).acked).toBe(2);
+    expect(getDb().select().from(schema.alerts).all().every((a) => a.acknowledged)).toBe(true);
   });
 });
