@@ -20,6 +20,9 @@ export const portfolioHoldings = sqliteTable("portfolio_holdings", {
   unrealizedGainLoss: real("unrealized_gain_loss"),
   unrealizedGainLossPercent: real("unrealized_gain_loss_percent"),
   source: text("source").notNull().default("manual"), // manual | alpaca
+  // GICS-style sector from Yahoo assetProfile (roadmap #37), backfilled by
+  // daily maintenance; enables sector-concentration warnings + the breakdown.
+  sector: text("sector"),
   updatedAt: text("updated_at").notNull(),
 });
 

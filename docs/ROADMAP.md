@@ -164,7 +164,7 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   untouched, and the delete window. Live run auto-acked 29 stale alerts on
   the real database.
 
-- [ ] **37. Sector data for holdings** *(medium)*
+- [x] **37. Sector data for holdings** *(medium — done)*
   **Why:** Nothing stores a sector, so the sector half of
   `concentrationWarnings` (#30) can never fire, and the portfolio has no
   sector breakdown. Yahoo `quoteSummary` `assetProfile` carries

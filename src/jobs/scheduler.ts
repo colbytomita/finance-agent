@@ -22,6 +22,7 @@ import { runDiscoveryScan } from "@/services/discoveryAgent";
 import { runSectorScan } from "@/services/sectorScout";
 import { runEventIngestion } from "@/services/eventIngestion";
 import { backfillCompanyNames } from "@/services/companyNames";
+import { backfillHoldingSectors } from "@/services/sectors";
 import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers, fetchUpcomingEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
@@ -187,6 +188,16 @@ async function dailyMaintenance(): Promise<void> {
           `upcoming earnings: ${upcoming.inserted} new, ${upcoming.updated} updated ` +
             `across ${upcoming.tickers} ticker(s)`,
         );
+
+      // Fill missing holding sectors (roadmap #37) so sector-concentration
+      // warnings and the portfolio breakdown work. Incremental — only rows
+      // without a sector are fetched.
+      const sectors = await backfillHoldingSectors().catch((e) => {
+        log(`sector backfill failed: ${errorMessage(e)}`);
+        return null;
+      });
+      if (sectors && sectors.filled > 0)
+        log(`sector backfill: filled ${sectors.filled}/${sectors.checked} holding(s)`);
     }
     // Backfill missing company names (SEC ticker->name) so the UI and GDELT
     // auto-queries have real names to work with. Cheap; the SEC file is cached.
