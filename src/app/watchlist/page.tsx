@@ -8,7 +8,7 @@ import {
 } from "@/lib/queries";
 import { effectiveConfig, loadConfig } from "@/lib/config";
 import { integrationsStatus } from "@/services/integrations";
-import { daysToNextEarnings } from "@/services/marketData";
+import { currentAccountValue, daysToNextEarnings } from "@/services/marketData";
 import { portfolioWatchlistRecommendations } from "@/services/portfolioRecommendations";
 import { fmtMoney } from "@/lib/format";
 import { EarningsBadge, Freshness, Pct } from "@/components/badges";
@@ -29,6 +29,7 @@ export const dynamic = "force-dynamic";
 
 export default function WatchlistPage() {
   const cfg = loadConfig();
+  const accountValue = currentAccountValue();
   const items = allWatchlist();
   const integrations = integrationsStatus();
   const alpacaConfigured = integrations.alpacaConfigured;
@@ -169,6 +170,12 @@ export default function WatchlistPage() {
                     entryPrice={snap?.regularPrice ?? dd?.currentPrice ?? undefined}
                     stopLoss={w.maxRiskPrice}
                     mode={alpacaMode}
+                    risk={{
+                      minRiskReward: cfg.minRiskReward,
+                      riskPerTradePercent: cfg.riskPerTradePercent,
+                      accountValue,
+                      maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
+                    }}
                   />
                 </td>
                 <td><DeleteButton url={`/api/watchlist/${w.id}`} /></td>

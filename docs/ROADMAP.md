@@ -52,7 +52,7 @@ maintenance run. Items are numbered #44+.
   **Accept:** Tests stay green; a live maintenance run logs the same counts
   in visibly less wall time.
 
-- [ ] **47. Live R/R + size feedback in the trade dialog** *(small–medium)*
+- [x] **47. Live R/R + size feedback in the trade dialog** *(small–medium — done)*
   **Why:** The pre-trade gate (#29) answers only on submit; the dialog shows
   est. notional but not the risk/reward being keyed in or a suggested size,
   though `riskRewardRatio` and `suggestPositionSize` are pure and
