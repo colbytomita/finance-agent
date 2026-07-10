@@ -21,6 +21,7 @@ import {
   EARNINGS_CALENDAR_SOURCE,
 } from "../catalysts";
 import { daysToNextEarnings, getCatalystInputs } from "../marketData";
+import { upcomingEarningsCalendar } from "@/lib/queries";
 import { industryScanTrend } from "../sectorScout";
 import { portfolioHistory, upsertPortfolioSnapshot } from "../portfolioHistory";
 import { saveConfig, loadConfig } from "@/lib/config";
@@ -418,6 +419,33 @@ describe("config round-trip", () => {
     expect(stored.yahooEnabled).toBe(false);
     expect("yahooBrowserEnabled" in stored).toBe(false);
     expect(loadConfig().yahooEnabled).toBe(false);
+  });
+});
+
+describe("upcoming earnings calendar (roadmap #32)", () => {
+  const inDays = (d: number) => daysAgo(-d).slice(0, 10);
+
+  it("lists soonest-first within the horizon, one row per ticker", () => {
+    upsertUpcomingEarningsCatalyst("MSFT", inDays(6));
+    upsertUpcomingEarningsCatalyst("AAPL", inDays(3));
+    upsertUpcomingEarningsCatalyst("NVDA", inDays(30)); // beyond the 14d horizon
+    // A hand-entered earnings catalyst for MSFT with an earlier date wins.
+    addCatalyst({
+      ticker: "MSFT",
+      catalystType: "earnings",
+      title: "MSFT reports (manual)",
+      eventDate: inDays(2),
+      status: "upcoming",
+      impactScore: 0,
+      impactDirection: "unknown",
+      confidence: "medium",
+      sourceName: "manual",
+    });
+
+    const cal = upcomingEarningsCalendar(14);
+    expect(cal.map((c) => c.ticker)).toEqual(["MSFT", "AAPL"]);
+    expect(cal[0].eventDate).toBe(inDays(2));
+    expect(cal.every((c) => c.daysUntil >= 0 && c.daysUntil <= 14)).toBe(true);
   });
 });
 

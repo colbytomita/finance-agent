@@ -8,10 +8,11 @@ import {
   openTrades,
   recentScoreChanges,
   unackedAlerts,
+  upcomingEarningsCalendar,
 } from "@/lib/queries";
 import { loadConfig } from "@/lib/config";
-import { fmtMoney, fmtPct, fmtScore } from "@/lib/format";
-import { Freshness, Pct, SeverityDot } from "@/components/badges";
+import { fmtDate, fmtMoney, fmtPct, fmtScore } from "@/lib/format";
+import { EarningsBadge, Freshness, Pct, SeverityDot } from "@/components/badges";
 import { BuyZoneInsight, SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { RefreshButton } from "@/components/RefreshButton";
 import { MarketRegimeBanner } from "@/components/MarketRegimeBanner";
@@ -25,6 +26,7 @@ export default function SummaryPage() {
   const watch = allWatchlist();
   const alerts = unackedAlerts(12);
   const scoreChanges = recentScoreChanges(8);
+  const earningsAhead = upcomingEarningsCalendar(14);
 
   const tradesNeedingAttention = trades.filter(
     (t) => t.recommendation === "Exit" || t.recommendation === "Trim" || (t.tradeScore ?? 10) < 5,
@@ -190,6 +192,28 @@ export default function SummaryPage() {
                   <TradeScoreInsight trade={t} kind="rec" />
                   <Pct value={t.unrealizedGainLossPercent} />
                   <span className="muted text-xs">score {fmtScore(t.tradeScore)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Earnings calendar (roadmap #32) */}
+        <section className="card lg:col-span-1">
+          <h2 className="card-title">Earnings ahead (14d)</h2>
+          {earningsAhead.length === 0 ? (
+            <p className="text-sm text-zinc-500">
+              No tracked ticker reports in the next two weeks (per fetched dates).
+            </p>
+          ) : (
+            <ul className="space-y-1.5 text-sm">
+              {earningsAhead.map((e) => (
+                <li key={e.ticker} className="flex items-center gap-2">
+                  <Link href={`/stock/${e.ticker}`} className="font-semibold hover:underline">
+                    {e.ticker}
+                  </Link>
+                  <span className="muted text-xs tabular-nums">{fmtDate(e.eventDate)}</span>
+                  <EarningsBadge days={e.daysUntil} avoidWithinDays={cfg.avoidEarningsWithinDays} />
                 </li>
               ))}
             </ul>
