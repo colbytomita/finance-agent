@@ -54,6 +54,20 @@ Last updated: 2026-07-09.
   fixed `install-jobs-task.ps1` reporting success after a denied
   registration (needs `-ErrorAction Stop` on the CIM cmdlet + existence
   check) — registration on this machine requires an elevated PowerShell.
+- **2026-07-10, repo quality pass (tests 396/35):** scripted dead-code
+  audit found the repo clean (zero orphan files/deps; the one orphaned
+  function, `flushQueuedNotifications`, is now the scheduler's
+  SIGINT/SIGTERM flush). Logic fixes: **tradeScoring was long-biased for
+  shorts** — `tradeMomentumScore(ind, direction)` now mirrors
+  EMA/RSI/MACD polarity, and `addBlockers`/`trimRules` are
+  direction-aware (long behavior regression-asserted unchanged);
+  setupDetection's `sma200 ?? 0` quality inflation fixed; sentimentScore
+  filters expired; combine*Score guard against zero weight sums.
+  Reviewed clean: indicators, buyZone, eventStudy, orderSync,
+  riskManagement. NOT line-audited yet: sectorScout, companyThesisScout,
+  eventIngestion/extraction internals (structural scan only). Test
+  fixture note: linear trendCloses converge the MACD histogram to ~0 —
+  use accelerating two-phase trends when a test needs histogram sign.
 - **2026-07-10, #41–#43 (ops-truth chain; tests 388/35, prod build clean):**
   #41 the minute heartbeat self-reports the runner's integrations
   (`alpaca=paper llm=on`) — `/status` shows it and warns on the
