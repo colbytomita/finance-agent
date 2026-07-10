@@ -1,13 +1,77 @@
-# Improvement Roadmap — v3 (2026-07-09)
+# Improvement Roadmap — v4 (2026-07-10)
 
-Roadmaps v1 (#1–#14) and v2 (#15–#28) are **complete** — see the archives at
-the bottom. This v3 list came from a fresh pass over the codebase on
-2026-07-09; every "Why" cites the actual code it's grounded in. Items are
-numbered #29+ so git-history references to "roadmap #N" stay unambiguous.
+Roadmaps v1 (#1–#14), v2 (#15–#28), and v3 (#29–#43, including follow-ups)
+are **complete** — see below and the archives. v4 came from a fresh pass on
+2026-07-10 over the modules v2/v3 hadn't touched (orderSync, catalysts,
+discovery, earnings fetch) plus runtime signals from the first-ever real
+maintenance run. Items are numbered #44+.
 
-Work top-to-bottom within a tier. Recommended sequencing: **29 → 30** first
-(both are fully implemented, fully tested safety features that are wired to
-nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
+## v4 — Tier 1: correctness
+
+- [ ] **44. `classifyCatalyst` tone adjustment forces the sign** *(small)*
+  **Why:** `catalysts.ts` tone rules say "adjustment for otherwise-neutral
+  matches" but apply to every match with sign-forcing math:
+  `Math.min(impact - 1, -1)` turns a +4 guidance-raise headline containing
+  one word like "warns" into **-1**, and the positive mirror turns a -3
+  estimates-miss with "soars" into **+1**. The existing test only covers the
+  neutral case, so the flip is unexercised.
+  **What:** Tone only *nudges*: when no rule matched (impact 0) it sets ±1
+  as today; when a rule matched, add/subtract 1 with the -5..5 clamp but
+  never force the result across zero. Tests for the two flip cases plus the
+  existing neutral behavior.
+  **Accept:** "Raises guidance but warns on supply" scores strongly positive
+  (+3), "misses estimates as shares soar" stays negative; old tests green.
+
+- [ ] **45. Suppress re-emits of condition alerts while one is already
+  unacked** *(medium)*
+  **Why:** `emitAlert`'s 20h dedupe keys on the exact message, and condition
+  messages embed the live price/score — so a stop that stays breached or a
+  ticker that stays stale re-alerts **every day with a new row**: observed
+  91 `data_stale`, 48 `stop_loss_hit` rows. The feed and badge fill with
+  repeats of states the user already hasn't acted on.
+  **What:** An `onceWhileUnacked` option on `emitAlert`: skip when an
+  **unacknowledged** alert of the same (type, ticker) already exists,
+  regardless of message/age. Apply to the condition-state alerts in
+  `generateAlerts` (stop/near-stop, score low/critical, exit/trim/add,
+  buy-zone, data_stale, concentration) — not to event alerts (order fills,
+  auto-closes, mentions, brief). Acknowledging re-arms the alert.
+  **Accept:** Persistence test: same condition two days running → one row
+  while unacked; ack + re-emit → second row. Live feed stops accumulating
+  daily repeats.
+
+## v4 — Tier 2: efficiency & UX
+
+- [ ] **46. Parallelize the maintenance Yahoo loops** *(small)*
+  **Why:** `scanYahooNews`, `fetchEarningsForTickers`, and
+  `fetchUpcomingEarningsForTickers` each `await` per ticker in a `for` loop
+  — 3 × 45 serialized Yahoo calls per maintenance (~20s observed for the
+  earnings pair alone). `mapPool` is the established idiom everywhere else.
+  **What:** `mapPool(tickers, 4, …)` in all three, keeping per-ticker
+  error isolation exactly as now (SQLite writes are synchronous on the main
+  thread, so parallel fetch + serial write is safe).
+  **Accept:** Tests stay green; a live maintenance run logs the same counts
+  in visibly less wall time.
+
+- [ ] **47. Live R/R + size feedback in the trade dialog** *(small–medium)*
+  **Why:** The pre-trade gate (#29) answers only on submit; the dialog shows
+  est. notional but not the risk/reward being keyed in or a suggested size,
+  though `riskRewardRatio` and `suggestPositionSize` are pure and
+  client-importable.
+  **What:** In `TradeOrder`, compute R/R from limit/stop/target as the user
+  types (with the configured minimum passed as a prop from the server page),
+  show it inline colored by threshold, plus "suggested size: N shares
+  (risking $X)" from `suggestPositionSize` when a stop is set. Display-only
+  — the server gate stays authoritative.
+  **Accept:** Typing a thin target shows the sub-minimum R/R immediately;
+  the placed order still round-trips the server gate unchanged.
+
+---
+
+# Roadmap v3 (2026-07-09) — complete
+
+This v3 list came from a fresh pass over the codebase on 2026-07-09; every
+"Why" cites the actual code it's grounded in. Items are numbered #29+ so
+git-history references to "roadmap #N" stay unambiguous.
 
 ## Working agreement (read before starting any item)
 
