@@ -78,13 +78,16 @@ export function classifyCatalyst(title: string, summary = ""): ClassifiedCatalys
   let impact = best?.impact ?? 0;
   let direction: ImpactDirection = best?.direction ?? "unknown";
 
-  // Tone adjustment for otherwise-neutral matches.
+  // Tone nudges the impact but never forces it across zero (roadmap #44): a
+  // strong rule match ("raises guidance", +4) with one negative-tone word
+  // ("warns") softens to +3 — it must not flip to negative. With no rule
+  // match, tone sets the ±1 as before.
   if (NEGATIVE_TONE.test(text)) {
-    impact = Math.min(impact - 1, -1);
+    impact = impact === 0 ? -1 : impact > 0 ? Math.max(impact - 1, 0) : impact - 1;
     direction = impact < 0 ? "negative" : direction;
     tags.push("negative-tone");
   } else if (POSITIVE_TONE.test(text)) {
-    impact = Math.max(impact + 1, 1);
+    impact = impact === 0 ? 1 : impact < 0 ? Math.min(impact + 1, 0) : impact + 1;
     direction = impact > 0 ? "positive" : direction;
     tags.push("positive-tone");
   }
