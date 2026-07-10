@@ -27,6 +27,17 @@ const SCORE_THIN_AFTER_DAYS = 30;
 const ALERT_AUTOACK_DAYS = 14;
 /** Acknowledged alerts older than this are deleted. */
 const ALERT_RETENTION_DAYS = 90;
+/**
+ * Setups older than this are thinned to the FIRST row per
+ * (ticker, setupType, day) — roadmap #38. scanForSetups re-inserts every
+ * live setup on each refresh, so the table grows by dozens of rows a day.
+ * The setup backtest (`dedupeSetups`) chains rows into episodes by ≤10-day
+ * gaps and keeps each episode's earliest row, so thinning must (a) keep
+ * MIN(id) per day so the episode-start row survives exactly, and (b) keep
+ * daily resolution so gap detection is unaffected. Active rows are never
+ * touched (the UI reads them).
+ */
+const SETUP_THIN_AFTER_DAYS = 30;
 
 export interface RetentionResult {
   snapshotsDeleted: number;
@@ -35,6 +46,7 @@ export interface RetentionResult {
   scoresThinned: number;
   alertsAutoAcked: number;
   alertsDeleted: number;
+  setupsThinned: number;
 }
 
 const isoDaysAgo = (days: number) =>
@@ -100,6 +112,18 @@ export function runRetention(): RetentionResult {
     ).changes,
   );
 
+  // Setups (roadmap #38): thin old non-active rows to the first per
+  // (ticker, setupType, day) — preserves the backtest's episode starts and
+  // gap chaining exactly (see SETUP_THIN_AFTER_DAYS above).
+  const setupCutoff = isoDaysAgo(SETUP_THIN_AFTER_DAYS);
+  const setupsThinned = Number(
+    db.run(
+      sql`DELETE FROM trade_setups WHERE detected_at < ${setupCutoff} AND status != 'active' AND id NOT IN (
+        SELECT MIN(id) FROM trade_setups GROUP BY ticker, setup_type, substr(detected_at, 1, 10)
+      )`,
+    ).changes,
+  );
+
   return {
     snapshotsDeleted,
     drawdownsDeleted,
@@ -107,6 +131,7 @@ export function runRetention(): RetentionResult {
     scoresThinned,
     alertsAutoAcked,
     alertsDeleted,
+    setupsThinned,
   };
 }
 

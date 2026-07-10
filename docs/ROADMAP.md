@@ -180,6 +180,19 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   strip renders true weights, and an over-cap sector emits the warning
   alert (persistence-tested with seeded sectors).
 
+- [x] **38. `trade_setups` retention that preserves the backtest's episodes**
+  *(small — done)*
+  **Why:** `scanForSetups` re-inserts every live setup on each refresh
+  (~854 rows in the first 12 days) and nothing pruned the table. The catch:
+  the setup backtest's `dedupeSetups` chains rows into episodes by ≤10-day
+  gaps and resolves outcomes from each episode's **earliest** row, so naive
+  deletion could split episodes or change their entry/stop levels.
+  **What:** In `runRetention`: for non-active rows older than 30 days, keep
+  the first row (`MIN(id)`) per (ticker, setupType, day) — episode-start
+  rows survive exactly and gap chaining is unchanged at day resolution.
+  **Accept:** Persistence test proves `dedupeSetups` returns identical
+  episodes before and after thinning, and active rows are never touched.
+
 ## Archive — v2 (2026-07-06 review), all done 2026-07-09
 
 `#15` Windows desktop notifications · `#16` auto-fetch upcoming earnings
