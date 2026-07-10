@@ -233,6 +233,22 @@ export async function flushQueuedNotifications(): Promise<void> {
   await flushPending();
 }
 
+/**
+ * Push one message through the configured channels immediately, bypassing
+ * the severity gate and the burst queue. Only for flows where the user
+ * explicitly opted in to *this* message (channel test, morning brief) —
+ * regular alerts must go through queueAlertNotification.
+ */
+export async function sendDirectNotification(
+  severity: AlertSeverity,
+  message: string,
+  subtitle: string,
+  cfg: AppConfig = loadConfig(),
+): Promise<void> {
+  sendDesktop(severity, message, subtitle);
+  await sendNtfy(cfg, severity, message, subtitle);
+}
+
 // --- Channel test (roadmap #34) ----------------------------------------------
 
 export interface TestNotificationResult {

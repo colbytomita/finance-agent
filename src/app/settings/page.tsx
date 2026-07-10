@@ -43,6 +43,7 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
   { key: "notifyEnabled", label: "Alert notifications", type: "checkbox", hint: "Push alerts out of the app: a desktop notification (macOS/Windows), plus ntfy when a topic is set below." },
   { key: "notifyMinSeverity", label: "Notify at or above severity", type: "select", options: ["info", "warning", "critical"], hint: "critical = stop-loss hits, exit recommendations. warning adds stop-loss proximity." },
   { key: "ntfyTopic", label: "ntfy topic", type: "text", placeholder: "my-secret-topic", hint: "Subscribe to this topic in the ntfy app (ntfy.sh) to get alerts on your phone. Pick something unguessable; leave empty to disable." },
+  { key: "morningBriefEnabled", label: "Morning brief (daily)", type: "checkbox", hint: "One compact daily summary after the 08:00 maintenance refresh: market regime, earnings inside your avoid window, trades flagged Exit/Trim, buy-zone hits, fresh quality setups. Needs 'Alert notifications' on; ignores the severity gate — this toggle is the opt-in." },
 ];
 
 interface IrFeedSetting {
