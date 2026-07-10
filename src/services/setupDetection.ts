@@ -62,7 +62,9 @@ function detectPullbackToSupport(ind: IndicatorSnapshot, bars: Bar[]): DetectedS
   const t2 = price + 3 * (price - stop);
   let quality = 6.5;
   if (ind.relativeVolume != null && ind.relativeVolume < 0.9) quality += 0.5; // quiet pullback
-  if (price > (ind.sma200 ?? 0)) quality += 0.5;
+  // Long-term uptrend bonus only when a 200-SMA actually exists — with fewer
+  // than 200 bars `?? 0` made this unconditionally true and inflated quality.
+  if (ind.sma200 != null && price > ind.sma200) quality += 0.5;
   return buildSetup(
     "pullback_to_support",
     quality,
