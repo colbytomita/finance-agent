@@ -159,6 +159,12 @@ export default function SwingPage() {
                         stopLoss={s.stopLoss}
                         targetPrice1={s.targetPrice1}
                         mode={alpacaMode}
+                        risk={{
+                          minRiskReward: cfg.minRiskReward,
+                          riskPerTradePercent: cfg.riskPerTradePercent,
+                          accountValue,
+                          maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
+                        }}
                       />
                     </td>
                   </tr>

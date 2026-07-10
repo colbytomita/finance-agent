@@ -3,11 +3,20 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useApiAction } from "./useApiAction";
+import { riskRewardRatio, suggestPositionSize } from "@/services/riskManagement";
 
 // User-initiated trade entry. A "Trade" button on a setup row opens this dialog,
 // pre-filled from the setup, where the user sets size/order type/protective legs
 // and submits ONE order to Alpaca. On success the trade is logged as an open
 // swing trade. Live (real-money) accounts require an explicit confirmation.
+
+/** Config values for the live R/R + sizing feedback (roadmap #47). */
+export interface RiskContext {
+  minRiskReward: number;
+  riskPerTradePercent: number;
+  accountValue: number;
+  maxPositionWeightPercent: number;
+}
 
 export interface PlaceOrderButtonProps {
   ticker: string;
@@ -19,6 +28,8 @@ export interface PlaceOrderButtonProps {
   targetPrice1?: number | null;
   /** Alpaca mode, or null when Alpaca isn't configured. */
   mode: "paper" | "live" | null;
+  /** When set, the dialog shows live R/R + suggested size as fields change (display-only; the server gate stays authoritative). */
+  risk?: RiskContext;
 }
 
 interface OrderResult {
@@ -102,6 +113,27 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
   }
 
   const estCost = Number(shares) * Number(orderType === "limit" ? limitPrice : props.entryPrice ?? 0);
+
+  // Live risk feedback (roadmap #47): recomputed from the current field values
+  // on every keystroke. Display-only — the server-side gate (#29) re-validates
+  // on submit with the same pure functions.
+  const entryNum = orderType === "limit" ? Number(limitPrice) : props.entryPrice ?? Number(limitPrice);
+  const stopNum = attachBracket ? Number(stopLoss) : NaN;
+  const targetNum = attachBracket ? Number(targetPrice1) : NaN;
+  const liveRr =
+    entryNum > 0 && stopNum > 0 && targetNum > 0
+      ? riskRewardRatio(entryNum, stopNum, targetNum, direction)
+      : undefined; // undefined = not enough fields; null = stop on the wrong side
+  const suggested =
+    props.risk && entryNum > 0 && stopNum > 0
+      ? suggestPositionSize({
+          accountValue: props.risk.accountValue,
+          riskPerTradePercent: props.risk.riskPerTradePercent,
+          entryPrice: entryNum,
+          stopLoss: stopNum,
+          maxPositionWeightPercent: props.risk.maxPositionWeightPercent,
+        })
+      : null;
 
   return (
     <>
@@ -251,6 +283,31 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
                       />
                     </div>
                   </div>
+                )}
+
+                {props.risk && attachBracket && (liveRr !== undefined || suggested) && (
+                  <p className="text-[11px] tabular-nums">
+                    {liveRr === null && (
+                      <span className="text-red-400">Stop is on the wrong side of entry.</span>
+                    )}
+                    {liveRr != null && (
+                      <span
+                        className={
+                          liveRr >= props.risk.minRiskReward ? "pos" : "text-amber-400"
+                        }
+                      >
+                        R/R {liveRr.toFixed(1)}:1
+                        {liveRr < props.risk.minRiskReward &&
+                          ` — below your ${props.risk.minRiskReward}:1 minimum`}
+                      </span>
+                    )}
+                    {suggested && suggested.shares > 0 && (
+                      <span className="ml-2 text-zinc-500">
+                        suggested {suggested.shares} sh · risking ≈ $
+                        {suggested.maxLossIfStopped.toFixed(0)} at {props.risk.riskPerTradePercent}%
+                      </span>
+                    )}
+                  </p>
                 )}
 
                 <div className={fieldCls}>
