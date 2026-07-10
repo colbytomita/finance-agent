@@ -31,6 +31,31 @@ export interface StatusReport {
   };
   barCoverage: BarCoverage[];
   backups: { file: string; bytes: number; modifiedAt: string }[];
+  schedulerEnv: SchedulerEnv;
+}
+
+export interface SchedulerEnv {
+  /** The runner-reported integration string from its heartbeat, if any. */
+  reported: string | null;
+  /** Web process has Alpaca but the runner reports alpaca=off (roadmap #40's failure mode). */
+  alpacaMismatch: boolean;
+}
+
+/**
+ * Compare the job runner's self-reported env (heartbeat message, roadmap
+ * #41) against this process's. Pure — the runner is a separate process, so
+ * its `.env` situation can differ from the web app's.
+ */
+export function schedulerEnvFromHeartbeat(
+  heartbeatMessage: string | null | undefined,
+  webAlpacaConfigured: boolean,
+): SchedulerEnv {
+  const reported =
+    heartbeatMessage && /alpaca=/.test(heartbeatMessage) ? heartbeatMessage : null;
+  return {
+    reported,
+    alpacaMismatch: Boolean(reported && webAlpacaConfigured && /alpaca=off/.test(reported)),
+  };
 }
 
 export function getStatusReport(yahooEnabled: boolean): StatusReport {
@@ -68,16 +93,22 @@ export function getStatusReport(yahooEnabled: boolean): StatusReport {
 
   const p = dbPath();
   const sizeOf = (f: string) => (fs.existsSync(f) ? fs.statSync(f).size : 0);
+  const integrations = integrationsStatus();
+  const jobs = getJobHealth();
   return {
     integrations: {
-      ...integrationsStatus(),
+      ...integrations,
       yahooEnabled,
       // Same default as YahooFinanceBrowserService: on unless explicitly "false".
       yahooBrowserFallback: process.env.YAHOO_BROWSER_ENABLED !== "false",
     },
-    jobs: getJobHealth(),
+    jobs,
     db: { path: p, bytes: sizeOf(p), walBytes: sizeOf(`${p}-wal`), tables },
     barCoverage,
     backups: listBackups(),
+    schedulerEnv: schedulerEnvFromHeartbeat(
+      jobs.jobs.find((j) => j.job === "heartbeat")?.message,
+      integrations.alpacaConfigured,
+    ),
   };
 }

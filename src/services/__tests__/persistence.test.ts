@@ -6,6 +6,7 @@ import { upsertWatchlistItem } from "../watchlist";
 import { emitAlert, generateAlerts, listAlerts } from "../alerts";
 import { closeTrade } from "../trades";
 import { recordJobRun, getJobHealth } from "../jobHealth";
+import { schedulerEnvFromHeartbeat } from "../status";
 import { addMention, findSameDayMention } from "../entityMentions";
 import { runRetention, runSqliteHousekeeping } from "../retention";
 import {
@@ -584,5 +585,22 @@ describe("upcoming earnings catalyst upsert (roadmap #16)", () => {
     // A real catalyst on the same ticker still flows into scoring.
     addCatalyst({ ticker: "NVDA", title: "Analyst upgrade to Buy", impactScore: 3, confidence: "medium" });
     expect(getCatalystInputs("NVDA")).toHaveLength(1);
+  });
+});
+
+describe("scheduler env from heartbeat (roadmap #41)", () => {
+  it("reports the runner string and flags the keyless-runner mismatch", () => {
+    expect(schedulerEnvFromHeartbeat("alpaca=paper llm=on", true)).toEqual({
+      reported: "alpaca=paper llm=on",
+      alpacaMismatch: false,
+    });
+    expect(schedulerEnvFromHeartbeat("alpaca=off llm=off", true)).toEqual({
+      reported: "alpaca=off llm=off",
+      alpacaMismatch: true, // web has Alpaca, runner doesn't — roadmap #40's failure mode
+    });
+    // Runner without Alpaca is fine when the web app has none either.
+    expect(schedulerEnvFromHeartbeat("alpaca=off llm=off", false).alpacaMismatch).toBe(false);
+    // Old heartbeats carried no message.
+    expect(schedulerEnvFromHeartbeat(null, true)).toEqual({ reported: null, alpacaMismatch: false });
   });
 });
