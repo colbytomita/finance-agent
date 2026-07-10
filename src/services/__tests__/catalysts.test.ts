@@ -74,6 +74,17 @@ describe("classifyCatalyst", () => {
     expect(r.tags).toContain("negative-tone");
   });
 
+  it("tone softens but never flips a strong rule match (roadmap #44)", () => {
+    // +4 guidance raise with one negative-tone word must stay strongly positive.
+    const up = classifyCatalyst("Acme raises guidance but warns of supply constraints");
+    expect(up.impactScore).toBe(3);
+    expect(up.impactDirection).toBe("positive");
+    // -3 estimates miss with a positive-tone word must stay negative.
+    const down = classifyCatalyst("Acme misses estimates even as shares soar");
+    expect(down.impactScore).toBe(-2);
+    expect(down.impactDirection).toBe("negative");
+  });
+
   it("falls back to industry_news with unknown impact", () => {
     const r = classifyCatalyst("Acme to attend industry gathering");
     expect(r.catalystType).toBe("industry_news");

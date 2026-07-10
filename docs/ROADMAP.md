@@ -8,7 +8,7 @@ maintenance run. Items are numbered #44+.
 
 ## v4 — Tier 1: correctness
 
-- [ ] **44. `classifyCatalyst` tone adjustment forces the sign** *(small)*
+- [x] **44. `classifyCatalyst` tone adjustment forces the sign** *(small — done)*
   **Why:** `catalysts.ts` tone rules say "adjustment for otherwise-neutral
   matches" but apply to every match with sign-forcing math:
   `Math.min(impact - 1, -1)` turns a +4 guidance-raise headline containing
