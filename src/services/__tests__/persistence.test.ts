@@ -5,7 +5,7 @@ import { useTestDb } from "./dbHarness";
 import { upsertWatchlistItem } from "../watchlist";
 import { emitAlert, generateAlerts, listAlerts } from "../alerts";
 import { closeTrade } from "../trades";
-import { recordJobRun, getJobHealth } from "../jobHealth";
+import { recordJobRun, getJobHealth, isDailyJobDue } from "../jobHealth";
 import { schedulerEnvFromHeartbeat } from "../status";
 import { addMention, findSameDayMention } from "../entityMentions";
 import { runRetention, runSqliteHousekeeping } from "../retention";
@@ -602,5 +602,18 @@ describe("scheduler env from heartbeat (roadmap #41)", () => {
     expect(schedulerEnvFromHeartbeat("alpaca=off llm=off", false).alpacaMismatch).toBe(false);
     // Old heartbeats carried no message.
     expect(schedulerEnvFromHeartbeat(null, true)).toEqual({ reported: null, alpacaMismatch: false });
+  });
+});
+
+describe("daily-job catch-up due check (roadmap #43)", () => {
+  const h = 3600_000;
+  const now = Date.parse("2026-07-10T18:00:00Z");
+  it("is due when never run, stale, or unparseable; not when recent", () => {
+    expect(isDailyJobDue(null, now)).toBe(true);
+    expect(isDailyJobDue(undefined, now)).toBe(true);
+    expect(isDailyJobDue("not-a-date", now)).toBe(true);
+    expect(isDailyJobDue(new Date(now - 21 * h).toISOString(), now)).toBe(true);
+    expect(isDailyJobDue(new Date(now - 19 * h).toISOString(), now)).toBe(false);
+    expect(isDailyJobDue(new Date(now - 2 * h).toISOString(), now)).toBe(false);
   });
 });

@@ -257,6 +257,22 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   **Accept:** Route test (acked rows excluded, criticals counted); live
   endpoint returns the real backlog and the chip renders in the header.
 
+- [x] **43. Startup catch-up for missed daily maintenance** *(small,
+  operational bug — done 2026-07-10)*
+  **Why:** The 08:00 maintenance cron only fires while the runner is alive
+  at 08:00. With the runner living in ad-hoc terminals, `job_runs` showed
+  **zero `daily_maintenance` completions ever** and `data/backups/` didn't
+  exist — no retention, no backups, no scheduled backtests had actually
+  been happening. (The #18 Scheduled Task installer would prevent this but
+  is opt-in and was never installed.)
+  **What:** Pure `isDailyJobDue(lastRunAt, now, maxAgeHours=20)` in
+  `jobHealth.ts`; on scheduler startup, when the last completed maintenance
+  is missing or >20h old, run it 30s after boot (logged as a catch-up).
+  **Accept:** Due-check unit-tested (never/stale/unparseable/recent). Live:
+  restarted runner logged the catch-up, ran full maintenance (discovery,
+  159 earnings quarters, retention), and wrote the **first backup ever**
+  (`finance-agent-2026-07-10.db`, 12.9 MB).
+
 ## Archive — v2 (2026-07-06 review), all done 2026-07-09
 
 `#15` Windows desktop notifications · `#16` auto-fetch upcoming earnings

@@ -34,6 +34,23 @@ export interface JobHealth {
   stale: boolean;
 }
 
+/**
+ * Should a startup catch-up run of a daily job happen now? (roadmap #43)
+ * A cron only fires while the runner is alive at that moment — an ad-hoc
+ * terminal runner misses it routinely (observed: zero daily_maintenance
+ * completions ever, and no backups). Due when the job has never completed
+ * or its last run is older than `maxAgeHours`. Pure.
+ */
+export function isDailyJobDue(
+  lastRunAt: string | null | undefined,
+  now = Date.now(),
+  maxAgeHours = 20,
+): boolean {
+  if (!lastRunAt) return true;
+  const t = new Date(lastRunAt).getTime();
+  return isNaN(t) || now - t > maxAgeHours * 3600_000;
+}
+
 export function getJobHealth(): JobHealth {
   const jobs = getDb().select().from(schema.jobRuns).all();
   const hb = jobs.find((j) => j.job === "heartbeat");
