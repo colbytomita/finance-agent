@@ -30,6 +30,7 @@ import { runEventIngestion } from "@/services/eventIngestion";
 import { backfillCompanyNames } from "@/services/companyNames";
 import { backfillHoldingSectors } from "@/services/sectors";
 import { sendMorningBrief } from "@/services/morningBrief";
+import { flushQueuedNotifications } from "@/services/notifications";
 import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers, fetchUpcomingEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
@@ -363,6 +364,15 @@ cron.schedule("0 8 * * *", () => void dailyMaintenance());
     );
     setTimeout(() => void dailyMaintenance(), 30_000);
   }
+}
+
+// Graceful shutdown: alerts queue into a 3s burst digest, so a Ctrl+C or task
+// stop mid-window would silently drop pending notifications — flush them first.
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, () => {
+    log(`${sig} — flushing queued notifications and stopping`);
+    void flushQueuedNotifications().finally(() => process.exit(0));
+  });
 }
 
 // Kick off the refresh loop immediately.

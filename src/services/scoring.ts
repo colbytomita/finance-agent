@@ -40,6 +40,7 @@ export function combineStockScore(
     c.riskScore * w.risk +
     c.sentimentScore * w.sentiment;
   const weightSum = w.valuation + w.momentum + w.catalyst + w.risk + w.sentiment;
+  if (weightSum <= 0) return 5; // defensive: all-zero weights → neutral, never NaN
   return clampScore(Math.round((total / weightSum) * 10) / 10);
 }
 
@@ -235,11 +236,13 @@ export function riskScore(
 
 /** Sentiment from analyst-action + news catalysts; neutral without data. */
 export function sentimentScore(catalystsIn: CatalystInput[]): ComponentResult {
-  if (catalystsIn.length === 0) {
+  // Match catalystScore: expired events don't shape current sentiment.
+  // (getCatalystInputs pre-filters these; this keeps direct callers safe too.)
+  const active = catalystsIn.filter((c) => c.status !== "expired");
+  if (active.length === 0) {
     return { score: 5.5, reasons: ["No sentiment signals — neutral."] };
   }
-  const avg =
-    catalystsIn.reduce((a, c) => a + c.impactScore, 0) / catalystsIn.length;
+  const avg = active.reduce((a, c) => a + c.impactScore, 0) / active.length;
   return {
     score: clampScore(5.5 + avg * 0.6),
     reasons: [`Average catalyst tone ${avg >= 0 ? "positive" : "negative"} (${avg.toFixed(1)}).`],

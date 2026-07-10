@@ -42,6 +42,7 @@ export function combineTradeScore(
     c.thesisValidityScore * w.thesisValidity;
   const weightSum =
     w.technical + w.momentum + w.catalyst + w.riskReward + w.marketCondition + w.thesisValidity;
+  if (weightSum <= 0) return 5; // defensive: all-zero weights → neutral, never NaN
   return clampScore(Math.round((total / weightSum) * 10) / 10);
 }
 
@@ -132,35 +133,53 @@ export function technicalScore(
   return { score: clampScore(score), reasons };
 }
 
-export function tradeMomentumScore(ind: IndicatorSnapshot | null): {
+export function tradeMomentumScore(
+  ind: IndicatorSnapshot | null,
+  direction: "long" | "short" = "long",
+): {
   score: number;
   reasons: string[];
 } {
   if (!ind) return { score: 5, reasons: ["No momentum data."] };
+  // For a short, favorable momentum is the mirror image: falling EMAs, weak
+  // RSI, negative MACD histogram. Long behavior is unchanged.
+  const long = direction === "long";
   let score = 5.5;
   const reasons: string[] = [];
   if (ind.ema8 != null && ind.ema21 != null) {
-    if (ind.ema8 > ind.ema21) score += 1;
+    const rising = ind.ema8 > ind.ema21;
+    if (rising === long) score += 1;
     else {
       score -= 1;
-      reasons.push("Short-term momentum rolled over (EMA8 < EMA21).");
+      reasons.push(
+        long
+          ? "Short-term momentum rolled over (EMA8 < EMA21)."
+          : "Short-term momentum turned up against the short (EMA8 > EMA21).",
+      );
     }
   }
   if (ind.rsi14 != null) {
-    if (ind.rsi14 >= 55 && ind.rsi14 <= 70) score += 1;
-    else if (ind.rsi14 > 70) {
+    // Mirror RSI for shorts so "strong" means "moving the trade's way".
+    const r = long ? ind.rsi14 : 100 - ind.rsi14;
+    if (r >= 55 && r <= 70) score += 1;
+    else if (r > 70) {
       score += 0.25;
-      reasons.push("RSI overbought — momentum strong but stretched.");
-    } else if (ind.rsi14 < 45) {
+      reasons.push(
+        long
+          ? "RSI overbought — momentum strong but stretched."
+          : "RSI deeply oversold — short working but stretched.",
+      );
+    } else if (r < 45) {
       score -= 1;
-      reasons.push("RSI weak (<45).");
+      reasons.push(long ? "RSI weak (<45)." : "RSI strengthening against the short.");
     }
   }
   if (ind.macd) {
-    if (ind.macd.histogram > 0) score += 0.75;
+    const favorable = long ? ind.macd.histogram > 0 : ind.macd.histogram < 0;
+    if (favorable) score += 0.75;
     else {
       score -= 0.75;
-      reasons.push("MACD histogram negative.");
+      reasons.push(long ? "MACD histogram negative." : "MACD histogram positive — against the short.");
     }
   }
   if (ind.relativeVolume != null && ind.relativeVolume > 1.5) {
@@ -313,8 +332,9 @@ export function trimRules(input: {
   if (previousScore != null && previousScore >= 8 && tradeScore < 6.5) {
     reasons.push("Trade score fell from strong to neutral.");
   }
-  if (indicators?.rsi14 != null && indicators.rsi14 > 78) {
-    reasons.push("Stock is overextended (RSI > 78).");
+  // Overextension in the trade's direction: RSI > 78 for longs, < 22 for shorts.
+  if (indicators?.rsi14 != null && (long ? indicators.rsi14 > 78 : indicators.rsi14 < 22)) {
+    reasons.push(long ? "Stock is overextended (RSI > 78)." : "Move is overextended (RSI < 22).");
   }
   const rr = riskRewardScore(trade);
   if (rr.ratio != null && rr.ratio > 0 && rr.ratio < 1) {
@@ -369,23 +389,31 @@ export function addBlockers(input: {
   } = input;
   const blockers: string[] = [];
 
+  const long = trade.direction === "long";
   if (tradeScore < 8) blockers.push("Trade score below 8.");
   if (belowBuyZone) blockers.push("Price is below the buy zone.");
   if (indicators) {
-    if (indicators.ema21 != null && trade.direction === "long" && indicators.price < indicators.ema21) {
-      blockers.push("Price below key trend support (21-EMA).");
+    // Trend-side check in the trade's direction: a long shouldn't add below
+    // the 21-EMA; a short shouldn't add above it.
+    if (indicators.ema21 != null && (long ? indicators.price < indicators.ema21 : indicators.price > indicators.ema21)) {
+      blockers.push(long ? "Price below key trend support (21-EMA)." : "Price above the 21-EMA — against the short.");
     }
-    if (indicators.ema8 != null && indicators.ema21 != null && indicators.ema8 < indicators.ema21) {
-      blockers.push("Momentum is negative.");
+    if (
+      indicators.ema8 != null &&
+      indicators.ema21 != null &&
+      (long ? indicators.ema8 < indicators.ema21 : indicators.ema8 > indicators.ema21)
+    ) {
+      blockers.push(long ? "Momentum is negative." : "Momentum has turned up against the short.");
     }
     if (indicators.relativeVolume != null && indicators.relativeVolume < 0.8) {
       blockers.push("Volume does not confirm momentum.");
     }
+    // Too extended in the trade's direction to add safely.
     if (
       indicators.ema21 != null &&
-      indicators.price > indicators.ema21 * 1.1
+      (long ? indicators.price > indicators.ema21 * 1.1 : indicators.price < indicators.ema21 * 0.9)
     ) {
-      blockers.push("Too extended above the 21-EMA.");
+      blockers.push(long ? "Too extended above the 21-EMA." : "Too extended below the 21-EMA.");
     }
   } else {
     blockers.push("No technical data to confirm an add.");
@@ -436,7 +464,7 @@ export function evaluateTrade(input: {
   } = input;
 
   const tech = technicalScore(indicators, trade);
-  const mom = tradeMomentumScore(indicators);
+  const mom = tradeMomentumScore(indicators, trade.direction);
   const cat = catalystScore(catalysts);
   const rr = riskRewardScore(trade);
   const mkt = marketConditionScore(marketIndicators);

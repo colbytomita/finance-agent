@@ -5,6 +5,7 @@ import {
   evaluateTrade,
   hardExitRules,
   riskRewardScore,
+  tradeMomentumScore,
   tradeRecommendationLabel,
   trimRules,
   type TradeContext,
@@ -256,5 +257,73 @@ describe("evaluateTrade end-to-end", () => {
     expect(result.tradeScore).toBe(combineTradeScore(result.components, result.weightsUsed));
     // Dropping the neutral no-data catalyst doesn't lower the score.
     expect(result.tradeScore).toBeGreaterThanOrEqual(combineTradeScore(result.components));
+  });
+});
+
+describe("tradeMomentumScore direction awareness", () => {
+  // Accelerating downtrend: EMA8 < EMA21, weak RSI, negative MACD histogram.
+  // (A linear trend converges the EMAs and leaves the histogram ~0.)
+  const downInd = computeIndicators(
+    barsFromCloses([...trendCloses(150, 140, 50), ...trendCloses(140, 100, 30)]),
+  );
+  // Accelerating uptrend: the mirror image.
+  const upInd = computeIndicators(
+    barsFromCloses([...trendCloses(100, 110, 50), ...trendCloses(110, 150, 30)]),
+  );
+
+  it("scores bearish momentum as favorable for a short, unfavorable for a long", () => {
+    const asLong = tradeMomentumScore(downInd, "long");
+    const asShort = tradeMomentumScore(downInd, "short");
+    expect(asLong.score).toBeLessThan(4);
+    expect(asShort.score).toBeGreaterThan(6);
+  });
+
+  it("scores bullish momentum as against a short", () => {
+    const asShort = tradeMomentumScore(upInd, "short");
+    const asLong = tradeMomentumScore(upInd, "long");
+    expect(asShort.score).toBeLessThan(4);
+    expect(asLong.score).toBeGreaterThan(6);
+    expect(asShort.reasons.join(" ")).toMatch(/against the short/i);
+  });
+
+  it("defaults to long — existing callers unchanged", () => {
+    expect(tradeMomentumScore(downInd)).toEqual(tradeMomentumScore(downInd, "long"));
+  });
+});
+
+describe("addBlockers direction awareness", () => {
+  const downInd = computeIndicators(barsFromCloses(trendCloses(150, 100, 80)));
+  const shortTrade: TradeContext = {
+    ...baseTrade,
+    direction: "short",
+    entryPrice: 120,
+    currentPrice: 110,
+    stopLoss: 126,
+    targetPrice1: 95,
+  };
+
+  it("does not block a short's add on bearish momentum", () => {
+    const blockers = addBlockers({
+      trade: shortTrade,
+      indicators: downInd,
+      catalysts: [{ impactScore: 2, confidence: "medium", status: "occurred" }],
+      tradeScore: 8.5,
+      riskScoreValue: 7,
+      maxPositionWeightPercent: 20,
+    });
+    expect(blockers.join(" ")).not.toMatch(/momentum is negative/i);
+    expect(blockers.join(" ")).not.toMatch(/below key trend support/i);
+  });
+
+  it("blocks a long's add on the same bearish tape", () => {
+    const blockers = addBlockers({
+      trade: { ...baseTrade, currentPrice: 101 },
+      indicators: downInd,
+      catalysts: [{ impactScore: 2, confidence: "medium", status: "occurred" }],
+      tradeScore: 8.5,
+      riskScoreValue: 7,
+      maxPositionWeightPercent: 20,
+    });
+    expect(blockers.join(" ")).toMatch(/momentum is negative/i);
   });
 });
