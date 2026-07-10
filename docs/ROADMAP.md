@@ -212,6 +212,25 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   Trim, six buy-zone names, five q≥7 setups, earnings section rightly
   absent).
 
+- [x] **40. The jobs runner never loaded `.env`** *(small, operational bug —
+  done 2026-07-10)*
+  **Why:** Next.js loads `.env` for the app, but `npm run jobs` runs under
+  plain tsx, which doesn't — so the background scheduler has been running
+  **keyless** the whole time: quotes fell back to Yahoo, broker order sync
+  and portfolio sync silently skipped, Alpaca clock phase detection
+  approximated, and LLM-gated features ran rule-based even with a key
+  configured. Found by comparing snapshot sources: dev-server refreshes
+  wrote `alpaca`, scheduler refreshes wrote `yahoo`. The README's
+  Scheduled-Task section even claimed `.env` was read.
+  **What:** `src/lib/loadEnv.ts` — dependency-free `applyDotEnv` parser
+  (comments, `export` prefixes, quotes, trailing comments; **never
+  overwrites real env vars**) + `loadDotEnv()` called at the top of the
+  three tsx entrypoints (`scheduler.ts`, `db/restore.ts`, `db/seed.ts`).
+  Safe because every env read in the codebase happens at call time.
+  **Accept:** Parser unit-tested (quoting, precedence, CRLF). Live: after
+  restart, the scheduler's refresh wrote 45/45 snapshots with source
+  `alpaca` (was `yahoo`), in 3s instead of a Yahoo-paced crawl.
+
 ## Archive — v2 (2026-07-06 review), all done 2026-07-09
 
 `#15` Windows desktop notifications · `#16` auto-fetch upcoming earnings
