@@ -617,3 +617,25 @@ describe("daily-job catch-up due check (roadmap #43)", () => {
     expect(isDailyJobDue(new Date(now - 2 * h).toISOString(), now)).toBe(false);
   });
 });
+
+describe("condition alerts emit once while unacked (roadmap #45)", () => {
+  const once = { onceWhileUnacked: true };
+  it("suppresses same (type,ticker) regardless of message; ack re-arms", () => {
+    expect(emitAlert("data_stale", "warning", "MSFT: data is 3h old.", "MSFT", once)).toBe(true);
+    // Next day the embedded age differs — still the same unacked condition.
+    expect(emitAlert("data_stale", "warning", "MSFT: data is 27h old.", "MSFT", once)).toBe(false);
+    // A different ticker is its own condition.
+    expect(emitAlert("data_stale", "warning", "NVDA: data is 3h old.", "NVDA", once)).toBe(true);
+    // Acknowledging re-arms the alert for MSFT.
+    getDb().update(schema.alerts).set({ acknowledged: true }).where(eq(schema.alerts.ticker, "MSFT")).run();
+    expect(emitAlert("data_stale", "warning", "MSFT: data is 2d old.", "MSFT", once)).toBe(true);
+    expect(
+      getDb().select().from(schema.alerts).all().filter((a) => a.ticker === "MSFT"),
+    ).toHaveLength(2);
+  });
+
+  it("event alerts without the option keep the old per-message dedupe", () => {
+    expect(emitAlert("order_fill", "info", "MSFT: filled 5 @ 100.", "MSFT")).toBe(true);
+    expect(emitAlert("order_fill", "info", "MSFT: filled 5 @ 101.", "MSFT")).toBe(true); // new message → new row
+  });
+});

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { freshness } from "@/lib/format";
@@ -12,6 +12,20 @@ import { queueAlertNotification } from "./notifications";
 
 export type AlertSeverity = "info" | "warning" | "critical";
 
+export interface EmitAlertOptions {
+  /**
+   * Condition-state alerts (roadmap #45): skip when an *unacknowledged*
+   * alert of the same (type, ticker) already exists, regardless of message
+   * or age — a stop that stays breached or a ticker that stays stale should
+   * not re-alert daily just because the embedded price/age changed.
+   * Acknowledging (or #36's auto-ack) re-arms the alert.
+   */
+  onceWhileUnacked?: boolean;
+}
+
+/** Shorthand for the condition-state alerts in generateAlerts (roadmap #45). */
+const ONCE: EmitAlertOptions = { onceWhileUnacked: true };
+
 /**
  * Emit one alert (de-duplicated: an identical type+message within the last 20h
  * is dropped). Exported for services that raise event-driven alerts outside the
@@ -22,8 +36,9 @@ export function emitAlert(
   severity: AlertSeverity,
   message: string,
   ticker: string | null = null,
+  opts: EmitAlertOptions = {},
 ): boolean {
-  return emit(alertType, severity, message, ticker);
+  return emit(alertType, severity, message, ticker, opts);
 }
 
 function emit(
@@ -31,8 +46,23 @@ function emit(
   severity: AlertSeverity,
   message: string,
   ticker: string | null = null,
+  opts: EmitAlertOptions = {},
 ): boolean {
   const db = getDb();
+  if (opts.onceWhileUnacked) {
+    const open = db
+      .select({ id: schema.alerts.id })
+      .from(schema.alerts)
+      .where(
+        and(
+          eq(schema.alerts.alertType, alertType),
+          eq(schema.alerts.acknowledged, false),
+          ticker == null ? isNull(schema.alerts.ticker) : eq(schema.alerts.ticker, ticker),
+        ),
+      )
+      .get();
+    if (open) return false;
+  }
   const since = new Date(Date.now() - 20 * 3600 * 1000).toISOString();
   const dupe = db
     .select()
@@ -89,11 +119,11 @@ export function generateAlerts(): number {
         Math.abs((price - t.stopLoss) / price) * 100 <= cfg.stopLossWarningPercent;
       if (hit) {
         count(
-          emit("stop_loss_hit", "critical", `${t.ticker}: stop-loss ${t.stopLoss} hit (price ${price}). Review exit.`, t.ticker),
+          emit("stop_loss_hit", "critical", `${t.ticker}: stop-loss ${t.stopLoss} hit (price ${price}). Review exit.`, t.ticker, ONCE),
         );
       } else if (near) {
         count(
-          emit("near_stop_loss", "warning", `${t.ticker}: within ${cfg.stopLossWarningPercent}% of stop-loss ${t.stopLoss}.`, t.ticker),
+          emit("near_stop_loss", "warning", `${t.ticker}: within ${cfg.stopLossWarningPercent}% of stop-loss ${t.stopLoss}.`, t.ticker, ONCE),
         );
       }
     }
@@ -101,29 +131,29 @@ export function generateAlerts(): number {
       const hit = long ? price >= t.targetPrice1 : price <= t.targetPrice1;
       if (hit) {
         count(
-          emit("target_hit", "info", `${t.ticker}: target 1 (${t.targetPrice1}) reached — trim rules apply.`, t.ticker),
+          emit("target_hit", "info", `${t.ticker}: target 1 (${t.targetPrice1}) reached — trim rules apply.`, t.ticker, ONCE),
         );
       }
     }
     if (t.tradeScore != null && t.tradeScore < 3) {
       count(
-        emit("trade_score_critical", "critical", `${t.ticker}: trade score ${t.tradeScore.toFixed(1)} — exit recommended.`, t.ticker),
+        emit("trade_score_critical", "critical", `${t.ticker}: trade score ${t.tradeScore.toFixed(1)} — exit recommended.`, t.ticker, ONCE),
       );
     } else if (t.tradeScore != null && t.tradeScore < 5) {
       count(
-        emit("trade_score_low", "warning", `${t.ticker}: trade score dropped to ${t.tradeScore.toFixed(1)} — monitor closely.`, t.ticker),
+        emit("trade_score_low", "warning", `${t.ticker}: trade score dropped to ${t.tradeScore.toFixed(1)} — monitor closely.`, t.ticker, ONCE),
       );
     }
     if (t.recommendation === "Exit") {
-      count(emit("exit_recommended", "critical", `${t.ticker}: EXIT recommended.`, t.ticker));
+      count(emit("exit_recommended", "critical", `${t.ticker}: EXIT recommended.`, t.ticker, ONCE));
     } else if (t.recommendation === "Trim") {
-      count(emit("trim_recommended", "warning", `${t.ticker}: trim recommended.`, t.ticker));
+      count(emit("trim_recommended", "warning", `${t.ticker}: trim recommended.`, t.ticker, ONCE));
     } else if (t.recommendation === "Add") {
-      count(emit("add_opportunity", "info", `${t.ticker}: add conditions met (score ${t.tradeScore?.toFixed(1)}).`, t.ticker));
+      count(emit("add_opportunity", "info", `${t.ticker}: add conditions met (score ${t.tradeScore?.toFixed(1)}).`, t.ticker, ONCE));
     }
     if (t.invalidationReason) {
       count(
-        emit("thesis_invalidated", "critical", `${t.ticker}: thesis invalidated — ${t.invalidationReason}`, t.ticker),
+        emit("thesis_invalidated", "critical", `${t.ticker}: thesis invalidated — ${t.invalidationReason}`, t.ticker, ONCE),
       );
     }
   }
@@ -153,7 +183,7 @@ export function generateAlerts(): number {
   });
   for (const w of concWarnings) {
     const ticker = [...positionValues.keys()].find((t) => w.startsWith(`${t} `)) ?? null;
-    count(emit("concentration", "warning", w, ticker));
+    count(emit("concentration", "warning", w, ticker, ONCE));
   }
 
   // --- Buy zone / setup alerts ---
@@ -167,7 +197,7 @@ export function generateAlerts(): number {
       .limit(1)
       .get();
     if (dd?.buyZoneStatus === "In Buy Zone") {
-      count(emit("entry_range_reached", "info", `${w.ticker}: price entered your buy zone.`, w.ticker));
+      count(emit("entry_range_reached", "info", `${w.ticker}: price entered your buy zone.`, w.ticker, ONCE));
     }
   }
   const setups = db
@@ -217,7 +247,7 @@ export function generateAlerts(): number {
     const f = freshness(snap?.capturedAt ?? null, cfg.staleDataMinutes * 8);
     if (f.isStale) {
       count(
-        emit("data_stale", "warning", `${ticker}: market data is ${f.label}. Recommendations may be outdated.`, ticker),
+        emit("data_stale", "warning", `${ticker}: market data is ${f.label}. Recommendations may be outdated.`, ticker, ONCE),
       );
     }
   }
