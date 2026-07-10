@@ -42,6 +42,18 @@ Last updated: 2026-07-09.
   untouched default paper cash; plotting equity would flatten the real
   ~$13k positions curve into noise. `portfolio_snapshots.totalValue`
   stays positions-based on purpose. Revisit only for a real-money account.
+- **2026-07-10, roadmap v4 (#44–#47) written and shipped same day (tests
+  391/35):** #44 `classifyCatalyst` tone now nudges toward zero, never
+  flips a strong rule match; #45 `emitAlert` gained `onceWhileUnacked`
+  (condition-state alerts — stop/score/rec/buy-zone/stale/concentration —
+  emit once per (type,ticker) until acked; #36's auto-ack re-arms every
+  14d); #46 the three maintenance Yahoo loops (news/earnings/upcoming)
+  use `mapPool` at concurrency 4 (47 tickers ≈7s vs ~14s); #47 the trade
+  dialog shows live direction-aware R/R + suggested size via a new
+  optional `risk` prop (display-only; server gate authoritative). Also
+  fixed `install-jobs-task.ps1` reporting success after a denied
+  registration (needs `-ErrorAction Stop` on the CIM cmdlet + existence
+  check) — registration on this machine requires an elevated PowerShell.
 - **2026-07-10, #41–#43 (ops-truth chain; tests 388/35, prod build clean):**
   #41 the minute heartbeat self-reports the runner's integrations
   (`alpaca=paper llm=on`) — `/status` shows it and warns on the

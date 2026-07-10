@@ -116,7 +116,10 @@ async function maybeRefresh(): Promise<void> {
     const failed = prices.filter((p) => !p.ok);
     log(
       `refresh done: ${prices.length - failed.length}/${prices.length} tickers ok, ${alerts} new alert(s)` +
-        (failed.length > 0 ? ` — failed: ${failed.map((f) => f.ticker).join(", ")}` : ""),
+        (failed.length > 0 ? ` — failed: ${failed.map((f) => f.ticker).join(", ")}` : "") +
+        // Sample one failure reason so transient source blips (rate limits,
+        // outages) are diagnosable from the log alone.
+        (failed[0]?.error ? ` — e.g. ${failed[0].ticker}: ${failed[0].error}` : ""),
     );
     recordJobRun("refresh");
   } catch (e) {
