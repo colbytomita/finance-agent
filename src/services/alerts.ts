@@ -3,7 +3,8 @@ import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { freshness } from "@/lib/format";
 import { nowIso } from "@/lib/util";
-import { getLatestSnapshot } from "./marketData";
+import { currentAccountValue, getLatestSnapshot } from "./marketData";
+import { concentrationWarnings } from "./riskManagement";
 import { queueAlertNotification } from "./notifications";
 
 // Alert generation. Idempotent per day: an identical (type, ticker, message)
@@ -125,6 +126,32 @@ export function generateAlerts(): number {
         emit("thesis_invalidated", "critical", `${t.ticker}: thesis invalidated — ${t.invalidationReason}`, t.ticker),
       );
     }
+  }
+
+  // --- Account concentration (roadmap #30) ---
+  // Positions = holdings, plus open trades for tickers not already held (a
+  // broker-synced position already includes a swing trade's shares — summing
+  // both would double-count the exposure). Holdings carry no sector data
+  // today, so only the per-position half of concentrationWarnings can fire.
+  const holdings = db.select().from(schema.portfolioHoldings).all();
+  const positionValues = new Map<string, number>();
+  for (const h of holdings) {
+    if (h.marketValue != null) positionValues.set(h.ticker, h.marketValue);
+  }
+  for (const t of trades) {
+    if (!positionValues.has(t.ticker) && t.currentPrice != null) {
+      positionValues.set(t.ticker, t.shares * t.currentPrice);
+    }
+  }
+  const concWarnings = concentrationWarnings({
+    positions: [...positionValues].map(([ticker, value]) => ({ ticker, value, sector: null })),
+    accountValue: currentAccountValue(),
+    maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
+    maxSectorWeightPercent: cfg.maxSectorConcentrationPercent,
+  });
+  for (const w of concWarnings) {
+    const ticker = [...positionValues.keys()].find((t) => w.startsWith(`${t} `)) ?? null;
+    count(emit("concentration", "warning", w, ticker));
   }
 
   // --- Buy zone / setup alerts ---
