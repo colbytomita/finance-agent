@@ -131,20 +131,22 @@ export function generateAlerts(): number {
   // --- Account concentration (roadmap #30) ---
   // Positions = holdings, plus open trades for tickers not already held (a
   // broker-synced position already includes a swing trade's shares — summing
-  // both would double-count the exposure). Holdings carry no sector data
-  // today, so only the per-position half of concentrationWarnings can fire.
+  // both would double-count the exposure). Sectors come from the holdings'
+  // Yahoo-backfilled column (roadmap #37); rows without one only count
+  // toward the per-position check.
   const holdings = db.select().from(schema.portfolioHoldings).all();
-  const positionValues = new Map<string, number>();
+  const positionValues = new Map<string, { value: number; sector: string | null }>();
   for (const h of holdings) {
-    if (h.marketValue != null) positionValues.set(h.ticker, h.marketValue);
+    if (h.marketValue != null)
+      positionValues.set(h.ticker, { value: h.marketValue, sector: h.sector });
   }
   for (const t of trades) {
     if (!positionValues.has(t.ticker) && t.currentPrice != null) {
-      positionValues.set(t.ticker, t.shares * t.currentPrice);
+      positionValues.set(t.ticker, { value: t.shares * t.currentPrice, sector: null });
     }
   }
   const concWarnings = concentrationWarnings({
-    positions: [...positionValues].map(([ticker, value]) => ({ ticker, value, sector: null })),
+    positions: [...positionValues].map(([ticker, p]) => ({ ticker, ...p })),
     accountValue: currentAccountValue(),
     maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
     maxSectorWeightPercent: cfg.maxSectorConcentrationPercent,

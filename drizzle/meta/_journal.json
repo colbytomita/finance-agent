@@ -43,6 +43,13 @@
       "when": 1783641786336,
       "tag": "0005_portfolio-snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1783643297313,
+      "tag": "0006_holding-sector",
+      "breakpoints": true
     }
   ]
 }

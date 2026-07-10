@@ -35,6 +35,20 @@ export default function PortfolioPage() {
   const totalValue = holdings.reduce((a, h) => a + (h.marketValue ?? 0), 0);
   const totalPL = holdings.reduce((a, h) => a + (h.unrealizedGainLoss ?? 0), 0);
 
+  // Sector weights (roadmap #37) from the Yahoo-backfilled sector column;
+  // holdings still missing one are grouped as "Unclassified".
+  const sectorWeights =
+    totalValue > 0
+      ? [...holdings
+          .reduce((m, h) => {
+            const key = h.sector ?? "Unclassified";
+            m.set(key, (m.get(key) ?? 0) + (h.marketValue ?? 0));
+            return m;
+          }, new Map<string, number>())]
+          .map(([sector, value]) => ({ sector, pct: (value / totalValue) * 100 }))
+          .sort((a, b) => b.pct - a.pct)
+      : [];
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
@@ -47,6 +61,33 @@ export default function PortfolioPage() {
           <RefreshButton />
         </div>
       </div>
+      {sectorWeights.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="text-zinc-500">Sectors:</span>
+          {sectorWeights.map(({ sector, pct }) => {
+            const over = sector !== "Unclassified" && pct > cfg.maxSectorConcentrationPercent;
+            return (
+              <span
+                key={sector}
+                className={`rounded border px-1.5 py-0.5 tabular-nums ${
+                  over
+                    ? "border-amber-800 bg-amber-950 text-amber-300"
+                    : "border-zinc-700 bg-zinc-900 text-zinc-400"
+                }`}
+                title={
+                  over
+                    ? `Above your ${cfg.maxSectorConcentrationPercent}% sector cap`
+                    : sector === "Unclassified"
+                      ? "No sector data yet — filled by daily maintenance via Yahoo"
+                      : undefined
+                }
+              >
+                {sector} {pct.toFixed(0)}%
+              </span>
+            );
+          })}
+        </div>
+      )}
       <EquityCurve />
       <AddHoldingForm />
       <div className="overflow-x-auto">
