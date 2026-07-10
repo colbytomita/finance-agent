@@ -18,12 +18,23 @@ const DRAWDOWN_RETENTION_DAYS = 30;
 const SCORE_HISTORY_RETENTION_DAYS = 90;
 /** Scores older than this are thinned to the last row per ticker per day. */
 const SCORE_THIN_AFTER_DAYS = 30;
+/**
+ * Alerts (roadmap #36): a non-critical alert nobody acknowledged in this many
+ * days is no longer actionable — auto-ack it so the unacked feed reflects
+ * what's current (critical alerts are never auto-acked; they wait for the
+ * user). The row itself survives as audit trail until the retention window.
+ */
+const ALERT_AUTOACK_DAYS = 14;
+/** Acknowledged alerts older than this are deleted. */
+const ALERT_RETENTION_DAYS = 90;
 
 export interface RetentionResult {
   snapshotsDeleted: number;
   drawdownsDeleted: number;
   scoreHistoryDeleted: number;
   scoresThinned: number;
+  alertsAutoAcked: number;
+  alertsDeleted: number;
 }
 
 const isoDaysAgo = (days: number) =>
@@ -73,7 +84,30 @@ export function runRetention(): RetentionResult {
     ).changes,
   );
 
-  return { snapshotsDeleted, drawdownsDeleted, scoreHistoryDeleted, scoresThinned };
+  // Alerts (roadmap #36): auto-ack stale non-critical noise, then prune the
+  // acknowledged history past the retention window.
+  const autoAckCutoff = isoDaysAgo(ALERT_AUTOACK_DAYS);
+  const alertsAutoAcked = Number(
+    db.run(
+      sql`UPDATE alerts SET acknowledged = 1
+          WHERE acknowledged = 0 AND severity != 'critical' AND created_at < ${autoAckCutoff}`,
+    ).changes,
+  );
+  const alertDeleteCutoff = isoDaysAgo(ALERT_RETENTION_DAYS);
+  const alertsDeleted = Number(
+    db.run(
+      sql`DELETE FROM alerts WHERE acknowledged = 1 AND created_at < ${alertDeleteCutoff}`,
+    ).changes,
+  );
+
+  return {
+    snapshotsDeleted,
+    drawdownsDeleted,
+    scoreHistoryDeleted,
+    scoresThinned,
+    alertsAutoAcked,
+    alertsDeleted,
+  };
 }
 
 export interface HousekeepingResult {
