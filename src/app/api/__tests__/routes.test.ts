@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getDb, schema } from "@/db";
+import { eq } from "drizzle-orm";
 import { useTestDb } from "@/services/__tests__/dbHarness";
 import * as watchlistRoute from "../watchlist/route";
 import * as tradesRoute from "../trades/route";
@@ -10,6 +11,7 @@ import * as jobsRoute from "../jobs/route";
 import * as settingsRoute from "../settings/route";
 import * as tradesExportRoute from "../trades/export/route";
 import * as ackAllRoute from "../alerts/ack-all/route";
+import * as unackedCountRoute from "../alerts/unacked-count/route";
 import { emitAlert } from "@/services/alerts";
 
 // Route-handler smoke tests (agent-memory "likely next work"): call the JSON
@@ -287,5 +289,17 @@ describe("POST /api/alerts/ack-all (roadmap #35)", () => {
     const all = await ackAllRoute.POST(jsonReq("POST", {}));
     expect(((await all.json()) as { acked: number }).acked).toBe(2);
     expect(getDb().select().from(schema.alerts).all().every((a) => a.acknowledged)).toBe(true);
+  });
+});
+
+describe("GET /api/alerts/unacked-count (roadmap #42)", () => {
+  it("counts unacked rows and criticals; acked rows don't count", async () => {
+    emitAlert("near_stop_loss", "warning", "MSFT warn", "MSFT");
+    emitAlert("exit_recommended", "critical", "NVDA exit", "NVDA");
+    emitAlert("info_note", "info", "AAPL note", "AAPL");
+    getDb().update(schema.alerts).set({ acknowledged: true }).where(eq(schema.alerts.ticker, "AAPL")).run();
+
+    const res = await unackedCountRoute.GET();
+    expect((await res.json()) as object).toEqual({ count: 2, critical: 1 });
   });
 });

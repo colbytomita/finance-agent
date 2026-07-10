@@ -246,6 +246,17 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   legacy null message). Live: restarted runner heartbeat shows
   `alpaca=paper llm=on` on the page.
 
+- [x] **42. Unacked-alerts badge in the header** *(small — done 2026-07-10)*
+  **Why:** The alerts feed only warns if you visit it — 319 unacked rows
+  (64 critical) had accumulated with zero ambient visibility; the header
+  had a jobs-health badge but nothing for alerts.
+  **What:** `AlertsBadge` (client, 60s poll of the new
+  `GET /api/alerts/unacked-count`) next to `JobHealthBadge`: hidden at
+  zero, muted amber-dot count normally, red when anything critical waits;
+  links to `/alerts?ack=unacked`.
+  **Accept:** Route test (acked rows excluded, criticals counted); live
+  endpoint returns the real backlog and the chip renders in the header.
+
 ## Archive — v2 (2026-07-06 review), all done 2026-07-09
 
 `#15` Windows desktop notifications · `#16` auto-fetch upcoming earnings

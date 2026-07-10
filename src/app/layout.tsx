@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JobHealthBadge } from "@/components/JobHealthBadge";
+import { AlertsBadge } from "@/components/AlertsBadge";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -53,6 +54,7 @@ export default function RootLayout({
               ))}
             </nav>
             <span className="flex shrink-0 items-center gap-4">
+              <AlertsBadge />
               <JobHealthBadge />
             </span>
           </div>
