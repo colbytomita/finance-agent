@@ -23,10 +23,25 @@ Last updated: 2026-07-09.
   stock_scores to last-per-day); test-notification button in Settings
   (`sendTestNotification` + POST /api/settings/test-notification);
   acknowledge-all on /alerts (`ackAlerts` + POST /api/alerts/ack-all).
-- Suite grew 357 → 379 tests across 33 files (incl. #36–#38 follow-ups:
-  alert retention, holding sectors, trade_setups thinning); typecheck
-  clean; every item verified live against real data before its merge
-  commit.
+- Suite grew 357 → 385 tests across 35 files (incl. follow-ups #36–#40:
+  alert retention, holding sectors, trade_setups thinning, opt-in morning
+  brief, scheduler .env fix); typecheck clean; every item verified live
+  against real data before its merge commit.
+- **2026-07-10, #39:** opt-in daily morning brief
+  (`src/services/morningBrief.ts`, `morningBriefEnabled` config, sent at
+  the end of daily maintenance; pushes via `sendDirectNotification` only
+  when the severity gate would suppress info — no double-send).
+- **2026-07-10, #40 (operational bug):** `npm run jobs` had NEVER loaded
+  `.env` — the scheduler ran keyless since day one (Yahoo-only quotes, no
+  broker order sync, rule-based LLM paths). Fixed with
+  `src/lib/loadEnv.ts` (`loadDotEnv()` at the top of the tsx entrypoints;
+  real env vars always win). If a new tsx entrypoint is added, call
+  `loadDotEnv()` there too.
+- **Considered and rejected (2026-07-10): broker-equity equity curve.**
+  The Alpaca *paper* account reports ~$100k equity of which ~$88k is
+  untouched default paper cash; plotting equity would flatten the real
+  ~$13k positions curve into noise. `portfolio_snapshots.totalValue`
+  stays positions-based on purpose. Revisit only for a real-money account.
 
 ## Current State
 
