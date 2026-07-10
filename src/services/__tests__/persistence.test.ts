@@ -21,7 +21,7 @@ import {
   EARNINGS_CALENDAR_SOURCE,
 } from "../catalysts";
 import { daysToNextEarnings, getCatalystInputs } from "../marketData";
-import { upcomingEarningsCalendar } from "@/lib/queries";
+import { scoreSeries, upcomingEarningsCalendar } from "@/lib/queries";
 import { industryScanTrend } from "../sectorScout";
 import { portfolioHistory, upsertPortfolioSnapshot } from "../portfolioHistory";
 import { saveConfig, loadConfig } from "@/lib/config";
@@ -446,6 +446,36 @@ describe("upcoming earnings calendar (roadmap #32)", () => {
     expect(cal.map((c) => c.ticker)).toEqual(["MSFT", "AAPL"]);
     expect(cal[0].eventDate).toBe(inDays(2));
     expect(cal.every((c) => c.daysUntil >= 0 && c.daysUntil <= 14)).toBe(true);
+  });
+});
+
+describe("score series (roadmap #33)", () => {
+  it("collapses to the last score of each day, oldest first", () => {
+    const ins = (calculatedAt: string, overallScore: number) =>
+      getDb()
+        .insert(schema.stockScores)
+        .values({
+          ticker: "MSFT",
+          overallScore,
+          valuationScore: 5,
+          momentumScore: 5,
+          catalystScore: 5,
+          riskScore: 5,
+          sentimentScore: 5,
+          recommendation: "Hold / Monitor",
+          confidence: "medium",
+          calculatedAt,
+        })
+        .run();
+    ins("2026-07-07T14:00:00Z", 5.0);
+    ins("2026-07-08T14:00:00Z", 6.0);
+    ins("2026-07-08T20:00:00Z", 6.4); // later same day wins
+    ins("2026-07-09T14:00:00Z", 7.1);
+
+    const series = scoreSeries("MSFT");
+    expect(series.map((p) => p.date)).toEqual(["2026-07-07", "2026-07-08", "2026-07-09"]);
+    expect(series.map((p) => p.overallScore)).toEqual([5.0, 6.4, 7.1]);
+    expect(scoreSeries("NVDA")).toHaveLength(0);
   });
 });
 
