@@ -35,6 +35,31 @@ export function latestScore(ticker: string) {
   );
 }
 
+/**
+ * Daily stock-score series for the sparkline (roadmap #33): stock_scores
+ * holds every recompute (several per day until retention thins old days to
+ * one), so collapse to the last score of each calendar day, oldest first.
+ */
+export function scoreSeries(
+  ticker: string,
+  limitDays = 180,
+): { date: string; overallScore: number }[] {
+  const rows = getDb()
+    .select({
+      overallScore: schema.stockScores.overallScore,
+      calculatedAt: schema.stockScores.calculatedAt,
+    })
+    .from(schema.stockScores)
+    .where(eq(schema.stockScores.ticker, ticker))
+    .orderBy(schema.stockScores.calculatedAt)
+    .all();
+  const byDay = new Map<string, number>();
+  for (const r of rows) byDay.set(r.calculatedAt.slice(0, 10), r.overallScore); // last of day wins
+  return [...byDay.entries()]
+    .map(([date, overallScore]) => ({ date, overallScore }))
+    .slice(-limitDays);
+}
+
 export function latestSnapshot(ticker: string) {
   return (
     getDb()

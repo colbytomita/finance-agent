@@ -110,7 +110,8 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   **Accept:** With real fetched dates, the card lists them soonest-first and
   shows nothing (with a quiet empty state) when no reports are near.
 
-- [ ] **33. Score-history sparkline on the stock page** *(small–medium)*
+- [x] **33. Score-history sparkline on the stock page** *(small–medium —
+  done)*
   **Why:** `stock_scores` keeps an append-only per-ticker time series
   (retention thins to one row/ticker/day precisely so history survives), and
   Signal Performance proves the data is usable — but `/stock/[ticker]` shows

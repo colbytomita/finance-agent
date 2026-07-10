@@ -19,6 +19,7 @@ import { effectiveConfig, loadConfig } from "@/lib/config";
 import { fmtDate, fmtMoney, fmtNum, fmtScore } from "@/lib/format";
 import { EarningsBadge, Freshness, Pct, RecBadge, ScoreBadge } from "@/components/badges";
 import { PriceChart, type ChartEvent } from "@/components/PriceChart";
+import { ScoreSparkline } from "@/components/ScoreSparkline";
 import { GenerateBriefButton } from "@/components/GenerateBriefButton";
 import { RefreshButton } from "@/components/RefreshButton";
 import { AddEarningsForm, FetchEarningsButton, DeleteButton } from "@/components/forms";
@@ -298,6 +299,7 @@ export default async function StockDetailPage({
                   <span className="muted">Risk (10=low)</span><ScoreBadge score={score.riskScore} />
                   <span className="muted">Sentiment</span><ScoreBadge score={score.sentimentScore} />
                 </div>
+                <ScoreSparkline ticker={ticker} />
                 {trade && (
                   <div className="border-t border-zinc-800 pt-2">
                     <span className="muted text-xs">Open trade</span>
