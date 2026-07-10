@@ -24,6 +24,7 @@ import { daysToNextEarnings, getCatalystInputs } from "../marketData";
 import { scoreSeries, upcomingEarningsCalendar } from "@/lib/queries";
 import { industryScanTrend } from "../sectorScout";
 import { portfolioHistory, upsertPortfolioSnapshot } from "../portfolioHistory";
+import { dedupeSetups } from "../setupPerformance";
 import { saveConfig, loadConfig } from "@/lib/config";
 
 // Write-path integration tests against an in-memory SQLite database
@@ -308,6 +309,45 @@ describe("retention", () => {
     const scores = db.select().from(schema.stockScores).all();
     expect(scores).toHaveLength(2);
     expect(scores.some((s) => s.calculatedAt === daysAgo(45, 15))).toBe(true); // kept the day's last
+  });
+
+  it("thins old setups to first-per-day without changing the backtest's episodes (roadmap #38)", () => {
+    const db = getDb();
+    const setup = (detectedAt: string, status = "expired", ticker = "MSFT") =>
+      db
+        .insert(schema.tradeSetups)
+        .values({
+          ticker,
+          setupType: "breakout",
+          setupQualityScore: 7,
+          entryRangeLow: 100,
+          entryRangeHigh: 102,
+          stopLoss: 95,
+          targetPrice1: 110,
+          riskRewardRatio: 2,
+          detectedAt,
+          status,
+        })
+        .run();
+    // One old episode re-detected across two days (several rows per day),
+    // then a second episode after a >10-day gap, plus a recent active row.
+    setup(daysAgo(60, 9));
+    setup(daysAgo(60, 15));
+    setup(daysAgo(59, 9));
+    setup(daysAgo(59, 15));
+    setup(daysAgo(40, 9)); // new episode (19-day gap)
+    setup(daysAgo(1, 9), "active");
+
+    const before = dedupeSetups(db.select().from(schema.tradeSetups).all());
+    const res = runRetention();
+    expect(res.setupsThinned).toBe(2); // the two later-in-day duplicates
+    const after = dedupeSetups(db.select().from(schema.tradeSetups).all());
+
+    // Same episodes, same episode-start rows, before and after thinning.
+    expect(after.map((s) => s.detectedAt)).toEqual(before.map((s) => s.detectedAt));
+    expect(after.map((s) => s.detectedAt)).toEqual([daysAgo(60, 9), daysAgo(40, 9), daysAgo(1, 9)]);
+    // Active row untouched even though hypothetical duplicates would thin.
+    expect(db.select().from(schema.tradeSetups).all().filter((s) => s.status === "active")).toHaveLength(1);
   });
 
   it("auto-acks stale non-critical alerts and prunes old acked ones (roadmap #36)", () => {

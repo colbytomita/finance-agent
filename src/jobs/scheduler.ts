@@ -237,12 +237,14 @@ async function dailyMaintenance(): Promise<void> {
         ret.scoreHistoryDeleted +
         ret.scoresThinned +
         ret.alertsAutoAcked +
-        ret.alertsDeleted;
+        ret.alertsDeleted +
+        ret.setupsThinned;
       if (total > 0)
         log(
           `retention: pruned ${ret.snapshotsDeleted} snapshot(s), ${ret.drawdownsDeleted} drawdown(s), ` +
-            `${ret.scoreHistoryDeleted} score change(s), thinned ${ret.scoresThinned} score(s), ` +
-            `auto-acked ${ret.alertsAutoAcked} stale alert(s), deleted ${ret.alertsDeleted} old acked alert(s)`,
+            `${ret.scoreHistoryDeleted} score change(s), thinned ${ret.scoresThinned} score(s) + ` +
+            `${ret.setupsThinned} setup(s), auto-acked ${ret.alertsAutoAcked} stale alert(s), ` +
+            `deleted ${ret.alertsDeleted} old acked alert(s)`,
         );
     } catch (e) {
       log(`retention failed: ${errorMessage(e)}`);
