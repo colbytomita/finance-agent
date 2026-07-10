@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { useTestDb } from "./dbHarness";
 import { upsertWatchlistItem } from "../watchlist";
-import { emitAlert, listAlerts } from "../alerts";
+import { emitAlert, generateAlerts, listAlerts } from "../alerts";
 import { closeTrade } from "../trades";
 import { recordJobRun, getJobHealth } from "../jobHealth";
 import { addMention, findSameDayMention } from "../entityMentions";
@@ -68,6 +68,67 @@ describe("alert emit dedupe", () => {
     expect(listAlerts({ ticker: "msft" }).map((a) => a.message)).toEqual(["MSFT warn"]);
     expect(listAlerts({ acknowledged: false })).toHaveLength(2);
     expect(listAlerts({ acknowledged: true }).map((a) => a.ticker)).toEqual(["AAPL"]);
+  });
+});
+
+describe("account concentration alerts (roadmap #30)", () => {
+  const holding = (ticker: string, marketValue: number) =>
+    getDb()
+      .insert(schema.portfolioHoldings)
+      .values({
+        ticker,
+        shares: 1,
+        averageCost: marketValue,
+        marketValue,
+        source: "manual",
+        updatedAt: new Date().toISOString(),
+      })
+      .run();
+
+  it("emits one warning for an oversized holding; rerun is deduped", () => {
+    // One holding = 100% of the account — way past the default 20% cap.
+    holding("NVDA", 5000);
+    generateAlerts();
+    const conc = () =>
+      getDb().select().from(schema.alerts).all().filter((a) => a.alertType === "concentration");
+    expect(conc()).toHaveLength(1);
+    expect(conc()[0].ticker).toBe("NVDA");
+    expect(conc()[0].severity).toBe("warning");
+    expect(conc()[0].message).toMatch(/NVDA is 100% of the account/);
+
+    generateAlerts(); // identical rerun → deduped by the 20h window
+    expect(conc()).toHaveLength(1);
+  });
+
+  it("stays quiet when every position is under the cap", () => {
+    for (const t of ["AAPL", "MSFT", "GOOG", "AMZN", "META", "NVDA"]) holding(t, 1000);
+    generateAlerts(); // six equal holdings ≈ 16.7% each, under the 20% cap
+    const conc = getDb().select().from(schema.alerts).all().filter((a) => a.alertType === "concentration");
+    expect(conc).toHaveLength(0);
+  });
+
+  it("counts an open trade the account doesn't already hold", () => {
+    // No holdings → account value falls back to the configured 10k;
+    // a 3k open trade is 30% of it.
+    getDb()
+      .insert(schema.activeTrades)
+      .values({
+        ticker: "TSLA",
+        direction: "long",
+        entryPrice: 100,
+        entryDate: new Date().toISOString(),
+        shares: 30,
+        positionSize: 3000,
+        currentPrice: 100,
+        status: "open",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      .run();
+    generateAlerts();
+    const conc = getDb().select().from(schema.alerts).all().filter((a) => a.alertType === "concentration");
+    expect(conc).toHaveLength(1);
+    expect(conc[0].message).toMatch(/TSLA is 30% of the account/);
   });
 });
 

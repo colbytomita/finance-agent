@@ -57,8 +57,8 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   no friction. Live: the dialog shows the problems and the confirm path
   works.
 
-- [ ] **30. Account-level concentration alerts: wire `concentrationWarnings`
-  into `generateAlerts`** *(small)*
+- [x] **30. Account-level concentration alerts: wire `concentrationWarnings`
+  into `generateAlerts`** *(small — done)*
   **Why:** `concentrationWarnings` (`riskManagement.ts:104`) computes
   per-position and per-sector weight breaches against
   `maxPortfolioConcentrationPercent` / `maxSectorConcentrationPercent` — both
