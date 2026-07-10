@@ -22,8 +22,8 @@ maintenance run. Items are numbered #44+.
   **Accept:** "Raises guidance but warns on supply" scores strongly positive
   (+3), "misses estimates as shares soar" stays negative; old tests green.
 
-- [ ] **45. Suppress re-emits of condition alerts while one is already
-  unacked** *(medium)*
+- [x] **45. Suppress re-emits of condition alerts while one is already
+  unacked** *(medium — done)*
   **Why:** `emitAlert`'s 20h dedupe keys on the exact message, and condition
   messages embed the live price/score — so a stop that stays breached or a
   ticker that stays stale re-alerts **every day with a new row**: observed
