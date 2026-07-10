@@ -232,3 +232,44 @@ export async function flushQueuedNotifications(): Promise<void> {
   }
   await flushPending();
 }
+
+// --- Channel test (roadmap #34) ----------------------------------------------
+
+export interface TestNotificationResult {
+  desktop: { attempted: boolean; ok: boolean; detail: string };
+  ntfy: { attempted: boolean; ok: boolean; detail: string };
+}
+
+/**
+ * Fire one clearly-labeled test through each configured channel, bypassing
+ * the severity gate and the burst queue, and report what happened per
+ * channel — so a broken ntfy topic or toast path surfaces on demand instead
+ * of the first time a real critical alert needs it.
+ */
+export async function sendTestNotification(
+  cfg: AppConfig = loadConfig(),
+): Promise<TestNotificationResult> {
+  const message = `Test notification from Finance Agent (${new Date().toLocaleTimeString()}). If you can read this, the channel works.`;
+  const desktopSupported = desktopCommandFor(process.platform, "info", message, "Test") != null;
+  const desktopOk = desktopSupported && sendDesktop("info", message, "Test");
+  const ntfyAttempted = Boolean(cfg.ntfyTopic);
+  const ntfyOk = ntfyAttempted && (await sendNtfy(cfg, "info", message, "Test"));
+  return {
+    desktop: {
+      attempted: desktopSupported,
+      ok: desktopOk,
+      detail: desktopSupported
+        ? "Toast dispatched (best-effort — the OS may suppress it in focus/do-not-disturb modes)."
+        : `No desktop notification channel on platform "${process.platform}".`,
+    },
+    ntfy: {
+      attempted: ntfyAttempted,
+      ok: ntfyOk,
+      detail: ntfyAttempted
+        ? ntfyOk
+          ? `Delivered to ${ntfyServer()}/${cfg.ntfyTopic}.`
+          : `POST to ${ntfyServer()}/${cfg.ntfyTopic} failed — check the topic and your network.`
+        : "No ntfy topic configured.",
+    },
+  };
+}

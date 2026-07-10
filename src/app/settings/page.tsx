@@ -40,7 +40,7 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
   { key: "eventSourceIrEnabled", label: "Source: company IR RSS", type: "checkbox", hint: "Company investor-relations feeds (requires irFeeds in config)." },
   { key: "eventIngestionMaxItems", label: "Event ingestion item cap", type: "number", hint: "Max raw items processed per run. Lower = cheaper LLM extraction." },
   { key: "eventMinConfidence", label: "Event min confidence", type: "select", options: ["low", "medium", "high"], hint: "Drop extracted events below this confidence before storing." },
-  { key: "notifyEnabled", label: "Alert notifications", type: "checkbox", hint: "Push alerts out of the app: a desktop notification (macOS), plus ntfy when a topic is set below." },
+  { key: "notifyEnabled", label: "Alert notifications", type: "checkbox", hint: "Push alerts out of the app: a desktop notification (macOS/Windows), plus ntfy when a topic is set below." },
   { key: "notifyMinSeverity", label: "Notify at or above severity", type: "select", options: ["info", "warning", "critical"], hint: "critical = stop-loss hits, exit recommendations. warning adds stop-loss proximity." },
   { key: "ntfyTopic", label: "ntfy topic", type: "text", placeholder: "my-secret-topic", hint: "Subscribe to this topic in the ntfy app (ntfy.sh) to get alerts on your phone. Pick something unguessable; leave empty to disable." },
 ];
@@ -48,6 +48,12 @@ const FIELDS: { key: string; label: string; type: "number" | "select" | "checkbo
 interface IrFeedSetting {
   ticker: string;
   url: string;
+}
+
+/** Shape of POST /api/settings/test-notification (roadmap #34). */
+interface TestNotificationResult {
+  desktop: { attempted: boolean; ok: boolean; detail: string };
+  ntfy: { attempted: boolean; ok: boolean; detail: string };
 }
 
 function stringList(value: unknown): string[] {
@@ -92,6 +98,8 @@ export default function SettingsPage() {
   const [sectorText, setSectorText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
+  const [testResult, setTestResult] = useState<TestNotificationResult | null>(null);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -128,6 +136,24 @@ export default function SettingsPage() {
       setMsg(e instanceof Error ? e.message : "save failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function testNotifications() {
+    setTestBusy(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/settings/test-notification", { method: "POST" });
+      const d = (await res.json()) as TestNotificationResult;
+      if (!res.ok) throw new Error("test failed");
+      setTestResult(d);
+    } catch {
+      setTestResult({
+        desktop: { attempted: false, ok: false, detail: "Request failed." },
+        ntfy: { attempted: false, ok: false, detail: "Request failed." },
+      });
+    } finally {
+      setTestBusy(false);
     }
   }
 
@@ -207,6 +233,34 @@ export default function SettingsPage() {
           </button>
           {msg && <span className="text-xs text-zinc-400">{msg}</span>}
         </div>
+      </section>
+
+      <section className="card space-y-2">
+        <h2 className="card-title">Test notifications</h2>
+        <p className="text-[10px] text-zinc-600">
+          Sends one clearly-labeled test through each configured channel (ignoring the severity
+          gate) so you can verify the wiring before a real alert needs it. Uses the <em>saved</em>{" "}
+          settings — save first if you just changed the ntfy topic.
+        </p>
+        <button className="btn" onClick={testNotifications} disabled={testBusy}>
+          {testBusy ? "Sending…" : "Send test notification"}
+        </button>
+        {testResult && (
+          <ul className="space-y-1 text-xs">
+            {(["desktop", "ntfy"] as const).map((ch) => {
+              const r = testResult[ch];
+              return (
+                <li key={ch}>
+                  <span className="font-semibold text-zinc-300">{ch}:</span>{" "}
+                  <span className={r.ok ? "pos" : r.attempted ? "neg" : "text-zinc-500"}>
+                    {r.ok ? "sent" : r.attempted ? "failed" : "skipped"}
+                  </span>{" "}
+                  <span className="text-zinc-500">{r.detail}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section className="card space-y-3">
