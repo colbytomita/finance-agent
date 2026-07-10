@@ -4,6 +4,8 @@
 
 import { getDb, schema } from "./index";
 import { nowIso } from "@/lib/util";
+import { loadDotEnv } from "@/lib/loadEnv";
+loadDotEnv(); // tsx doesn't load .env — DATABASE_PATH must match the app's
 import { addCatalyst } from "@/services/catalysts";
 
 const db = getDb();

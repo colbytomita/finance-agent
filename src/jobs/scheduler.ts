@@ -3,6 +3,12 @@
 // Runs alongside `npm run dev`/`start` and shares the same SQLite database.
 
 import cron from "node-cron";
+import { loadDotEnv } from "@/lib/loadEnv";
+// Plain tsx doesn't load .env like Next does (roadmap #40) — without this the
+// scheduler ran keyless: Yahoo-only quotes, no broker order sync, no LLM.
+// Every env read in the codebase happens at call time, so loading here —
+// before any job runs — is early enough.
+loadDotEnv();
 import { loadConfig } from "@/lib/config";
 import { errorMessage, nowIso } from "@/lib/util";
 import {

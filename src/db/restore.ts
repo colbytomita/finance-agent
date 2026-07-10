@@ -3,6 +3,8 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { dbPath, backupDir, listBackups } from "@/services/backup";
 import { nowIso } from "@/lib/util";
+import { loadDotEnv } from "@/lib/loadEnv";
+loadDotEnv(); // tsx doesn't load .env — DATABASE_PATH must match the app's
 
 // Restore the SQLite database from a backup (roadmap #19). Companion to the
 // daily VACUUM INTO backups in backup.ts. Usage:
