@@ -231,6 +231,21 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   restart, the scheduler's refresh wrote 45/45 snapshots with source
   `alpaca` (was `yahoo`), in 3s instead of a Yahoo-paced crawl.
 
+- [x] **41. Surface the runner's env on `/status`** *(small — done
+  2026-07-10)*
+  **Why:** #40 stayed invisible for weeks because `/status` reports the
+  *web process's* integrations while the scheduler is a separate process —
+  "Alpaca: connected" on the page said nothing about the runner being
+  keyless.
+  **What:** The minute heartbeat now records the scheduler's own
+  integration flags in its `job_runs` message (`alpaca=paper llm=on`);
+  `schedulerEnvFromHeartbeat` (pure, in `status.ts`) surfaces it on
+  `/status` and raises an amber warning when the web app has Alpaca but
+  the runner reports `alpaca=off` — exactly #40's failure mode.
+  **Accept:** Helper unit-tested (match, mismatch, both-keyless,
+  legacy null message). Live: restarted runner heartbeat shows
+  `alpaca=paper llm=on` on the page.
+
 ## Archive — v2 (2026-07-06 review), all done 2026-07-09
 
 `#15` Windows desktop notifications · `#16` auto-fetch upcoming earnings

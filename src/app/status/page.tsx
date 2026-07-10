@@ -66,6 +66,18 @@ export default function StatusPage() {
               </tbody>
             </table>
           )}
+          {s.schedulerEnv.reported && (
+            <p className="mt-2 text-[11px] text-zinc-500">
+              Runner integrations (self-reported): <code className="text-zinc-400">{s.schedulerEnv.reported}</code>
+            </p>
+          )}
+          {s.schedulerEnv.alpacaMismatch && (
+            <p className="mt-1 text-[11px] text-amber-400">
+              The job runner reports no Alpaca credentials while the web app has them — it was
+              probably started without <code>.env</code> in reach. Restart <code>npm run jobs</code>{" "}
+              from the project root.
+            </p>
+          )}
           <p className="mt-2 text-[11px] text-zinc-600">
             The heartbeat ticks every minute while the runner is alive; the header badge turns red
             after {HEARTBEAT_STALE_MINUTES} minutes of silence.

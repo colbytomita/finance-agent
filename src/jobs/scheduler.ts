@@ -35,6 +35,7 @@ import { fetchEarningsForTickers, fetchUpcomingEarningsForTickers } from "@/serv
 import { runPerformanceBacktest } from "@/services/signalPerformance";
 import { runRetention, runSqliteHousekeeping } from "@/services/retention";
 import { recordJobRun } from "@/services/jobHealth";
+import { integrationsStatus } from "@/services/integrations";
 import { runBackup } from "@/services/backup";
 
 const log = (msg: string) => console.log(`[jobs ${nowIso()}] ${msg}`);
@@ -324,8 +325,16 @@ log(`tracked tickers: ${getTrackedTickers().join(", ") || "(none yet)"}`);
 async function refreshLoop(): Promise<void> {
   try {
     // Liveness signal for the UI: ticks every minute even when the refresh
-    // itself is skipped, so a stale heartbeat means the runner is down.
-    recordJobRun("heartbeat");
+    // itself is skipped, so a stale heartbeat means the runner is down. The
+    // message reports THIS process's integrations (roadmap #41) — the web
+    // process can have .env while the runner doesn't (see roadmap #40), and
+    // /status flags that mismatch from this string.
+    const integ = integrationsStatus();
+    recordJobRun(
+      "heartbeat",
+      "ok",
+      `alpaca=${integ.alpacaConfigured ? integ.alpacaMode : "off"} llm=${integ.llmConfigured ? "on" : "off"}`,
+    );
     await maybeRefresh();
   } finally {
     setTimeout(() => void refreshLoop(), 60_000);
