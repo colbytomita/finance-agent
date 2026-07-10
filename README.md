@@ -83,7 +83,7 @@ This is a **single-user, localhost tool** — it has no authentication or CSRF p
 |---|---|
 | `npm run dev` / `build` / `start` | Next.js app |
 | `npm run jobs` | cron scheduler (market-aware refresh, catalyst scan, daily maintenance incl. retention, backtest, backup) |
-| `npm test` | vitest suite (pure logic + in-memory-SQLite persistence tests — 297 tests) |
+| `npm test` | vitest suite (pure logic + in-memory-SQLite persistence tests — 379 tests) |
 | `npm run typecheck` | strict TypeScript check |
 | `npm run db:generate` | generate a SQL migration in `drizzle/` after editing `src/db/schema.ts` |
 | `npm run db:restore -- <file>` | restore the database from a `data/backups/` file (see below); snapshots the current DB first |

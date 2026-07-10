@@ -23,8 +23,10 @@ Last updated: 2026-07-09.
   stock_scores to last-per-day); test-notification button in Settings
   (`sendTestNotification` + POST /api/settings/test-notification);
   acknowledge-all on /alerts (`ackAlerts` + POST /api/alerts/ack-all).
-- Suite grew 357 → 373 tests across 32 files; typecheck clean; every item
-  verified live against real data before its merge commit.
+- Suite grew 357 → 379 tests across 33 files (incl. #36–#38 follow-ups:
+  alert retention, holding sectors, trade_setups thinning); typecheck
+  clean; every item verified live against real data before its merge
+  commit.
 
 ## Current State
 
