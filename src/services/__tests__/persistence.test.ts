@@ -309,6 +309,34 @@ describe("retention", () => {
     expect(scores).toHaveLength(2);
     expect(scores.some((s) => s.calculatedAt === daysAgo(45, 15))).toBe(true); // kept the day's last
   });
+
+  it("auto-acks stale non-critical alerts and prunes old acked ones (roadmap #36)", () => {
+    const db = getDb();
+    const alert = (severity: string, acknowledged: boolean, createdAt: string, message: string) =>
+      db
+        .insert(schema.alerts)
+        .values({ alertType: "test", severity, message, acknowledged, createdAt })
+        .run();
+    alert("info", false, daysAgo(20), "stale info — auto-ack");
+    alert("warning", false, daysAgo(20), "stale warning — auto-ack");
+    alert("critical", false, daysAgo(20), "stale critical — stays unacked");
+    alert("info", false, daysAgo(2), "recent info — untouched");
+    alert("info", true, daysAgo(120), "ancient acked — deleted");
+    alert("info", true, daysAgo(30), "acked but recent — kept");
+
+    const res = runRetention();
+    expect(res.alertsAutoAcked).toBe(2);
+    expect(res.alertsDeleted).toBe(1);
+
+    const rows = db.select().from(schema.alerts).all();
+    expect(rows).toHaveLength(5);
+    const byMsg = new Map(rows.map((a) => [a.message, a]));
+    expect(byMsg.get("stale info — auto-ack")?.acknowledged).toBe(true);
+    expect(byMsg.get("stale warning — auto-ack")?.acknowledged).toBe(true);
+    expect(byMsg.get("stale critical — stays unacked")?.acknowledged).toBe(false);
+    expect(byMsg.get("recent info — untouched")?.acknowledged).toBe(false);
+    expect(byMsg.has("ancient acked — deleted")).toBe(false);
+  });
 });
 
 describe("sector scout scan trend (roadmap #25)", () => {

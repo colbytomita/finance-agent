@@ -149,6 +149,37 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   **Accept:** Filter to a subset → button acks exactly that subset; route
   test covers filter scoping.
 
+## Tier 4 — Follow-ups spotted while shipping v3 (2026-07-09)
+
+- [x] **36. Alert-table retention** *(small — done)*
+  **Why:** `runRetention` pruned snapshots/drawdowns/score history but never
+  `alerts` — 278 unacked rows and growing, dominated by repeated stale-data
+  warnings the 20h dedupe happily re-emits every day.
+  **What:** In `runRetention`: auto-acknowledge non-critical alerts left
+  unacked for 14+ days (no longer actionable; the row survives as audit
+  trail; **critical is never auto-acked** — it waits for the user), and
+  delete acknowledged alerts older than 90 days. Reported in the maintenance
+  log line.
+  **Accept:** Persistence test covers auto-ack severity gating, recent rows
+  untouched, and the delete window. Live run auto-acked 29 stale alerts on
+  the real database.
+
+- [ ] **37. Sector data for holdings** *(medium)*
+  **Why:** Nothing stores a sector, so the sector half of
+  `concentrationWarnings` (#30) can never fire, and the portfolio has no
+  sector breakdown. Yahoo `quoteSummary` `assetProfile` carries
+  sector/industry, and `fundamentals.ts` already requests that module for
+  discovery — the plumbing exists.
+  **What:** Add `sector` to `portfolio_holdings` (migration). Backfill in
+  daily maintenance (and on portfolio sync) via a small
+  `getYahooSector(ticker)` (or reuse the fundamentals fetch), only for rows
+  missing it. Pass real sectors into the #30 concentration scan (drop the
+  `sector: null` placeholder), and show a small sector-weights strip on
+  `/portfolio`.
+  **Accept:** After one maintenance run, real holdings carry sectors, the
+  strip renders true weights, and an over-cap sector emits the warning
+  alert (persistence-tested with seeded sectors).
+
 ## Archive — v2 (2026-07-06 review), all done 2026-07-09
 
 `#15` Windows desktop notifications · `#16` auto-fetch upcoming earnings
