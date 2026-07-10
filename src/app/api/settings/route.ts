@@ -35,6 +35,7 @@ const settingsSchema = z
     eventMinConfidence: z.enum(["low", "medium", "high"]),
     notifyEnabled: z.coerce.boolean(),
     notifyMinSeverity: z.enum(["info", "warning", "critical"]),
+    morningBriefEnabled: z.coerce.boolean(),
     ntfyTopic: z
       .string()
       .trim()

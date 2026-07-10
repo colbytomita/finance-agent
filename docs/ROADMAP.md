@@ -193,6 +193,25 @@ nothing), then Tier 2 surfaces data the DB already holds, then Tier 3 QoL.
   **Accept:** Persistence test proves `dedupeSetups` returns identical
   episodes before and after thinning, and active rows are never touched.
 
+- [x] **39. Opt-in daily morning brief** *(small–medium — done 2026-07-10)*
+  **Why:** Everything a trader should glance at each morning (market regime,
+  earnings inside the avoid window, trades flagged Exit/Trim, buy-zone hits,
+  fresh quality setups) is computed but spread across four pages; the
+  notification rails (#9/#15/#34) were only used for reactive alerts.
+  **What:** `src/services/morningBrief.ts` — `buildMorningBrief()` composes
+  the sections (empty ones omitted) and `sendMorningBrief()` emits it once
+  per day as an info alert (date in the message keys the dedupe) at the end
+  of daily maintenance, pushing through the channels directly when the
+  severity gate would suppress info (the `morningBriefEnabled` toggle is the
+  opt-in; master `notifyEnabled` still applies; no double-send when the gate
+  passes info). New config key + settings validation + Settings row, per the
+  new-setting checklist.
+  **Accept:** Tests cover section composition, quiet-day omission, the
+  disabled/sent/already-sent-today paths, and exactly one alert row. Live
+  compose against real data produced a correct brief (regime favorable, LLY
+  Trim, six buy-zone names, five q≥7 setups, earnings section rightly
+  absent).
+
 ## Archive — v2 (2026-07-06 review), all done 2026-07-09
 
 `#15` Windows desktop notifications · `#16` auto-fetch upcoming earnings

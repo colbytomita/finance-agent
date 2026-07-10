@@ -52,6 +52,12 @@ export interface AppConfig {
   notifyEnabled: boolean;
   notifyMinSeverity: "info" | "warning" | "critical"; // notify at or above this
   ntfyTopic: string; // empty = ntfy channel off; subscribe to this topic in ntfy
+  // Opt-in daily morning brief (roadmap #39): one compact summary (market
+  // regime, earnings inside the avoid window, trades flagged Exit/Trim,
+  // buy-zone hits, fresh quality setups) delivered after the 08:00
+  // maintenance refresh. Enabling it bypasses notifyMinSeverity — the toggle
+  // itself is the opt-in — but the notifyEnabled master switch still applies.
+  morningBriefEnabled: boolean;
   stockScoreWeights: {
     valuation: number;
     momentum: number;
@@ -104,6 +110,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   notifyEnabled: false,
   notifyMinSeverity: "critical",
   ntfyTopic: "",
+  morningBriefEnabled: false,
   stockScoreWeights: {
     valuation: 0.2,
     momentum: 0.2,

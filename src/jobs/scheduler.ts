@@ -23,6 +23,7 @@ import { runSectorScan } from "@/services/sectorScout";
 import { runEventIngestion } from "@/services/eventIngestion";
 import { backfillCompanyNames } from "@/services/companyNames";
 import { backfillHoldingSectors } from "@/services/sectors";
+import { sendMorningBrief } from "@/services/morningBrief";
 import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers, fetchUpcomingEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
@@ -272,6 +273,13 @@ async function dailyMaintenance(): Promise<void> {
         `performance backtest: ${perf.score.analyzed} score event(s), ${perf.picks.analyzed} pick event(s) analyzed`,
       );
     generateAlerts();
+    // Opt-in morning brief (roadmap #39) — after the refresh and alert scan
+    // so it summarizes today's state. Idempotent per day.
+    const brief = await sendMorningBrief().catch((e) => {
+      log(`morning brief failed: ${errorMessage(e)}`);
+      return null;
+    });
+    if (brief && brief.reason !== "disabled") log(`morning brief: ${brief.reason}`);
     // Last: snapshot the day's final state to data/backups (keeps last 7).
     try {
       const b = runBackup();
