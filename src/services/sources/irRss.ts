@@ -29,14 +29,18 @@ export function irItemsFromFeed(xml: string, feed: IrFeed): RawEventItem[] {
 
 export async function fetchIrFeeds(
   feeds: IrFeed[],
-  opts: { fetchFn?: typeof fetch } = {},
+  opts: { fetchFn?: typeof fetch; timeoutMs?: number } = {},
 ): Promise<RawEventItem[]> {
   const fetchFn = opts.fetchFn ?? fetch;
+  const timeoutMs = Math.max(1000, opts.timeoutMs ?? 10000);
   const out: RawEventItem[] = [];
   for (const feed of feeds) {
     if (!feed.url) continue;
     try {
-      const res = await fetchFn(feed.url, { headers: { Accept: "application/rss+xml, application/atom+xml, application/xml" } });
+      const res = await fetchFn(feed.url, {
+        headers: { Accept: "application/rss+xml, application/atom+xml, application/xml" },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
       if (!res.ok) continue;
       const xml = await res.text();
       out.push(...irItemsFromFeed(xml, feed));

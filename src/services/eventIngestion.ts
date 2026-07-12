@@ -132,6 +132,28 @@ export interface SkippedItem {
 /** Cap on per-item skip details kept per run (the count is always exact). */
 export const MAX_SKIPPED_ITEMS = 20;
 
+/**
+ * Cap raw items across sources fairly: take one item per source per round
+ * (preserving each source's own newest-first order) until the cap is reached.
+ * A plain concat-then-slice lets one chatty source starve the rest — SEC's
+ * recent-filings feed always fills its fetch size, which used to push every
+ * GDELT/IR item past the cap and out of the extraction batch entirely.
+ */
+export function capAcrossSources<T>(lists: T[][], max: number): T[] {
+  const out: T[] = [];
+  for (let round = 0; out.length < max; round++) {
+    let took = false;
+    for (const list of lists) {
+      if (round >= list.length) continue;
+      out.push(list[round]);
+      took = true;
+      if (out.length >= max) break;
+    }
+    if (!took) break;
+  }
+  return out;
+}
+
 export interface IngestResult {
   fetched: number;
   extracted: number;
@@ -174,12 +196,12 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
     generatedBy: "none",
   };
 
-  // 1. Gather raw items from enabled sources.
-  const raw: RawEventItem[] = [];
+  // 1. Gather raw items from enabled sources (kept per-source for a fair cap).
+  const raw: RawEventItem[][] = [];
   if (sources.sec) {
     try {
       const items = await fetchEdgarFilings({ max: maxItems, fetchFn: opts.fetchFn });
-      raw.push(...items);
+      raw.push(items);
       result.bySource["sec-edgar"] = items.length;
     } catch (e) {
       result.errors.push(`sec-edgar: ${errorMessage(e)}`);
@@ -188,7 +210,7 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
   if (sources.gdelt && gdeltQueries.length > 0) {
     try {
       const items = await fetchGdeltNews(gdeltQueries, { fetchFn: opts.fetchFn });
-      raw.push(...items);
+      raw.push(items);
       result.bySource["gdelt"] = items.length;
     } catch (e) {
       result.errors.push(`gdelt: ${errorMessage(e)}`);
@@ -197,14 +219,14 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
   if (sources.ir && irFeeds.length > 0) {
     try {
       const items = await fetchIrFeeds(irFeeds, { fetchFn: opts.fetchFn });
-      raw.push(...items);
+      raw.push(items);
       result.bySource["ir-rss"] = items.length;
     } catch (e) {
       result.errors.push(`ir-rss: ${errorMessage(e)}`);
     }
   }
 
-  const capped = raw.slice(0, maxItems);
+  const capped = capAcrossSources(raw, maxItems);
   result.fetched = capped.length;
   if (capped.length === 0) return result;
 

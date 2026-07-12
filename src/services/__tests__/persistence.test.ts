@@ -23,7 +23,7 @@ import {
 } from "../catalysts";
 import { daysToNextEarnings, getCatalystInputs } from "../marketData";
 import { scoreSeries, upcomingEarningsCalendar } from "@/lib/queries";
-import { industryScanTrend } from "../sectorScout";
+import { industryScanTrend, listSectorPicks } from "../sectorScout";
 import { portfolioHistory, upsertPortfolioSnapshot } from "../portfolioHistory";
 import { dedupeSetups } from "../setupPerformance";
 import { saveConfig, loadConfig } from "@/lib/config";
@@ -404,6 +404,39 @@ describe("sector scout scan trend (roadmap #25)", () => {
     expect(trend).toHaveLength(3); // energy excluded
     expect(trend.map((p) => p.meanPickScore)).toEqual([7.2, null, 7.8]); // chronological, oldest first
     expect(trend[0].proposed).toBe(2);
+  });
+});
+
+describe("sector scout pick ordering", () => {
+  const pick = (industry: string, ticker: string, score: number, scannedAt: string, status = "new") => ({
+    industry,
+    ticker,
+    overallScore: score,
+    confidence: "low",
+    status,
+    scannedAt,
+  });
+
+  it("keeps each industry contiguous even when an added pick kept a stale scannedAt", () => {
+    const db = getDb();
+    // "space" was scanned most recently, but its "added" pick stopped surfacing
+    // in re-scans and kept its old scannedAt — per-row comparison used to
+    // interleave the industries and split the page's groups.
+    db.insert(schema.sectorScoutPicks).values(pick("space", "RKLB", 8, daysAgo(10), "added")).run();
+    db.insert(schema.sectorScoutPicks).values(pick("space", "ASTS", 7, daysAgo(1))).run();
+    db.insert(schema.sectorScoutPicks).values(pick("energy", "XOM", 9, daysAgo(5))).run();
+    db.insert(schema.sectorScoutPicks).values(pick("energy", "CVX", 6, daysAgo(5))).run();
+
+    const rows = listSectorPicks();
+    expect(rows.map((r) => r.industry)).toEqual(["space", "space", "energy", "energy"]);
+    expect(rows.map((r) => r.ticker)).toEqual(["RKLB", "ASTS", "XOM", "CVX"]); // best score first within an industry
+  });
+
+  it("excludes dismissed picks", () => {
+    const db = getDb();
+    db.insert(schema.sectorScoutPicks).values(pick("space", "RKLB", 8, daysAgo(1))).run();
+    db.insert(schema.sectorScoutPicks).values(pick("space", "BAD", 9, daysAgo(1), "dismissed")).run();
+    expect(listSectorPicks().map((r) => r.ticker)).toEqual(["RKLB"]);
   });
 });
 

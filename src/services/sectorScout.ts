@@ -61,8 +61,39 @@ const CURATED_THEMES: { keys: string[]; tickers: string[] }[] = [
   { keys: ["crypto", "cryptocurrency", "blockchain", "bitcoin"], tickers: ["COIN", "MARA", "RIOT", "MSTR", "HOOD", "CLSK"] },
   { keys: ["gold", "mining", "metals", "miners"], tickers: ["NEM", "GOLD", "FCX", "AEM", "SCCO", "WPM"] },
   { keys: ["retail", "consumer", "restaurants"], tickers: ["WMT", "COST", "TGT", "HD", "LOW", "NKE", "MCD", "SBUX"] },
-  { keys: ["bank", "banks", "financials", "financial"], tickers: ["JPM", "BAC", "GS", "MS", "WFC", "C", "SCHW", "BLK"] },
+  { keys: ["bank", "banks", "banking", "financials", "financial"], tickers: ["JPM", "BAC", "GS", "MS", "WFC", "C", "SCHW", "BLK"] },
 ];
+
+/** Lower-cased words with a light plural fold ("banks" → "bank"), for theme matching. */
+function themeWords(s: string): string[] {
+  return s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .map((w) => (w.length >= 4 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w));
+}
+
+/** Whether `phrase` appears as a contiguous run of words inside `hay`. */
+function containsPhrase(hay: string[], phrase: string[]): boolean {
+  if (phrase.length === 0 || phrase.length > hay.length) return false;
+  outer: for (let i = 0; i + phrase.length <= hay.length; i++) {
+    for (let j = 0; j < phrase.length; j++) {
+      if (hay[i + j] !== phrase[j]) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Whole-word theme matching: the key's words appear contiguously in the query,
+ * or vice versa ("nuclear fusion" ⊇ "fusion", "oil and gas" ⊇ "oil"). Substring
+ * matching used to let "ai" hit "ret**ai**l" and "tech" hit "fin**tech**".
+ */
+function themeKeyMatches(queryWords: string[], key: string): boolean {
+  const keyWords = themeWords(key);
+  return containsPhrase(queryWords, keyWords) || containsPhrase(keyWords, queryWords);
+}
 
 const TICKER_STOPWORDS = new Set([
   "ETF", "ETFS", "INC", "THE", "AND", "USD", "CEO", "IPO", "JSON", "NULL", "NA", "US", "USA", "API",
@@ -104,11 +135,11 @@ export function parseTickerList(raw: string): string[] {
 
 /** Curated fallback: tickers for an industry by keyword match against the map. */
 export function curatedTickersFor(industry: string): string[] {
-  const q = normalizeIndustryLabel(industry);
-  if (!q) return [];
+  const q = themeWords(normalizeIndustryLabel(industry));
+  if (q.length === 0) return [];
   const out = new Set<string>();
   for (const theme of CURATED_THEMES) {
-    const hit = theme.keys.some((k) => q === k || q.includes(k) || k.includes(q));
+    const hit = theme.keys.some((k) => themeKeyMatches(q, k));
     if (hit) theme.tickers.forEach((t) => out.add(t));
   }
   return [...out];
@@ -491,12 +522,24 @@ export function listSectorPicks(industry?: string): SectorPick[] {
         .where(eq(schema.sectorScoutPicks.industry, normalizeIndustryLabel(industry)))
         .all()
     : db.select().from(schema.sectorScoutPicks).all();
-  return rows
-    .filter((r) => r.status !== "dismissed")
-    .sort((a, b) => {
-      if (a.industry !== b.industry) return b.scannedAt.localeCompare(a.scannedAt);
-      return thesisAdjustedScore(b.overallScore, b.thesisScore) - thesisAdjustedScore(a.overallScore, a.thesisScore);
-    });
+  const kept = rows.filter((r) => r.status !== "dismissed");
+  // Order industries by their latest scan time. Comparing per-row scannedAt
+  // isn't transitive — an "added" pick that stopped surfacing keeps its old
+  // scannedAt, which could interleave industries and split the page's groups.
+  const latestByIndustry = new Map<string, string>();
+  for (const r of kept) {
+    const cur = latestByIndustry.get(r.industry);
+    if (!cur || r.scannedAt > cur) latestByIndustry.set(r.industry, r.scannedAt);
+  }
+  return kept.sort((a, b) => {
+    if (a.industry !== b.industry) {
+      const byLatest = (latestByIndustry.get(b.industry) ?? "").localeCompare(
+        latestByIndustry.get(a.industry) ?? "",
+      );
+      return byLatest !== 0 ? byLatest : a.industry.localeCompare(b.industry);
+    }
+    return thesisAdjustedScore(b.overallScore, b.thesisScore) - thesisAdjustedScore(a.overallScore, a.thesisScore);
+  });
 }
 
 export function listSectorScans(limit = 20) {
@@ -515,12 +558,12 @@ export function listSectorScans(limit = 20) {
 
 /** Curated theme keys that match a query, plus the tickers those themes seed. */
 function curatedMatch(industry: string): { keywords: string[]; tickers: string[] } {
-  const q = normalizeIndustryLabel(industry);
+  const q = themeWords(normalizeIndustryLabel(industry));
   const keywords: string[] = [];
   const tickers = new Set<string>();
-  if (q) {
+  if (q.length > 0) {
     for (const theme of CURATED_THEMES) {
-      if (theme.keys.some((k) => q === k || q.includes(k) || k.includes(q))) {
+      if (theme.keys.some((k) => themeKeyMatches(q, k))) {
         theme.keys.forEach((k) => keywords.push(k));
         theme.tickers.forEach((t) => tickers.add(t));
       }

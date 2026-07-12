@@ -1,5 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { confidenceRank, dedupeKey, ingestionRunRecord, type IngestResult } from "../eventIngestion";
+import {
+  capAcrossSources,
+  confidenceRank,
+  dedupeKey,
+  ingestionRunRecord,
+  type IngestResult,
+} from "../eventIngestion";
+
+describe("eventIngestion.capAcrossSources", () => {
+  const list = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
+
+  it("keeps items from every source when one source alone would fill the cap", () => {
+    // The pre-fix failure mode: 25 SEC items + a cap of 25 dropped all GDELT/IR.
+    const out = capAcrossSources([list("sec", 25), list("gdelt", 10), list("ir", 5)], 25);
+    expect(out).toHaveLength(25);
+    expect(out.filter((x) => x.startsWith("sec"))).toHaveLength(10);
+    expect(out.filter((x) => x.startsWith("gdelt"))).toHaveLength(10);
+    expect(out.filter((x) => x.startsWith("ir"))).toHaveLength(5);
+  });
+
+  it("preserves each source's own order", () => {
+    const out = capAcrossSources([list("a", 3), list("b", 3)], 4);
+    expect(out.filter((x) => x.startsWith("a"))).toEqual(["a0", "a1"]);
+    expect(out.filter((x) => x.startsWith("b"))).toEqual(["b0", "b1"]);
+  });
+
+  it("returns everything when under the cap, and stops exactly at the cap", () => {
+    expect(capAcrossSources([list("a", 2), list("b", 1)], 10)).toHaveLength(3);
+    expect(capAcrossSources([list("a", 9)], 4)).toEqual(["a0", "a1", "a2", "a3"]);
+  });
+
+  it("handles empty inputs", () => {
+    expect(capAcrossSources([], 5)).toEqual([]);
+    expect(capAcrossSources([[], []], 5)).toEqual([]);
+    expect(capAcrossSources([list("a", 3)], 0)).toEqual([]);
+  });
+});
 
 describe("eventIngestion.confidenceRank", () => {
   it("orders low < medium < high", () => {

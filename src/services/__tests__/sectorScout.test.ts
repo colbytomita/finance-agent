@@ -55,6 +55,26 @@ describe("sectorScout.curatedTickersFor", () => {
   it("returns an empty list for an unknown theme", () => {
     expect(curatedTickersFor("underwater basket weaving")).toEqual([]);
   });
+
+  it("matches a multi-word query containing a theme keyword as a whole word", () => {
+    expect(curatedTickersFor("nuclear fusion")).toContain("CCJ");
+    expect(curatedTickersFor("defense contractors")).toContain("LMT");
+  });
+
+  it("does not match keywords as substrings inside unrelated words", () => {
+    // "ai" is a whole-word key of the AI theme, not a substring of "retail".
+    const ai = curatedTickersFor("ai");
+    expect(ai).toContain("NVDA");
+    expect(ai).not.toContain("WMT"); // used to leak in via "ret-ai-l"
+    // "tech" alone is not a theme; it used to leak fintech + biotech via substring.
+    expect(curatedTickersFor("tech")).toEqual([]);
+  });
+
+  it("folds simple plurals so singular/plural queries match either way", () => {
+    expect(curatedTickersFor("restaurant")).toContain("MCD"); // key is "restaurants"
+    expect(curatedTickersFor("banking")).toContain("JPM");
+    expect(curatedTickersFor("rocket")).toContain("RKLB"); // key is "rockets"
+  });
 });
 
 describe("sectorScout.describeIndustry", () => {
