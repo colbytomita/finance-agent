@@ -35,7 +35,12 @@ import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers, fetchUpcomingEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
 import { runRetention, runSqliteHousekeeping } from "@/services/retention";
-import { recordJobRun, getJobHealth, isDailyJobDue } from "@/services/jobHealth";
+import {
+  recordJobRun,
+  getJobHealth,
+  isDailyJobDue,
+  isMaintenanceCatchupDue,
+} from "@/services/jobHealth";
 import { integrationsStatus } from "@/services/integrations";
 import { runBackup } from "@/services/backup";
 
@@ -128,6 +133,21 @@ async function maybeRefresh(): Promise<void> {
     recordJobRun("refresh", "error", errorMessage(e));
   } finally {
     refreshing = false;
+  }
+}
+
+// One maintenance at a time, whichever path triggers it (the 08:00 cron, the
+// startup catch-up, or the minute loop's missed-tick catch-up — roadmap #48).
+let maintaining = false;
+
+async function runMaintenanceGuarded(reason: string): Promise<void> {
+  if (maintaining) return;
+  maintaining = true;
+  try {
+    log(`daily maintenance (${reason})`);
+    await dailyMaintenance();
+  } finally {
+    maintaining = false;
   }
 }
 
@@ -340,6 +360,13 @@ async function refreshLoop(): Promise<void> {
       `alpaca=${integ.alpacaConfigured ? integ.alpacaMode : "off"} llm=${integ.llmConfigured ? "on" : "off"}`,
     );
     await maybeRefresh();
+    // Missed-tick catch-up (roadmap #48): the 08:00 cron doesn't fire if the
+    // machine is asleep at that minute, and the startup catch-up only covers
+    // restarts. Past 08:00 local with a stale last run, run it from here.
+    const lastMaint = getJobHealth().jobs.find((j) => j.job === "daily_maintenance")?.lastRunAt;
+    if (isMaintenanceCatchupDue(lastMaint)) {
+      await runMaintenanceGuarded("catch-up: missed the 08:00 tick");
+    }
   } finally {
     setTimeout(() => void refreshLoop(), 60_000);
   }
@@ -348,7 +375,7 @@ async function refreshLoop(): Promise<void> {
 // Catalyst scan every 4 hours on weekdays.
 cron.schedule("0 */4 * * 1-5", () => void catalystScan());
 // Daily maintenance at 8:00 local time (bars, setups, portfolio sync, news).
-cron.schedule("0 8 * * *", () => void dailyMaintenance());
+cron.schedule("0 8 * * *", () => void runMaintenanceGuarded("08:00 cron"));
 
 // Startup catch-up (roadmap #43): the 08:00 cron only fires while the runner
 // is alive at 08:00 — an ad-hoc terminal runner misses it routinely, which is
@@ -362,7 +389,7 @@ cron.schedule("0 8 * * *", () => void dailyMaintenance());
         ? `daily maintenance last ran ${lastMaint} — catch-up run in 30s`
         : "daily maintenance has never completed — catch-up run in 30s",
     );
-    setTimeout(() => void dailyMaintenance(), 30_000);
+    setTimeout(() => void runMaintenanceGuarded("startup catch-up"), 30_000);
   }
 }
 

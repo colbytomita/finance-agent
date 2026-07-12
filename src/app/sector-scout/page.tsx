@@ -65,6 +65,14 @@ function PickCard({ pick, claims }: { pick: SectorPick; claims: CompanyClaimRow[
             · AI brief
           </span>
         )}
+        {pick.themeFitFlag && (
+          <span
+            className="rounded border border-amber-700/60 bg-amber-950/40 px-1.5 py-0.5 text-[11px] text-amber-300"
+            title={`Model-generated interpretation: ${pick.themeFitFlag}`}
+          >
+            ⚠ theme fit questioned
+          </span>
+        )}
         <span className="ml-auto tabular-nums text-sm text-zinc-300">{fmtMoney(pick.price)}</span>
       </div>
 

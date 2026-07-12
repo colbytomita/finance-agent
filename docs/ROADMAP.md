@@ -1,4 +1,84 @@
-# Improvement Roadmap — v4 (2026-07-10)
+# Improvement Roadmap — v5 (2026-07-11)
+
+Roadmaps v1–v4 (#1–#47) are **complete** — see below and the archives. v5
+came from runtime signals observed on 2026-07-11 against the live system
+(alert-table composition, job heartbeats vs. the maintenance log, and a
+mis-themed pick found while verifying the audit fixes). Items are #48+.
+
+## v5 — Tier 1: ops correctness & alert hygiene
+
+- [x] **48. Sleep-proof the daily maintenance schedule** *(small — done
+  2026-07-11)*
+  **Why:** node-cron's `0 8 * * *` tick doesn't fire when the machine is
+  asleep at 08:00, and the #43 catch-up only runs at process startup.
+  Observed 2026-07-11: the runner's heartbeat was alive 08:36–08:42 local
+  (machine woke after the tick) but no maintenance ran all day — no
+  retention, no backup, no discovery — with nothing on /status to say why.
+  The refresh loop is already a sleep-tolerant self-scheduling timer; only
+  maintenance depends on being awake at one exact minute.
+  **What:** pure `isMaintenanceCatchupDue(lastRunAt, now, dueHour=8,
+  maxAgeHours=20)` in `jobHealth.ts` — due only when past `dueHour` local
+  AND `isDailyJobDue` — called from the minute refresh loop; a `maintaining`
+  guard prevents overlap with the 08:00 cron and the startup catch-up (both
+  stay). Note `recordJobRun("daily_maintenance","error")` bumps
+  `last_run_at`, so a failing maintenance retries next day, not every
+  minute — unchanged from today.
+  **Accept:** helper unit-tested (pre-hour stale, post-hour stale, post-hour
+  fresh, never-ran, unparseable). Live: with a >20h-old last run, the
+  running scheduler kicks maintenance within a minute — no restart needed.
+
+- [x] **49. Auto-acknowledge condition alerts whose condition has cleared**
+  *(medium — done 2026-07-11; the first live scan drained the backlog
+  64→14 criticals, 118→13 warnings, event alerts untouched)*
+  **Why:** #45 stopped daily re-emits, but rows for dead states linger
+  forever: observed 48 unacked `stop_loss_hit` **criticals all referencing
+  closed trades** (RTX ×28), `exit_recommended` for long-closed F/ORCL
+  trades, and 93 `data_stale` warnings whose tickers have long since
+  refreshed. The header badge stays red on states nobody can act on. #36's
+  age-based auto-ack deliberately never touches criticals — age is not
+  evidence a critical is moot — but the condition objectively ending is.
+  **What:** two layers. (a) `generateAlerts` tracks which condition alerts
+  are currently true per (type, ticker) and, after the scan, auto-acks
+  unacked rows no longer true. *Fluid* conditions (`near_stop_loss`,
+  `target_hit`, `trade_score_low/critical`, `exit/trim/add`,
+  `entry_range_reached`, `concentration`, `data_stale`) clear as soon as a
+  scan stops finding them; *sticky* criticals (`stop_loss_hit`,
+  `thesis_invalidated`) clear only when the ticker has no open trade left —
+  an intraday stop breach stays visible even if price recovers. Event
+  alerts (order fills/cancels, auto-closes, new_setup, major_catalyst,
+  mentions, morning brief) are never touched. (b) `closeTrade` acks the
+  trade-scoped types for its ticker immediately; on multi-trade tickers the
+  next scan re-emits if another open trade still has the condition (#45's
+  ack re-arm makes this self-healing).
+  **Accept:** persistence tests — zombie stop alert on a closed trade acked
+  by one scan; an open-trade breach survives; stale→fresh `data_stale`
+  acked; event alerts untouched; `closeTrade` acks immediately. Live: the
+  48-critical backlog drains on the first scan and the badge drops.
+
+## v5 — Tier 2: pick quality
+
+- [x] **50. Sector Scout: theme-membership check on surfaced picks**
+  *(small–medium — done 2026-07-11; also covers kept "added" picks, which is
+  how the live ALKS row got its flag)*
+  **Why:** validation proves a ticker has real price data, not that it
+  belongs to the theme — the live "space" scan holds **ALKS (Alkermes, a
+  biotech)** as an added pick, an LLM-expansion slip from 2026-06-29 that
+  rode a decent market score into the industry list. Thesis validation
+  would catch this via `themeFitScore`, but it's budget-capped and opt-in.
+  **What:** after the score/thesis gates select the surfaced set, one
+  batched LLM call re-checks membership ("which of these are NOT primarily
+  <industry> businesses?") and stores a flag; the pick card shows a visible
+  "theme fit questioned" chip — flag, never silently drop (decision
+  support). Rule-based fallback: curated-theme members pass, everything
+  else is left unflagged (no false accusations without evidence). Nullable
+  `theme_fit_flag` column on `sector_scout_picks` (normal migration flow).
+  **Accept:** parser + fallback unit-tested; persistence test that a
+  flagged pick keeps its flag through a re-scan upsert. Live: a re-scan of
+  "space" flags a biotech interloper while leaving RKLB-class names clean.
+
+---
+
+# Roadmap v4 (2026-07-10) — complete
 
 Roadmaps v1 (#1–#14), v2 (#15–#28), and v3 (#29–#43, including follow-ups)
 are **complete** — see below and the archives. v4 came from a fresh pass on

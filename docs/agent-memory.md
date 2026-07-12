@@ -32,6 +32,38 @@ API render real picks grouped correctly. Note: GDELT 429-throttles for
 minutes at a time — a `bySource` gdelt=0 with no error usually means it was
 rate-limited and the run correctly stopped early, not that the connector broke.
 
+**Same session, roadmap v5 (#48–#50) written from runtime signals and shipped
+(tests 420/35):**
+
+- **#48 sleep-proof maintenance:** node-cron's 08:00 tick doesn't fire while
+  the machine sleeps, and the #43 catch-up only ran at boot — observed a full
+  missed day (2026-07-11) with a live heartbeat. Now the minute loop calls
+  `isMaintenanceCatchupDue` (past 08:00 local + `isDailyJobDue`) and a
+  `maintaining` guard serializes the three trigger paths (cron / startup /
+  loop). Live: the loop's catch-up fired at boot, ran the full chain, and
+  wrote the day's missed backup; the 30s startup timer was absorbed by the
+  guard.
+- **#49 condition alerts auto-ack when cleared:** `generateAlerts` marks
+  condition-true (type,ticker) pairs and post-scan acks unacked rows no
+  longer true. Fluid types clear on any scan; sticky criticals
+  (`stop_loss_hit`, `thesis_invalidated`) only clear when the ticker has no
+  open trade; `closeTrade` acks its ticker's trade-condition alerts
+  immediately; event alerts never touched. Live: first scan drained the
+  backlog 64→14 criticals / 118→13 warnings (the survivors are legit: open
+  TSLA/UPS trades).
+- **#50 theme-membership flag:** `checkThemeMembership` (one batched LLM
+  call, curated members exempt, returns **null when it couldn't run** so
+  flags are never cleared blind) covers surfaced AND kept "added" picks;
+  `theme_fit_flag` column (migration 0007); amber "theme fit questioned"
+  chip on the pick card — flag, never drop. Live: re-scanning "space"
+  flagged the legacy ALKS row ("Biopharmaceutical company…") and a
+  borderline new pick (COMM), left RTX/TRMB clean.
+
+Session gotcha: the machine's internet dropped mid-scan once
+(`ERR_INTERNET_DISCONNECTED` on every Yahoo call) — scans fail soft
+(validation drops, errors array) and the membership check's null path left
+flags untouched, as designed. Retried after connectivity returned.
+
 ## 2026-07-09 session — roadmap v2 finished, v3 written and finished
 
 - **v2 closed out:** #26 split `marketData.ts` — quote refresh now lives in

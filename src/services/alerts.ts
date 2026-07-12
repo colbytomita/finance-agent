@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { freshness } from "@/lib/format";
@@ -92,6 +92,86 @@ function emit(
   return true;
 }
 
+// --- Condition-alert lifecycle (roadmap #49) ---
+// A condition alert should live exactly as long as its condition: #45 stops
+// re-emits while one is unacked; this closes the other half by auto-acking
+// rows whose condition has cleared. Event alerts (order fills/cancels,
+// auto-closes, new_setup, major_catalyst, mentions, morning brief) are
+// records of things that happened — they are never auto-acked here.
+
+/** Condition types that clear as soon as a scan stops finding them true. */
+const FLUID_CONDITION_TYPES = [
+  "near_stop_loss",
+  "target_hit",
+  "trade_score_low",
+  "trade_score_critical",
+  "exit_recommended",
+  "trim_recommended",
+  "add_opportunity",
+  "entry_range_reached",
+  "concentration",
+  "data_stale",
+];
+
+/**
+ * Critical conditions that stay visible while the trade is open — an intraday
+ * stop breach matters even if price recovers — and clear only when the ticker
+ * has no open trade left.
+ */
+const STICKY_TRADE_TYPES = ["stop_loss_hit", "thesis_invalidated"];
+
+/** Trade-scoped condition types, acked immediately when a trade closes. */
+const TRADE_CONDITION_TYPES = [
+  ...STICKY_TRADE_TYPES,
+  "near_stop_loss",
+  "target_hit",
+  "trade_score_low",
+  "trade_score_critical",
+  "exit_recommended",
+  "trim_recommended",
+  "add_opportunity",
+];
+
+/**
+ * Acknowledge unacked trade-condition alerts for a ticker whose trade just
+ * closed (roadmap #49). On a ticker with several trades, the next scan simply
+ * re-emits anything still true for the remaining open ones (#45's ack re-arm).
+ */
+export function ackTradeConditionAlerts(ticker: string): number {
+  const res = getDb()
+    .update(schema.alerts)
+    .set({ acknowledged: true })
+    .where(
+      and(
+        eq(schema.alerts.acknowledged, false),
+        eq(schema.alerts.ticker, ticker.toUpperCase()),
+        inArray(schema.alerts.alertType, TRADE_CONDITION_TYPES),
+      ),
+    )
+    .run();
+  return Number(res.changes);
+}
+
+/** Auto-ack unacked condition alerts whose condition was not seen this scan. */
+function ackClearedConditionAlerts(active: Map<string, Set<string | null>>): number {
+  const db = getDb();
+  let acked = 0;
+  for (const type of [...FLUID_CONDITION_TYPES, ...STICKY_TRADE_TYPES]) {
+    const still = active.get(type);
+    const rows = db
+      .select({ id: schema.alerts.id, ticker: schema.alerts.ticker })
+      .from(schema.alerts)
+      .where(and(eq(schema.alerts.alertType, type), eq(schema.alerts.acknowledged, false)))
+      .all();
+    for (const r of rows) {
+      if (still?.has(r.ticker)) continue;
+      db.update(schema.alerts).set({ acknowledged: true }).where(eq(schema.alerts.id, r.id)).run();
+      acked++;
+    }
+  }
+  return acked;
+}
+
 /** Scan current state and produce alerts. Returns number of new alerts. */
 export function generateAlerts(): number {
   const db = getDb();
@@ -99,6 +179,14 @@ export function generateAlerts(): number {
   let created = 0;
   const count = (ok: boolean) => {
     if (ok) created++;
+  };
+  // Condition-true bookkeeping for the post-scan clear pass (roadmap #49),
+  // marked whether or not the emit deduped.
+  const active = new Map<string, Set<string | null>>();
+  const mark = (type: string, ticker: string | null) => {
+    let set = active.get(type);
+    if (!set) active.set(type, (set = new Set()));
+    set.add(ticker);
   };
 
   // --- Open trade alerts ---
@@ -108,6 +196,11 @@ export function generateAlerts(): number {
     .where(eq(schema.activeTrades.status, "open"))
     .all();
   for (const t of trades) {
+    // Sticky criticals stay armed for any ticker with an open trade — they
+    // clear on trade close (see ackTradeConditionAlerts), not price recovery.
+    mark("stop_loss_hit", t.ticker);
+    mark("thesis_invalidated", t.ticker);
+
     const price = t.currentPrice;
     if (price == null) continue;
     const long = t.direction !== "short";
@@ -122,6 +215,7 @@ export function generateAlerts(): number {
           emit("stop_loss_hit", "critical", `${t.ticker}: stop-loss ${t.stopLoss} hit (price ${price}). Review exit.`, t.ticker, ONCE),
         );
       } else if (near) {
+        mark("near_stop_loss", t.ticker);
         count(
           emit("near_stop_loss", "warning", `${t.ticker}: within ${cfg.stopLossWarningPercent}% of stop-loss ${t.stopLoss}.`, t.ticker, ONCE),
         );
@@ -130,12 +224,14 @@ export function generateAlerts(): number {
     if (t.targetPrice1 != null) {
       const hit = long ? price >= t.targetPrice1 : price <= t.targetPrice1;
       if (hit) {
+        mark("target_hit", t.ticker);
         count(
           emit("target_hit", "info", `${t.ticker}: target 1 (${t.targetPrice1}) reached — trim rules apply.`, t.ticker, ONCE),
         );
       }
     }
     if (t.tradeScore != null && t.tradeScore < 3) {
+      mark("trade_score_critical", t.ticker);
       count(
         emit("trade_score_critical", "critical", `${t.ticker}: trade score ${t.tradeScore.toFixed(1)} — exit recommended.`, t.ticker, ONCE),
       );
@@ -144,11 +240,17 @@ export function generateAlerts(): number {
         emit("trade_score_low", "warning", `${t.ticker}: trade score dropped to ${t.tradeScore.toFixed(1)} — monitor closely.`, t.ticker, ONCE),
       );
     }
+    // A low score keeps the (worse) critical row armed too, so an unacked
+    // "score < 3" alert doesn't auto-ack the moment the score ticks up to 4.
+    if (t.tradeScore != null && t.tradeScore < 5) mark("trade_score_low", t.ticker);
     if (t.recommendation === "Exit") {
+      mark("exit_recommended", t.ticker);
       count(emit("exit_recommended", "critical", `${t.ticker}: EXIT recommended.`, t.ticker, ONCE));
     } else if (t.recommendation === "Trim") {
+      mark("trim_recommended", t.ticker);
       count(emit("trim_recommended", "warning", `${t.ticker}: trim recommended.`, t.ticker, ONCE));
     } else if (t.recommendation === "Add") {
+      mark("add_opportunity", t.ticker);
       count(emit("add_opportunity", "info", `${t.ticker}: add conditions met (score ${t.tradeScore?.toFixed(1)}).`, t.ticker, ONCE));
     }
     if (t.invalidationReason) {
@@ -183,6 +285,7 @@ export function generateAlerts(): number {
   });
   for (const w of concWarnings) {
     const ticker = [...positionValues.keys()].find((t) => w.startsWith(`${t} `)) ?? null;
+    mark("concentration", ticker);
     count(emit("concentration", "warning", w, ticker, ONCE));
   }
 
@@ -197,6 +300,7 @@ export function generateAlerts(): number {
       .limit(1)
       .get();
     if (dd?.buyZoneStatus === "In Buy Zone") {
+      mark("entry_range_reached", w.ticker);
       count(emit("entry_range_reached", "info", `${w.ticker}: price entered your buy zone.`, w.ticker, ONCE));
     }
   }
@@ -246,11 +350,16 @@ export function generateAlerts(): number {
     const snap = getLatestSnapshot(ticker);
     const f = freshness(snap?.capturedAt ?? null, cfg.staleDataMinutes * 8);
     if (f.isStale) {
+      mark("data_stale", ticker);
       count(
         emit("data_stale", "warning", `${ticker}: market data is ${f.label}. Recommendations may be outdated.`, ticker, ONCE),
       );
     }
   }
+
+  // Close the loop (roadmap #49): condition alerts whose condition wasn't
+  // seen this scan — including tickers no longer tracked — are auto-acked.
+  ackClearedConditionAlerts(active);
 
   return created;
 }

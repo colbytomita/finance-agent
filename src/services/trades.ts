@@ -4,6 +4,7 @@ import { nowIso } from "@/lib/util";
 import { loadConfig } from "@/lib/config";
 import { validateProposedTrade } from "./riskManagement";
 import { daysToNextEarnings } from "./marketData";
+import { ackTradeConditionAlerts } from "./alerts";
 
 // Shared trade-close path: record the exit on the trade row and auto-create
 // the journal entry. Used by the manual close action (trades API) and by the
@@ -94,6 +95,11 @@ export function closeTrade(trade: ActiveTrade, opts: CloseTradeOptions = {}): Cl
       createdAt: now,
     })
     .run();
+
+  // The trade's condition alerts (stop hit, exit recommended, …) are moot now
+  // (roadmap #49). If another open trade on the ticker still has a condition,
+  // the next scan re-emits it — acking re-arms #45's once-while-unacked gate.
+  ackTradeConditionAlerts(trade.ticker);
 
   return { exitPrice, profitLoss, profitLossPercent };
 }

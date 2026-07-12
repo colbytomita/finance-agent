@@ -1,0 +1,1 @@
+ALTER TABLE `sector_scout_picks` ADD `theme_fit_flag` text;

@@ -51,6 +51,25 @@ export function isDailyJobDue(
   return isNaN(t) || now - t > maxAgeHours * 3600_000;
 }
 
+/**
+ * Should the running scheduler catch up a missed daily maintenance? (roadmap
+ * #48) node-cron's 08:00 tick doesn't fire when the machine is asleep at that
+ * exact minute, and the #43 startup catch-up only covers restarts — a runner
+ * that sleeps through 08:00 and wakes at 08:30 silently skips the whole day.
+ * Due only once past `dueHour` local (so catch-up never drifts the schedule
+ * earlier than the cron would fire) AND the last run is stale per
+ * `isDailyJobDue`. Pure.
+ */
+export function isMaintenanceCatchupDue(
+  lastRunAt: string | null | undefined,
+  now = new Date(),
+  dueHour = 8,
+  maxAgeHours = 20,
+): boolean {
+  if (now.getHours() < dueHour) return false;
+  return isDailyJobDue(lastRunAt, now.getTime(), maxAgeHours);
+}
+
 export function getJobHealth(): JobHealth {
   const jobs = getDb().select().from(schema.jobRuns).all();
   const hb = jobs.find((j) => j.job === "heartbeat");

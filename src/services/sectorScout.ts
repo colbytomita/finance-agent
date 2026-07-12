@@ -8,7 +8,7 @@ import {
   suggestBuyZone,
   type CandidateAnalysis,
 } from "./discoveryAgent";
-import { completeJson, extractJson, getProvider } from "./llm";
+import { completeJson, extractJson, getProvider, type LLMProvider } from "./llm";
 import { errorMessage, mapPool, nowIso } from "@/lib/util";
 import { edgeCatalystsForTicker } from "./catalystEdge";
 import {
@@ -308,6 +308,73 @@ Respond in strict JSON with keys: summary (1 sentence), bullCase (1-2 sentences)
 }
 
 // ----------------------------------------------------------------------------
+// Theme-membership check (roadmap #50)
+// ----------------------------------------------------------------------------
+
+/**
+ * Parse the misfit-check response — an array of {ticker, reason} naming picks
+ * that are NOT primarily businesses in the searched theme. Tickers outside
+ * `allowed` are ignored (the model can't flag names it wasn't asked about).
+ * Pure — no IO.
+ */
+export function parseThemeMisfits(raw: string, allowed: string[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const allowedSet = new Set(allowed.map((t) => t.toUpperCase()));
+  const arr = extractJson<{ ticker?: unknown; reason?: unknown }[]>(raw, "array");
+  if (!Array.isArray(arr)) return out;
+  for (const el of arr) {
+    const t = typeof el.ticker === "string" ? el.ticker.trim().toUpperCase() : "";
+    if (!t || !allowedSet.has(t)) continue;
+    const reason =
+      typeof el.reason === "string" && el.reason.trim()
+        ? el.reason.trim().slice(0, 200)
+        : "not primarily a business in this industry";
+    out.set(t, reason);
+  }
+  return out;
+}
+
+/**
+ * Re-check that surfaced picks actually belong to the theme (roadmap #50):
+ * validation only proves a ticker has real price data, so an LLM-expansion
+ * slip (a biotech in a "space" scan) can ride a good market score into the
+ * list. One batched LLM call names the misfits; curated-theme members are
+ * exempt. Returns null when the check could not run (no LLM, or the call
+ * failed) so callers can leave existing flags untouched — an empty map means
+ * it ran and everything fits. Flag-only — callers display the flag, never
+ * drop the pick.
+ */
+export async function checkThemeMembership(
+  industry: string,
+  picks: { ticker: string; companyName: string | null }[],
+  opts: { provider?: LLMProvider | null } = {},
+): Promise<Map<string, string> | null> {
+  const curated = new Set(curatedTickersFor(industry));
+  const candidates = picks.filter((p) => !curated.has(p.ticker.toUpperCase()));
+  if (candidates.length === 0) return new Map(); // all exempt — trivially fits
+  const provider = opts.provider !== undefined ? opts.provider : getProvider();
+  if (!provider) return null;
+
+  const list = candidates
+    .map((p) => `${p.ticker}${p.companyName ? ` (${p.companyName})` : ""}`)
+    .join(", ");
+  const prompt = `A stock screener searched the industry/theme "${industry}" and surfaced these companies:
+${list}
+
+Which of them are NOT primarily "${industry}" businesses (their core business lies elsewhere, with at most incidental exposure to the theme)? Be conservative: only name a company you are confident is mis-categorized.
+
+Respond with ONLY a JSON array, one object per mis-categorized company (empty array if all fit):
+[{"ticker":"XYZ","reason":"<what its core business actually is, under 20 words>"}]`;
+
+  try {
+    const raw = await provider.complete(prompt, { maxTokens: 500 });
+    return parseThemeMisfits(raw, candidates.map((p) => p.ticker));
+  } catch {
+    return null; // best effort — an unreachable LLM never blocks a scan
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Scan orchestration + persistence
 // ----------------------------------------------------------------------------
 
@@ -439,6 +506,35 @@ export async function runSectorScan(opts: {
     .where(and(eq(schema.sectorScoutPicks.industry, industry), eq(schema.sectorScoutPicks.status, "new")))
     .run();
 
+  // Theme-membership re-check (roadmap #50) — one batched call over the
+  // surfaced set PLUS this industry's kept picks (added rows from earlier
+  // scans that didn't resurface), so a legacy misfit the user accepted gets
+  // its flag too. Misfits are flagged for display, never dropped. A null
+  // result means the check couldn't run — existing flags are left as-is.
+  const surfacedTickers = new Set(surfaced.map((s) => s.a.ticker.toUpperCase()));
+  const keptPicks = db
+    .select()
+    .from(schema.sectorScoutPicks)
+    .where(eq(schema.sectorScoutPicks.industry, industry))
+    .all()
+    .filter((p) => p.status !== "dismissed" && !surfacedTickers.has(p.ticker.toUpperCase()));
+  const checkSet = [
+    ...surfaced.map((s) => ({ ticker: s.a.ticker, companyName: s.a.companyName })),
+    ...keptPicks.map((p) => ({ ticker: p.ticker, companyName: p.companyName })),
+  ];
+  const misfits = checkSet.length > 0 ? await checkThemeMembership(industry, checkSet) : new Map<string, string>();
+  if (misfits != null) {
+    for (const p of keptPicks) {
+      const flag = misfits.get(p.ticker.toUpperCase()) ?? null;
+      if (flag !== p.themeFitFlag) {
+        db.update(schema.sectorScoutPicks)
+          .set({ themeFitFlag: flag })
+          .where(eq(schema.sectorScoutPicks.id, p.id))
+          .run();
+      }
+    }
+  }
+
   for (const { a, brief, low, high, thesis, thesisReportId } of surfaced) {
     const values = {
       industry,
@@ -466,6 +562,9 @@ export async function runSectorScan(opts: {
       thesisVerdict: thesis?.verdict ?? null,
       thesisSummary: thesis?.summary ?? null,
       thesisGeneratedBy: thesis?.generatedBy ?? null,
+      // When the membership check didn't run, omit the flag so a re-surfaced
+      // pick keeps whatever an earlier successful check concluded.
+      ...(misfits != null ? { themeFitFlag: misfits.get(a.ticker.toUpperCase()) ?? null } : {}),
       scannedAt: now,
     };
     db.insert(schema.sectorScoutPicks)

@@ -391,6 +391,10 @@ export const sectorScoutPicks = sqliteTable("sector_scout_picks", {
   thesisVerdict: text("thesis_verdict"),
   thesisSummary: text("thesis_summary"),
   thesisGeneratedBy: text("thesis_generated_by"),
+  // Roadmap #50: set when the post-scan membership check judged this pick NOT
+  // primarily a <industry> business (the value is the reason). Display-only —
+  // flagged picks still surface, with a "theme fit questioned" chip.
+  themeFitFlag: text("theme_fit_flag"),
   status: text("status").notNull().default("new"), // new | added | dismissed
   scannedAt: text("scanned_at").notNull(),
 }, (t) => [

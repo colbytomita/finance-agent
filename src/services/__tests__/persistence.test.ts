@@ -5,7 +5,7 @@ import { useTestDb } from "./dbHarness";
 import { upsertWatchlistItem } from "../watchlist";
 import { emitAlert, generateAlerts, listAlerts } from "../alerts";
 import { closeTrade } from "../trades";
-import { recordJobRun, getJobHealth, isDailyJobDue } from "../jobHealth";
+import { recordJobRun, getJobHealth, isDailyJobDue, isMaintenanceCatchupDue } from "../jobHealth";
 import { schedulerEnvFromHeartbeat } from "../status";
 import { addMention, findSameDayMention } from "../entityMentions";
 import { runRetention, runSqliteHousekeeping } from "../retention";
@@ -651,6 +651,31 @@ describe("daily-job catch-up due check (roadmap #43)", () => {
   });
 });
 
+describe("missed-tick maintenance catch-up (roadmap #48)", () => {
+  const h = 3600_000;
+  // Local-time constructor: the due-hour check runs on local wall clock.
+  const at = (hour: number, minute = 0) => new Date(2026, 6, 11, hour, minute);
+
+  it("is never due before the due hour, even when stale", () => {
+    expect(isMaintenanceCatchupDue(null, at(7, 59))).toBe(false);
+    expect(isMaintenanceCatchupDue(new Date(at(7).getTime() - 40 * h).toISOString(), at(7, 30))).toBe(false);
+  });
+
+  it("is due past the due hour when stale, never-run, or unparseable", () => {
+    const stale = new Date(at(8, 30).getTime() - 21 * h).toISOString();
+    expect(isMaintenanceCatchupDue(stale, at(8, 30))).toBe(true);
+    expect(isMaintenanceCatchupDue(null, at(8))).toBe(true);
+    expect(isMaintenanceCatchupDue("not-a-date", at(23))).toBe(true);
+  });
+
+  it("is not due past the due hour when the last run is recent", () => {
+    const recent = new Date(at(9).getTime() - 1 * h).toISOString();
+    expect(isMaintenanceCatchupDue(recent, at(9))).toBe(false);
+    // Yesterday's on-time run (25.0h ago at 09:00) IS due; an 18h-old one is not.
+    expect(isMaintenanceCatchupDue(new Date(at(9).getTime() - 18 * h).toISOString(), at(9))).toBe(false);
+  });
+});
+
 describe("condition alerts emit once while unacked (roadmap #45)", () => {
   const once = { onceWhileUnacked: true };
   it("suppresses same (type,ticker) regardless of message; ack re-arms", () => {
@@ -670,5 +695,94 @@ describe("condition alerts emit once while unacked (roadmap #45)", () => {
   it("event alerts without the option keep the old per-message dedupe", () => {
     expect(emitAlert("order_fill", "info", "MSFT: filled 5 @ 100.", "MSFT")).toBe(true);
     expect(emitAlert("order_fill", "info", "MSFT: filled 5 @ 101.", "MSFT")).toBe(true); // new message → new row
+  });
+});
+
+describe("condition alerts auto-ack when the condition clears (roadmap #49)", () => {
+  const openTrade = (ticker: string, price: number, stop: number | null) => {
+    getDb()
+      .insert(schema.activeTrades)
+      .values({
+        ticker,
+        direction: "long",
+        entryPrice: 100,
+        entryDate: new Date().toISOString(),
+        shares: 1,
+        positionSize: 100,
+        currentPrice: price,
+        stopLoss: stop,
+        status: "open",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      .run();
+    return getDb().select().from(schema.activeTrades).all().at(-1)!;
+  };
+  const unacked = (type: string) =>
+    getDb().select().from(schema.alerts).all().filter((a) => a.alertType === type && !a.acknowledged);
+
+  it("acks zombie trade alerts once no open trade remains", () => {
+    // The observed live state: stop/exit criticals referencing closed trades.
+    emitAlert("stop_loss_hit", "critical", "RTX: stop-loss 196.31 hit.", "RTX", { onceWhileUnacked: true });
+    emitAlert("exit_recommended", "critical", "RTX: EXIT recommended.", "RTX", { onceWhileUnacked: true });
+    expect(unacked("stop_loss_hit")).toHaveLength(1);
+    generateAlerts(); // no open RTX trade → both conditions are moot
+    expect(unacked("stop_loss_hit")).toHaveLength(0);
+    expect(unacked("exit_recommended")).toHaveLength(0);
+  });
+
+  it("keeps a stop-hit critical while the trade stays open, even after price recovers", () => {
+    const t = openTrade("TSLA", 90, 95); // price 90 ≤ stop 95 → hit
+    generateAlerts();
+    expect(unacked("stop_loss_hit")).toHaveLength(1);
+
+    // Price recovers well above the stop — the breach already happened, so
+    // the critical stays until the user acks it or the trade closes.
+    getDb().update(schema.activeTrades).set({ currentPrice: 120 }).where(eq(schema.activeTrades.id, t.id)).run();
+    generateAlerts();
+    expect(unacked("stop_loss_hit")).toHaveLength(1);
+  });
+
+  it("closeTrade acks the trade's condition alerts immediately", () => {
+    const t = openTrade("NVDA", 90, 95);
+    generateAlerts();
+    expect(unacked("stop_loss_hit")).toHaveLength(1);
+    closeTrade(t, { exitPrice: 90 });
+    expect(unacked("stop_loss_hit")).toHaveLength(0);
+  });
+
+  it("acks a fluid condition (near-stop) as soon as a scan stops finding it", () => {
+    const t = openTrade("AMD", 96, 95); // within the default warning band
+    generateAlerts();
+    expect(unacked("near_stop_loss")).toHaveLength(1);
+    getDb().update(schema.activeTrades).set({ currentPrice: 150 }).where(eq(schema.activeTrades.id, t.id)).run();
+    generateAlerts();
+    expect(unacked("near_stop_loss")).toHaveLength(0);
+  });
+
+  it("acks data_stale once the ticker refreshes (or stops being tracked)", () => {
+    upsertWatchlistItem({ ticker: "MSFT" });
+    generateAlerts(); // no snapshot at all → stale
+    expect(unacked("data_stale")).toHaveLength(1);
+
+    getDb()
+      .insert(schema.marketPriceSnapshots)
+      .values({ ticker: "MSFT", regularPrice: 400, source: "manual", capturedAt: new Date().toISOString() })
+      .run();
+    generateAlerts(); // fresh snapshot → condition cleared
+    expect(unacked("data_stale")).toHaveLength(0);
+
+    // An untracked ticker's stale alert is moot too.
+    emitAlert("data_stale", "warning", "GONE: market data is 9d old.", "GONE", { onceWhileUnacked: true });
+    generateAlerts();
+    expect(unacked("data_stale")).toHaveLength(0);
+  });
+
+  it("never touches event alerts", () => {
+    emitAlert("order_fill", "info", "MSFT: filled 5 @ 100.", "MSFT");
+    emitAlert("trade_auto_closed", "warning", "NVDA: stop leg filled — trade closed.", "NVDA");
+    generateAlerts();
+    expect(unacked("order_fill")).toHaveLength(1);
+    expect(unacked("trade_auto_closed")).toHaveLength(1);
   });
 });

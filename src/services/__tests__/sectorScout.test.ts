@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkThemeMembership,
   curatedTickersFor,
   describeIndustry,
   normalizeIndustryLabel,
+  parseThemeMisfits,
   parseTickerList,
   ruleBriefFromAnalysis,
 } from "../sectorScout";
@@ -74,6 +76,62 @@ describe("sectorScout.curatedTickersFor", () => {
     expect(curatedTickersFor("restaurant")).toContain("MCD"); // key is "restaurants"
     expect(curatedTickersFor("banking")).toContain("JPM");
     expect(curatedTickersFor("rocket")).toContain("RKLB"); // key is "rockets"
+  });
+});
+
+describe("sectorScout theme-membership check (roadmap #50)", () => {
+  it("parses misfits, ignoring tickers it wasn't asked about", () => {
+    const raw = 'Sure: [{"ticker":"alks","reason":"Biotech — CNS therapeutics, no space business"},{"ticker":"NVDA","reason":"chips"}]';
+    const m = parseThemeMisfits(raw, ["ALKS", "RTX"]);
+    expect(m.get("ALKS")).toMatch(/biotech/i);
+    expect(m.has("NVDA")).toBe(false); // not in the asked set
+  });
+
+  it("returns empty on unparseable output or an empty array", () => {
+    expect(parseThemeMisfits("no json here", ["ALKS"]).size).toBe(0);
+    expect(parseThemeMisfits("[]", ["ALKS"]).size).toBe(0);
+  });
+
+  it("substitutes a generic reason when the model omits one", () => {
+    const m = parseThemeMisfits('[{"ticker":"ALKS"}]', ["ALKS"]);
+    expect(m.get("ALKS")).toMatch(/not primarily/i);
+  });
+
+  it("exempts curated-theme members and asks only about the rest", async () => {
+    const asked: string[] = [];
+    const provider = {
+      name: "fake",
+      complete: async (prompt: string) => {
+        asked.push(prompt);
+        return '[{"ticker":"ALKS","reason":"biotech"}]';
+      },
+    };
+    const m = await checkThemeMembership(
+      "space",
+      [
+        { ticker: "RKLB", companyName: "Rocket Lab" }, // curated space member — exempt
+        { ticker: "ALKS", companyName: "Alkermes" },
+      ],
+      { provider },
+    );
+    expect(m?.get("ALKS")).toBe("biotech");
+    expect(m?.has("RKLB")).toBe(false);
+    expect(asked[0]).not.toContain("RKLB");
+    expect(asked[0]).toContain("ALKS");
+  });
+
+  it("returns null without an LLM so existing flags are never cleared blind", async () => {
+    const m = await checkThemeMembership("space", [{ ticker: "ALKS", companyName: "Alkermes" }], {
+      provider: null,
+    });
+    expect(m).toBeNull();
+  });
+
+  it("returns an empty map (ran, all fit) when every pick is curated-exempt", async () => {
+    const m = await checkThemeMembership("space", [{ ticker: "RKLB", companyName: "Rocket Lab" }], {
+      provider: null,
+    });
+    expect(m?.size).toBe(0);
   });
 });
 
