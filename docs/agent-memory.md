@@ -1,6 +1,36 @@
 # Agent Memory
 
-Last updated: 2026-07-09.
+Last updated: 2026-07-11.
+
+## 2026-07-11 session — audit of the modules the quality pass skipped
+
+The 2026-07-10 repo quality pass left sectorScout, companyThesisScout, and
+eventIngestion/extraction (incl. `sources/*`) line-audited only structurally;
+this session audited them line-by-line. companyThesisScout, eventExtraction,
+gdelt, secEdgar, tickerMap, and parse reviewed clean. Three logic fixes +
+one gap (tests 396 → 405):
+
+- **Ingestion cap starved GDELT/IR (real bug):** `ingestCore` concatenated
+  SEC+GDELT+IR then `slice(0, maxItems)`; SEC's recent-filings feed always
+  fills its fetch size (= the cap, default 25), so GDELT/IR items **never
+  reached extraction** while SEC was enabled. Now `capAcrossSources`
+  round-robins one item per source per round (per-source order preserved).
+- **Curated theme matching used substrings:** "ai" seeded retail (ret-**ai**-l),
+  "tech" seeded fintech+biotech. `curatedTickersFor`/`curatedMatch` now match
+  whole words with a light plural fold (`themeWords`/`themeKeyMatches`);
+  "banking" added as an explicit key (the only real stem match lost).
+- **`listSectorPicks` comparator was non-transitive:** industries were ordered
+  by per-row `scannedAt`, but an "added" pick that stops re-surfacing keeps its
+  old timestamp — could interleave industries and split the page's groups. Now
+  sorts by per-industry latest scannedAt, then name, then adjusted score.
+- **IR feed fetch had no timeout** (EDGAR 15s, GDELT 10s, IR none) — a hung
+  feed would stall ingestion; now `AbortSignal.timeout(10s)`.
+
+Live-verified against the running dev server: two real SEC+GDELT ingestion
+runs end-to-end (LLM extraction, mentions persisted), /sector-scout page and
+API render real picks grouped correctly. Note: GDELT 429-throttles for
+minutes at a time — a `bySource` gdelt=0 with no error usually means it was
+rate-limited and the run correctly stopped early, not that the connector broke.
 
 ## 2026-07-09 session — roadmap v2 finished, v3 written and finished
 
