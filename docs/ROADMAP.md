@@ -1,4 +1,141 @@
-# Improvement Roadmap — v5 (2026-07-11)
+# Improvement Roadmap — v6 (2026-07-13)
+
+Roadmaps v1–v5 (#1–#50) are **complete** — see below and the archives. v6
+came from runtime forensics on 2026-07-13: the newly installed scheduled
+task's logon run died after 13 seconds with 0xC000013A (console Ctrl+C /
+window close) and nothing restarted it — the whole Monday market session ran
+with no scheduler and no notice anywhere; `catalyst_scan` hadn't fired since
+Friday (its cron has no catch-up); the 07-12 daily maintenance was missed
+because the >20h due-anchor had drifted 43 minutes past the machine's
+bedtime; every Yahoo browser-fallback invocation fails to parse; and GDELT
+has produced 0 items across six straight ingestion runs with zero errors
+shown. Items are #51+.
+
+## v6 — Tier 1: runner resilience
+
+- [ ] **51. Runner survivability: hidden task window + single-instance
+  lock** *(small–medium)*
+  **Why:** the scheduled task runs `cmd.exe` interactively at logon, so a
+  console window pops up on every logon — closing it (or a stray Ctrl+C)
+  kills the runner, and the task doesn't restart it. Observed 2026-07-13:
+  LastTaskResult 0xC000013A 13s after logon, runner dead all day. Ad-hoc
+  `npm run jobs` terminals also compete with the task — the double-scheduler
+  footgun the README warns about (the 07-12 evening runner was a manual one;
+  its output isn't even in jobs.log).
+  **What:** (a) `scripts/run-jobs-hidden.vbs`: `WScript.Shell.Run` of
+  `cmd /c npm run jobs >> data\logs\jobs.log 2>&1` with window style 0 and
+  bWaitOnReturn=True, so no window ever appears, the task shows *Running*,
+  and `Stop-ScheduledTask` kills the whole tree. `install-jobs-task.ps1`
+  points the action at `wscript.exe` + the vbs and gains `-StartNow`;
+  the uninstall script stops the task before unregistering (stopping is now
+  Stop-ScheduledTask, not Ctrl+C — losing the best-effort SIGINT
+  notification flush on a hard stop is acceptable). (b) single-instance
+  lock: at startup the scheduler exclusively creates `data/jobs.lock`
+  containing its PID; if the file exists and that PID is alive, log
+  "another scheduler (pid N) is running — exiting" and exit(1); a dead PID's
+  lock is stolen; the lock is removed on SIGINT/SIGTERM. Lock *errors*
+  (fs failures) never stop the runner — only a held lock does.
+  **Accept:** lock helper unit-tested with injectable PID-liveness (fresh
+  start, held-by-live-pid, stale-pid steal, unreadable lockfile). Live:
+  re-register + start → no window, heartbeat ticks; a second
+  `npm run jobs` exits immediately with the clear message;
+  `Stop-ScheduledTask` actually stops node (heartbeat stops).
+
+- [ ] **52. One scheduling mechanism: fold the cron jobs into the minute
+  loop** *(medium)*
+  **Why:** two of the three jobs still depend on being awake at exact
+  minutes. `catalyst_scan` (`0 */4 * * 1-5`) has **no catch-up** — last ran
+  Friday 07-10 20:00 local, then nothing (weekend gate aside, Monday was
+  simply missed). And maintenance's ">20h since last run" anchor drifts
+  later every time a catch-up runs late: the 07-11 catch-up ran 17:18 local,
+  so 07-12's maintenance wasn't due until 13:18 — 43 minutes after the
+  machine went to sleep — and the day was silently skipped. node-cron also
+  spams missed-execution warnings after every sleep.
+  **What:** drop node-cron entirely; the existing self-scheduling minute
+  loop becomes the only trigger. Two pure due-checks in `jobHealth.ts`:
+  `isMaintenanceDue(lastRunAt, now)` — past 08:00 local AND the last
+  completed run's **local calendar date** is before today (calendar
+  anchoring can't drift; a mid-run kill self-heals because the completion
+  date stays yesterday); `isCatalystScanDue(lastRunAt, now)` — local
+  Mon–Fri AND (never ran OR >4h old). Tick order: heartbeat → refresh →
+  maintenance if due → catalyst scan if due *and* maintenance didn't just
+  run this tick (maintenance already includes the news scan). The
+  `maintaining` guard stays; the #43 startup timer and
+  `isMaintenanceCatchupDue` are deleted (the loop's first tick at boot
+  covers startup catch-up). `recordJobRun("daily_maintenance","error")`
+  still bumps last_run_at, so a failing maintenance retries next day —
+  unchanged from #48.
+  **Accept:** due-checks unit-tested with fake clocks (pre/post 08:00,
+  ran-today, ran-yesterday-late, never-ran, unparseable, weekend vs weekday,
+  4h boundary). node-cron gone from package.json. Live: with stale last
+  runs, both jobs fire within a minute of runner start, and sleep/wake no
+  longer logs cron warnings.
+
+## v6 — Tier 2: data-source truth
+
+- [ ] **53. Yahoo browser fallback: verify live, then fix or retire**
+  *(small–medium, investigation-gated)*
+  **Why:** every browser-quote invocation in the recent log fails with
+  "regularMarketPrice not found — page layout may have changed", and
+  chromium-1228 *is* installed — this is parser rot, not environment. The
+  last-resort quote net demonstrably catches nothing, keeps Playwright load
+  in the hot path, and fills the log with noise during outages.
+  **What:** drive `yahooFinanceBrowser` live (quote path and the news-scan
+  fallback separately) against real tickers. If the page still carries the
+  data (fin-streamer data-field attributes or the embedded JSON state
+  blob), fix the extraction and pin it with a saved-fixture unit test. If
+  Yahoo's page is no longer reliably scrapable headless (consent walls,
+  anti-bot), remove the browser **quote** fallback — `yahooHttp` stays
+  primary, `quoteFromSummaryFields` untouched — and update the README and
+  provenance notes; judge the news fallback by the same rule. Bias: don't
+  keep a safety net that demonstrably doesn't catch.
+  **Accept:** either a live browser quote returns real fields plus a green
+  fixture test, or the dead path is removed with tests/typecheck/README
+  updated. Log noise gone either way.
+
+- [ ] **54. /status "Data sources" health card** *(small)*
+  **Why:** GDELT returned 0 items in six straight ingestion runs with zero
+  errors — silent 429 throttling looks identical, on /events, to "nothing
+  happened". The browser rot (#53) was likewise invisible until log
+  forensics. Nothing answers "which sources actually produced data lately?"
+  **What:** pure helpers in `status.ts`, derived from existing tables — no
+  new writes. Per ingestion source (sec-edgar / gdelt / ir-rss) from
+  `ingestion_runs.by_source`: last producing run + consecutive zero-item
+  streak, amber at ≥3. Per quote transport (alpaca / yahoo / yahoo-browser)
+  from `market_price_snapshots.source`: last "produced data" timestamp,
+  phrased so a legitimately-never-invoked fallback isn't an alarm. New card
+  on /status.
+  **Accept:** helpers unit-tested (streak counting, sources missing from
+  some runs, empty/absent by_source JSON). Live: /status shows a gdelt
+  streak matching ingestion_runs and renders with real data.
+
+## v6 — Tier 3: last-resort alerting
+
+- [ ] **55. Dead-runner watchdog task** *(small–medium)*
+  **Why:** every liveness surface — header badge, /status, alerts, ntfy —
+  is served by processes that are dead exactly when the answer matters.
+  Observed 2026-07-13: runner dead since 22:35 the prior night, the whole
+  market session missed, zero notification anywhere.
+  **What:** `scripts/watchdog.ts` (tsx entrypoint — `loadDotEnv()` first,
+  per the #40 rule): opens the DB read-only (missing DB → silent exit 0),
+  reads the heartbeat age; if >10 min stale, pushes a critical notification
+  through the existing ntfy/desktop plumbing (severity-gate bypass, like
+  the morning brief's direct send), throttled to one alert per outage with
+  a 6h re-alert via `data/watchdog-state.json`; a fresh heartbeat clears
+  the state silently. If no notification channel is configured it logs and
+  exits — the install script warns about that. `install-watchdog-task.ps1`
+  registers `FinanceAgentWatchdog` on a 30-minute repetition using the #51
+  hidden-vbs pattern (short-lived run each time), with an uninstall mirror;
+  opt-in like #18. A sleeping machine pauses the watchdog too — correct,
+  since there's nobody there to alert.
+  **Accept:** staleness/throttle helpers unit-tested (fresh, stale,
+  missing DB, inside/outside the re-alert window, state round-trip). Live:
+  with the runner stopped, one manual watchdog run raises the toast/ntfy
+  push; with it running, a run stays silent and clears the state.
+
+---
+
+# Roadmap v5 (2026-07-11) — complete
 
 Roadmaps v1–v4 (#1–#47) are **complete** — see below and the archives. v5
 came from runtime signals observed on 2026-07-11 against the live system
