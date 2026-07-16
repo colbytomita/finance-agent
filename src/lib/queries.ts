@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { isCatalystStale } from "@/services/catalysts";
+import { pairKey, suppressedSetupPairs } from "@/services/setupArchive";
 
 // Read-side helpers used by server components and services. Latest-row
 // lookups per ticker, plus the tracked-ticker set.
@@ -113,12 +114,17 @@ export function topCatalystAndRisk(ticker: string): {
 }
 
 export function activeSetups() {
+  // Hide pairs the user archived while their episode is still being
+  // re-detected (spec 2026-07-16); scanForSetups ends the suppression when
+  // the pair drops out of a scan.
+  const suppressed = suppressedSetupPairs();
   return getDb()
     .select()
     .from(schema.tradeSetups)
     .where(eq(schema.tradeSetups.status, "active"))
     .orderBy(desc(schema.tradeSetups.setupQualityScore))
-    .all();
+    .all()
+    .filter((s) => !suppressed.has(pairKey(s.ticker, s.setupType)));
 }
 
 export function openTrades() {
