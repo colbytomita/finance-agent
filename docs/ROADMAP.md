@@ -1,6 +1,6 @@
-# Improvement Roadmap — v6 (2026-07-13)
+# Improvement Roadmap — v6 (2026-07-13) — complete
 
-Roadmaps v1–v5 (#1–#50) are **complete** — see below and the archives. v6
+Roadmaps v1–v6 (#1–#55) are **complete** — see below and the archives. v6
 came from runtime forensics on 2026-07-13: the newly installed scheduled
 task's logon run died after 13 seconds with 0xC000013A (console Ctrl+C /
 window close) and nothing restarted it — the whole Monday market session ran
@@ -9,12 +9,20 @@ Friday (its cron has no catch-up); the 07-12 daily maintenance was missed
 because the >20h due-anchor had drifted 43 minutes past the machine's
 bedtime; every Yahoo browser-fallback invocation fails to parse; and GDELT
 has produced 0 items across six straight ingestion runs with zero errors
-shown. Items are #51+.
+shown. Items are #51+. Implemented 2026-07-16.
 
 ## v6 — Tier 1: runner resilience
 
-- [ ] **51. Runner survivability: hidden task window + single-instance
-  lock** *(small–medium)*
+- [x] **51. Runner survivability: hidden task window + single-instance
+  lock** *(small–medium — done 2026-07-16; task re-registered on the
+  hidden VBS action and Running with a fresh heartbeat; a second
+  `npm run jobs` exits 1 with the "another scheduler (pid N)" message.
+  Live surprise: `Stop-ScheduledTask` kills only the wscript launcher and
+  orphans the cmd/npm/node tree — even the old cmd.exe action behaved
+  this way — so `scripts/stop-jobs-task.ps1` now stops the task AND kills
+  the pid in `data/jobs.lock`, and README says to use it. Also: .ps1
+  files need a UTF-8 BOM or PS 5.1 parses an em dash inside a string as a
+  smart-quote terminator.)*
   **Why:** the scheduled task runs `cmd.exe` interactively at logon, so a
   console window pops up on every logon — closing it (or a stray Ctrl+C)
   kills the runner, and the task doesn't restart it. Observed 2026-07-13:
@@ -41,8 +49,13 @@ shown. Items are #51+.
   `npm run jobs` exits immediately with the clear message;
   `Stop-ScheduledTask` actually stops node (heartbeat stops).
 
-- [ ] **52. One scheduling mechanism: fold the cron jobs into the minute
-  loop** *(medium)*
+- [x] **52. One scheduling mechanism: fold the cron jobs into the minute
+  loop** *(medium — done 2026-07-16; node-cron removed, both jobs on
+  minute-loop due-checks. Live: after restart, catalyst_scan (2h old)
+  correctly stayed quiet inside its 4h window and maintenance did not
+  re-run after today's completed 08:02 run — calendar anchor holding; no
+  cron banners in jobs.log. The rewire also fixed a latent crash: a throw
+  inside `void catalystScan()` was an unhandled rejection under cron.)*
   **Why:** two of the three jobs still depend on being awake at exact
   minutes. `catalyst_scan` (`0 */4 * * 1-5`) has **no catch-up** — last ran
   Friday 07-10 20:00 local, then nothing (weekend gate aside, Monday was
@@ -73,8 +86,16 @@ shown. Items are #51+.
 
 ## v6 — Tier 2: data-source truth
 
-- [ ] **53. Yahoo browser fallback: verify live, then fix or retire**
-  *(small–medium, investigation-gated)*
+- [x] **53. Yahoo browser fallback: verify live, then fix or retire**
+  *(small–medium — done 2026-07-16; **fixed**, not retired: the live probe
+  (AAPL + MSFT) showed the page loads clean with no consent wall, but the
+  main quote's price moved off fin-streamer — zero `data-symbol="<ticker>"`
+  elements on the whole page — into `data-testid="qsp-price"` spans, with
+  the 52-week range on a `fiftyTwoWeekRange` streamer's data-value. Parser
+  now falls back to those; pinned by a fixture test from the live page.
+  Post-fix probe parsed AAPL at 331.92 with zero extraction errors. The
+  earnings in-page API path was verified working (4 rows) and untouched;
+  the news-scan fallback stays behind the stable RSS primary.)*
   **Why:** every browser-quote invocation in the recent log fails with
   "regularMarketPrice not found — page layout may have changed", and
   chromium-1228 *is* installed — this is parser rot, not environment. The
@@ -93,7 +114,11 @@ shown. Items are #51+.
   fixture test, or the dead path is removed with tests/typecheck/README
   updated. Log noise gone either way.
 
-- [ ] **54. /status "Data sources" health card** *(small)*
+- [x] **54. /status "Data sources" health card** *(small — done
+  2026-07-16; live /status immediately showed the real problem: gdelt
+  amber at "8 runs dark", sec-edgar and ir-rss producing, and the three
+  quote transports with honest last-produced stamps — alpaca fresh,
+  yahoo/yahoo-browser last used 07-10/07-11.)*
   **Why:** GDELT returned 0 items in six straight ingestion runs with zero
   errors — silent 429 throttling looks identical, on /events, to "nothing
   happened". The browser rot (#53) was likewise invisible until log
@@ -111,7 +136,15 @@ shown. Items are #51+.
 
 ## v6 — Tier 3: last-resort alerting
 
-- [ ] **55. Dead-runner watchdog task** *(small–medium)*
+- [x] **55. Dead-runner watchdog task** *(small–medium — done 2026-07-16;
+  entrypoint landed in `src/jobs/watchdog.ts` (not scripts/) to keep `@/`
+  imports. Live-verified against a REAL outage: with the runner down
+  mid-migration, `npm run watchdog` raised the desktop toast ("heartbeat
+  is 14 minutes old"), the immediate re-run stayed silent (6h throttle),
+  and after the runner came back the state file self-cleared.
+  FinanceAgentWatchdog registered without elevation, Ready, 30-min
+  repetition — note `[TimeSpan]::MaxValue` as RepetitionDuration is
+  rejected by current builds; omit the parameter for "indefinite".)*
   **Why:** every liveness surface — header badge, /status, alerts, ntfy —
   is served by processes that are dead exactly when the answer matters.
   Observed 2026-07-13: runner dead since 22:35 the prior night, the whole

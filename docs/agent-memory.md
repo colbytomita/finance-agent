@@ -1,6 +1,56 @@
 # Agent Memory
 
-Last updated: 2026-07-11.
+Last updated: 2026-07-16.
+
+## 2026-07-16 session — roadmap v6 (#51–#55): runner resilience
+
+Executed the committed v6 plan (written from the 2026-07-13 forensics:
+task killed at logon with 0xC000013A, catalyst_scan dark since Friday, the
+>20h maintenance anchor drifting past bedtime, browser-fallback parser rot,
+gdelt silently dark for six runs). All five items shipped and live-verified;
+tests 420 → 443. What shipped, plus the live discoveries:
+
+- **#51b lock:** `data/jobs.lock` pidfile guard in `schedulerLock.ts`;
+  second `npm run jobs` exits 1 naming the holder pid. Verified against the
+  real task.
+- **#51a hidden task:** `run-hidden.vbs` + re-registered FinanceAgentJobs
+  action (needed an **elevated** re-register — the old task's ACL blocked a
+  limited-token overwrite; fresh task names register fine unelevated).
+  **Live discovery: `Stop-ScheduledTask` orphans the cmd/npm/node tree**
+  (kills only its direct child; observed with BOTH the old cmd.exe action
+  and the new wscript one — jobs.log refreshes continued right through a
+  "stop"). New `scripts/stop-jobs-task.ps1` stops the task and kills the
+  lockfile pid (node.exe-verified against pid reuse); the npm/cmd ancestry
+  unwinds. Uninstall now routes through it. **Windows PS gotcha:** .ps1
+  files must carry a UTF-8 BOM — PowerShell 5.1 reads BOM-less files as
+  ANSI and an em dash inside a double-quoted string parses as a smart-quote
+  terminator (0x94). All repo .ps1 files now have BOMs.
+- **#52 no more cron:** node-cron removed; `isMaintenanceDue` (calendar-day
+  anchor, 08:00 local) + `isCatalystScanDue` (4h interval, weekdays) run
+  from the minute loop. Verified live: neither re-fired after today's
+  completed runs; scan skipped on maintenance ticks. Also fixed the latent
+  unhandled-rejection crash in the old `void catalystScan()` cron callback.
+- **#53 Yahoo browser fallback — FIXED (probe-driven):** the quote page
+  loads headless with no consent wall, but the main quote no longer renders
+  any `data-symbol="<ticker>"` fin-streamer; price lives in
+  `data-testid="qsp-price"` spans and the 52-week range in a
+  `fiftyTwoWeekRange` streamer's `data-value`. Parser falls back to those
+  (fixture test from the live page). Post-fix probe: AAPL 331.92, zero
+  extraction errors. Earnings in-page API path verified (4 rows), kept.
+- **#54 /status Data sources card:** per-source ingestion pulse from
+  `ingestion_runs.by_source` (amber ≥3 empty runs) + quote-transport
+  last-produced stamps. First live render showed **gdelt at 8 runs dark**.
+- **#55 watchdog:** `src/jobs/watchdog.ts` (src/jobs, not scripts/, for
+  `@/` imports) + `decideWatchdogAction` pure core. Live-verified against
+  a real outage window mid-session: toast at 14-min staleness, throttle
+  held on the re-run, state self-cleared once the runner returned.
+  FinanceAgentWatchdog registered unelevated, 30-min repetition. Gotcha:
+  `-RepetitionDuration [TimeSpan]::MaxValue` is rejected as out-of-range
+  XML on current Windows builds — omit the parameter for indefinite.
+
+End state: FinanceAgentJobs Running (hidden, new code, lock held),
+FinanceAgentWatchdog Ready, today's maintenance + catalyst_scan stamped ok,
+/status card live, jobs.log clean of cron banners and parser noise.
 
 ## 2026-07-11 session — audit of the modules the quality pass skipped
 
