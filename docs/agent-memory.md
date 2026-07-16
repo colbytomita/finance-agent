@@ -52,6 +52,24 @@ End state: FinanceAgentJobs Running (hidden, new code, lock held),
 FinanceAgentWatchdog Ready, today's maintenance + catalyst_scan stamped ok,
 /status card live, jobs.log clean of cron banners and parser noise.
 
+**Same session: swing recommendation archive (user feature request; tests
+443 → 450).** Spec + plan in docs/superpowers/{specs,plans}/2026-07-16-*.
+Archive = snapshot + episode-scoped suppression: `archived_setups` table
+(migration 0008) copies the trade_setups row (immune to retention) with a
+`suppressing` flag; `activeSetups()` filters suppressed (ticker,setupType)
+pairs — which also removes them from Summary's setup strip, watchlist rows,
+and the morning brief; `scanForSetups` clears the flag when a scan stops
+detecting the pair, so a future NEW episode lists normally while the
+snapshot stays as history. Detection rows keep inserting while suppressed —
+the setup-outcome backtest loses nothing. Three POST routes
+(/api/setups/archive|unarchive|note); /swing has an Archive button per
+recommendation and a collapsed native-`<details>` "Archived recommendations
+(N)" section (snapshot numbers, live price, editable note, Unarchive, Trade
+with stale-snapshot caveat). Live-verified end-to-end: archived AAPL
+momentum_continuation → left the table, survived a real /api/refresh scan
+(suppressing stayed 1 while the detection row re-inserted), note updated,
+unarchived → row returned, archive (0).
+
 ## 2026-07-11 session — audit of the modules the quality pass skipped
 
 The 2026-07-10 repo quality pass left sectorScout, companyThesisScout, and
