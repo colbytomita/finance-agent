@@ -82,13 +82,15 @@ This is a **single-user, localhost tool** — it has no authentication or CSRF p
 | Command | What it does |
 |---|---|
 | `npm run dev` / `build` / `start` | Next.js app |
-| `npm run jobs` | cron scheduler (market-aware refresh, catalyst scan, daily maintenance incl. retention, backtest, backup) |
+| `npm run jobs` | background scheduler (market-aware refresh + due-check-driven catalyst scan and daily maintenance incl. retention, backtest, backup) |
+| `npm run watchdog` | one heartbeat check; notifies if the job runner is down — normally run by the watchdog task |
 | `npm test` | vitest suite (pure logic + in-memory-SQLite persistence tests — 379 tests) |
 | `npm run typecheck` | strict TypeScript check |
 | `npm run db:generate` | generate a SQL migration in `drizzle/` after editing `src/db/schema.ts` |
 | `npm run db:restore -- <file>` | restore the database from a `data/backups/` file (see below); snapshots the current DB first |
 | `npm run db:seed` | optional demo data — not required; the app is designed to run on your real data |
 | `scripts/install-jobs-task.ps1` | (Windows, opt-in) register a Scheduled Task so `npm run jobs` starts at logon and restarts on failure; `uninstall-jobs-task.ps1` removes it |
+| `scripts/install-watchdog-task.ps1` | (Windows, opt-in) register a task that runs the watchdog every 30 min; `uninstall-watchdog-task.ps1` removes it |
 
 ### Keeping the scheduler running (Windows)
 
@@ -99,15 +101,28 @@ badge go red. To keep it running unattended, register it as a Scheduled Task
 
 ```powershell
 # from the project root, in PowerShell
-scripts\install-jobs-task.ps1          # register: runs `npm run jobs` at logon, restarts on failure
-Start-ScheduledTask -TaskName FinanceAgentJobs   # start it now without logging off
-scripts\uninstall-jobs-task.ps1        # remove it
+scripts\install-jobs-task.ps1 -StartNow   # register + start: runs `npm run jobs` at logon, hidden, restarts on failure
+Stop-ScheduledTask -TaskName FinanceAgentJobs    # stop it (it restarts at next logon)
+scripts\uninstall-jobs-task.ps1           # remove it
 ```
 
-Output is appended to `data/logs/jobs.log` (git-ignored). The task runs as your
-user with your environment (so it finds `node`/`npm` and reads `.env`). If you
-already have `npm run jobs` in a terminal, stop that one so you don't run two
-schedulers against the same database.
+Output is appended to `data/logs/jobs.log` (git-ignored). The task runs
+hidden — there is no console window to close by accident; stop it with
+`Stop-ScheduledTask`. The scheduler also holds a single-instance lock
+(`data/jobs.lock`), so an ad-hoc `npm run jobs` terminal and the task can
+never run two schedulers against the same database — whichever starts
+second exits immediately with a message.
+
+### Knowing when the scheduler dies
+
+The header badge and /status only help while you're looking at the app. The
+opt-in **watchdog task** watches from outside it: every 30 minutes it checks
+the scheduler heartbeat in the database and, if it's more than 10 minutes
+old, sends a desktop toast (plus ntfy push, if you configured a topic in
+Settings) — one alert per outage, repeated every 6 hours while it stays down.
+
+    scripts\install-watchdog-task.ps1      # register (runs `npm run watchdog` every 30 min)
+    scripts\uninstall-watchdog-task.ps1    # remove it
 
 ### Restoring a backup
 

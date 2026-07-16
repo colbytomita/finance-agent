@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "jobs": "tsx src/jobs/scheduler.ts",
+    "watchdog": "tsx src/jobs/watchdog.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:restore": "tsx src/db/restore.ts",
     "test": "vitest run",
