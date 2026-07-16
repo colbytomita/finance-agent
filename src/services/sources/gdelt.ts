@@ -124,12 +124,59 @@ export function buildGdeltQueriesFor(
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Per-run request-failure tally (roadmap #56) — every path that used to be silent. */
+export interface GdeltFailures {
+  /** 429 responses seen (fast enough to arrive before the timeout). */
+  throttled: number;
+  /** Requests aborted by the per-request timeout — a slow 429 lands here. */
+  timedOut: number;
+  /** HTTP 200 whose body wasn't the expected JSON (GDELT error text). */
+  badPayload: number;
+  /** Non-ok, non-429 statuses and non-timeout network errors. */
+  httpError: number;
+  /** Head of the first non-JSON body, for diagnosis. */
+  badPayloadSample?: string;
+}
+
+export interface GdeltFetchResult {
+  items: RawEventItem[];
+  failures: GdeltFailures;
+}
+
+/** "1 throttled (429), 6 timed out" — only the nonzero classes. Pure. */
+export function describeGdeltFailures(f: GdeltFailures): string {
+  const parts: string[] = [];
+  if (f.throttled > 0) parts.push(`${f.throttled} throttled (429)`);
+  if (f.timedOut > 0) parts.push(`${f.timedOut} timed out`);
+  if (f.badPayload > 0)
+    parts.push(
+      `${f.badPayload} bad payload` + (f.badPayloadSample ? ` (e.g. "${f.badPayloadSample}")` : ""),
+    );
+  if (f.httpError > 0) parts.push(`${f.httpError} http error`);
+  return parts.join(", ");
+}
+
 /**
- * Fetch news for each query. GDELT is free but slow and rate-limits aggressively
- * (~1 request / 5s; bursts return HTTP 429). To stay responsive and avoid
- * grinding through dozens of throttled requests, we: cap the number of queries
- * per run, time-box each request, space requests out a little, and STOP as soon
- * as we hit a 429 (further calls would just be throttled too — they retry next run).
+ * Rotate a query list by a seed (e.g. day number) so a different batch leads
+ * each run — when a run dies early to throttling, coverage still cycles
+ * through every company over successive days instead of starving the tail. Pure.
+ */
+export function rotateQueries<T>(queries: T[], seed: number): T[] {
+  if (queries.length === 0) return [];
+  const k = ((seed % queries.length) + queries.length) % queries.length;
+  return [...queries.slice(k), ...queries.slice(0, k)];
+}
+
+/**
+ * Fetch news for each query, reporting every failure class (roadmap #56).
+ * GDELT is free but rate-limits hard: its stated floor is ONE request per 5
+ * seconds, and observed penalties last minutes — during which even the 429
+ * response can take >10s to arrive. The old defaults (1.5s spacing, 10s
+ * timeout) therefore self-inflicted throttling and then hid it: the abort
+ * fired before the slow 429 landed, the catch swallowed it, and a week of
+ * runs recorded zero items with zero errors. Now: spacing above the stated
+ * floor, a timeout generous enough to actually SEE a slow 429, one polite
+ * Retry-After retry, and a failures tally the caller can surface.
  */
 export async function fetchGdeltNews(
   queries: string[],
@@ -141,14 +188,16 @@ export async function fetchGdeltNews(
     perRequestTimeoutMs?: number;
     spacingMs?: number;
   } = {},
-): Promise<RawEventItem[]> {
+): Promise<GdeltFetchResult> {
   const fetchFn = opts.fetchFn ?? fetch;
   const maxPerQuery = Math.min(75, Math.max(5, opts.maxPerQuery ?? 25));
   const timespan = opts.timespan ?? "3d";
   const maxQueries = Math.max(1, opts.maxQueries ?? 8);
-  const timeoutMs = Math.max(1000, opts.perRequestTimeoutMs ?? 10000);
-  const spacingMs = Math.max(0, opts.spacingMs ?? 1500);
-  const out: RawEventItem[] = [];
+  const timeoutMs = Math.max(1000, opts.perRequestTimeoutMs ?? 20000);
+  const spacingMs = Math.max(0, opts.spacingMs ?? 5500);
+  const items: RawEventItem[] = [];
+  const failures: GdeltFailures = { throttled: 0, timedOut: 0, badPayload: 0, httpError: 0 };
+  let retriedAfter429 = false;
 
   const selected = queries.slice(0, maxQueries);
   for (let i = 0; i < selected.length; i++) {
@@ -162,20 +211,40 @@ export async function fetchGdeltNews(
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (res.status === 429) {
-        // Rate limited — stop; remaining queries retry next run. GDELT throttles
-        // to ~1 request / 5s, so continuing would just collect more 429s.
+        failures.throttled++;
+        // One polite retry when GDELT tells us exactly how long to wait.
+        const retryAfter = Number.parseInt(res.headers.get("retry-after") ?? "", 10);
+        if (!retriedAfter429 && Number.isFinite(retryAfter) && retryAfter >= 0 && retryAfter <= 15) {
+          retriedAfter429 = true;
+          await sleep(retryAfter * 1000);
+          i--; // re-run this query
+          continue;
+        }
+        // Otherwise stop; remaining queries retry next run — continuing would
+        // just extend the penalty window.
         console.warn(
-          `[gdelt] rate limited (429) after ${out.length} item(s); stopping this run — try again in a few minutes`,
+          `[gdelt] rate limited (429) after ${items.length} item(s); stopping this run — try again in a few minutes`,
         );
         break;
       }
-      if (!res.ok) continue;
-      const json = await res.json().catch(() => ({}));
-      out.push(...parseGdelt(json, q));
-    } catch {
-      // Timeout or network error — skip this query; others still contribute.
+      if (!res.ok) {
+        failures.httpError++;
+        continue;
+      }
+      const text = await res.text();
+      try {
+        items.push(...parseGdelt(JSON.parse(text), q));
+      } catch {
+        // 200 with GDELT's plain-text error body — the old silent-zero path.
+        failures.badPayload++;
+        if (!failures.badPayloadSample) failures.badPayloadSample = text.slice(0, 80).trim();
+      }
+    } catch (e) {
+      const name = (e as Error)?.name ?? "";
+      if (name === "TimeoutError" || name === "AbortError") failures.timedOut++;
+      else failures.httpError++;
     }
     if (spacingMs > 0 && i < selected.length - 1) await sleep(spacingMs);
   }
-  return out;
+  return { items, failures };
 }

@@ -8,7 +8,13 @@ import { alertWatchedEntities, type EntityMentionBatch } from "./watchedEntities
 import { extractEvents, type ExtractedEvent } from "./eventExtraction";
 import type { RawEventItem } from "./sources/types";
 import { fetchEdgarFilings } from "./sources/secEdgar";
-import { fetchGdeltNews, buildGdeltQueriesFor, type GdeltQueryItem } from "./sources/gdelt";
+import {
+  fetchGdeltNews,
+  buildGdeltQueriesFor,
+  describeGdeltFailures,
+  rotateQueries,
+  type GdeltQueryItem,
+} from "./sources/gdelt";
 import { fetchIrFeeds, type IrFeed } from "./sources/irRss";
 import { makeResolver } from "./sources/tickerMap";
 import { errorMessage, nowIso } from "@/lib/util";
@@ -209,9 +215,20 @@ async function ingestCore(opts: IngestOptions = {}): Promise<IngestResult> {
   }
   if (sources.gdelt && gdeltQueries.length > 0) {
     try {
-      const items = await fetchGdeltNews(gdeltQueries, { fetchFn: opts.fetchFn });
+      // Rotate which batch leads by day (roadmap #56): when a run dies early
+      // to throttling, coverage still cycles through every company over
+      // successive days instead of starving the tail of the list.
+      const rotated = rotateQueries(gdeltQueries, Math.floor(Date.now() / 86_400_000));
+      const { items, failures } = await fetchGdeltNews(rotated, { fetchFn: opts.fetchFn });
       raw.push(items);
       result.bySource["gdelt"] = items.length;
+      const failTotal =
+        failures.throttled + failures.timedOut + failures.badPayload + failures.httpError;
+      // A zero with failures is an OUTAGE, not "no news" — say so in the run
+      // log (flows to ingestion_runs.errors_json and the /events run list).
+      if (items.length === 0 && failTotal > 0) {
+        result.errors.push(`gdelt: 0 items — ${describeGdeltFailures(failures)}`);
+      }
     } catch (e) {
       result.errors.push(`gdelt: ${errorMessage(e)}`);
     }

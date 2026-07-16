@@ -506,7 +506,9 @@ export async function gatherThesisEvidence(opts: {
       timespan: "30d",
       spacingMs: 0,
       perRequestTimeoutMs: 8000,
-    }).catch(() => []);
+    })
+      .then((r) => r.items)
+      .catch(() => []);
     evidence.push(...items.slice(0, 8).map((it) => rawItemToEvidence(it, "news", false)));
   }
 

@@ -52,6 +52,24 @@ End state: FinanceAgentJobs Running (hidden, new code, lock held),
 FinanceAgentWatchdog Ready, today's maintenance + catalyst_scan stamped ok,
 /status card live, jobs.log clean of cron banners and parser noise.
 
+**Same session: roadmap v7 (#56) — GDELT throttle-blindness (tests 450 →
+458).** Post-v6 forensics: gdelt fetched 0 items in EVERY recorded run since
+≥07-10 with zero errors. Root cause chain, proven by live probes: 1.5s
+request spacing violates GDELT's 1-per-5s floor → multi-minute penalty
+windows → **the throttled 429 response itself takes >10s to arrive, past the
+old 10s timeout, so the abort fired first and the empty catch swallowed it**
+— the connector never saw the 429, never warned, never backed off. Fix:
+`fetchGdeltNews` returns `{items, failures}` (throttled/timedOut/badPayload/
+httpError + sample), spacing 5500ms, timeout 20s, one polite Retry-After
+retry, `rotateQueries` day-rotation so early-death runs still cycle
+coverage; ingestCore records `gdelt: 0 items — <reasons>` into
+ingestion_runs.errors_json when zero-with-failures. First live run: exactly
+that error recorded (still throttled — penalty needs days of politeness to
+decay; the /status card + /events now show it loudly). Also: the old runner
+double-ran maintenance this morning (startup catch-up + 08:00 cron, 17:48 +
+18:02 runs) — the exact duplication #52 eliminated; it was the old code's
+last day.
+
 **Same session: swing recommendation archive (user feature request; tests
 443 → 450).** Spec + plan in docs/superpowers/{specs,plans}/2026-07-16-*.
 Archive = snapshot + episode-scoped suppression: `archived_setups` table

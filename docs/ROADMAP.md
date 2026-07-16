@@ -16,8 +16,13 @@ the penalty. That is why a week of dead runs shows zero errors and only one
 
 ## v7 — Tier 1: data-source truth (continued)
 
-- [ ] **56. GDELT: obey the rate limit and make silent failures loud**
-  *(small–medium)*
+- [x] **56. GDELT: obey the rate limit and make silent failures loud**
+  *(small–medium — done 2026-07-16; first live run after the fix recorded
+  `gdelt: 0 items — 1 throttled (429)` in the run's errors — the 20s timeout
+  let the connector finally SEE the slow 429 and stop after one request
+  instead of hammering eight blind. The penalty window needs days of polite
+  behavior to decay; watch the /status card — the failure is loud now either
+  way.)*
   **Why:** the source has been dark ≥6 days with zero errors recorded.
   `fetchGdeltNews` never throws: 429 stops the run with only a console.warn,
   a 200 whose body isn't JSON parses to `{}` → zero articles, and a
