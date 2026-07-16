@@ -102,16 +102,19 @@ badge go red. To keep it running unattended, register it as a Scheduled Task
 ```powershell
 # from the project root, in PowerShell
 scripts\install-jobs-task.ps1 -StartNow   # register + start: runs `npm run jobs` at logon, hidden, restarts on failure
-Stop-ScheduledTask -TaskName FinanceAgentJobs    # stop it (it restarts at next logon)
+scripts\stop-jobs-task.ps1                # stop it (it starts again at next logon)
 scripts\uninstall-jobs-task.ps1           # remove it
 ```
 
 Output is appended to `data/logs/jobs.log` (git-ignored). The task runs
-hidden — there is no console window to close by accident; stop it with
-`Stop-ScheduledTask`. The scheduler also holds a single-instance lock
-(`data/jobs.lock`), so an ad-hoc `npm run jobs` terminal and the task can
-never run two schedulers against the same database — whichever starts
-second exits immediately with a message.
+hidden — there is no console window to close by accident. Stop it with
+`scripts\stop-jobs-task.ps1`, not bare `Stop-ScheduledTask`: stopping the
+task only kills the hidden launcher, and the npm/node tree underneath
+keeps running as an orphan (observed live); the stop script also
+terminates the scheduler process recorded in `data/jobs.lock`. That lock
+is the single-instance guard — an ad-hoc `npm run jobs` terminal and the
+task can never run two schedulers against the same database; whichever
+starts second exits immediately with a message.
 
 ### Knowing when the scheduler dies
 

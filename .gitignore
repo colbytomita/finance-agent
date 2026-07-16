@@ -15,3 +15,5 @@ playwright-report/
 test-results/
 data/backups/
 data/logs/
+data/jobs.lock
+data/watchdog-state.json

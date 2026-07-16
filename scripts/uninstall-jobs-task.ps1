@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Remove the Finance Agent background-scheduler Scheduled Task registered by
   scripts/install-jobs-task.ps1.
@@ -18,7 +18,9 @@ if (-not $existing) {
     return
 }
 
-try { Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue } catch {}
+# stop-jobs-task.ps1 also kills the npm/node tree — Stop-ScheduledTask alone
+# orphans it (the children aren't in the task's job object; roadmap #51).
+& (Join-Path $PSScriptRoot "stop-jobs-task.ps1")
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 
 Write-Host "Removed scheduled task '$TaskName'." -ForegroundColor Green

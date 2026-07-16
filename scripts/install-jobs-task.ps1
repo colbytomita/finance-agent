@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Register a Windows Scheduled Task that keeps the Finance Agent background
   scheduler (`npm run jobs`) running across logons and restarts it on failure.
@@ -19,6 +19,11 @@
   registration is blocked by policy, re-run from an elevated PowerShell.
 #>
 
+param(
+    # Start the task immediately after registering it.
+    [switch]$StartNow
+)
+
 $ErrorActionPreference = "Stop"
 
 $TaskName = "FinanceAgentJobs"
@@ -28,10 +33,15 @@ $LogFile = Join-Path $LogDir "jobs.log"
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
-# npm is npm.cmd on Windows, so run it through cmd.exe — that also lets us
-# redirect stdout+stderr to the log file.
-$innerCmd = "npm run jobs >> `"$LogFile`" 2>&1"
-$action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$innerCmd`"" -WorkingDirectory $ProjectRoot
+# Launch through the hidden-window VBS wrapper (roadmap #51): a bare cmd.exe
+# action opens a console window at every logon, and closing that window kills
+# the runner. wscript runs it hidden and waits, so the task shows "Running".
+# Output still lands in jobs.log. NOTE: Stop-ScheduledTask kills only the
+# launcher and orphans the npm/node tree (observed live) — stop with
+# scripts/stop-jobs-task.ps1, which also kills the process in data/jobs.lock.
+$vbs = Join-Path $PSScriptRoot "run-hidden.vbs"
+$action = New-ScheduledTaskAction -Execute "wscript.exe" `
+    -Argument "`"$vbs`" jobs data\logs\jobs.log" -WorkingDirectory $ProjectRoot
 
 # Fire at logon; keep running with no execution time limit (the scheduler loops
 # forever); restart up to 3 times, a minute apart, if the process exits with an
@@ -65,13 +75,19 @@ if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) 
 }
 
 Write-Host "Registered scheduled task '$TaskName'." -ForegroundColor Green
-Write-Host "  - Starts 'npm run jobs' at logon (working dir: $ProjectRoot)"
+Write-Host "  - Starts 'npm run jobs' at logon, in a hidden window (no console to close)"
 Write-Host "  - Output appended to: $LogFile"
 Write-Host "  - Restarts on failure; no run-time limit"
 Write-Host ""
-Write-Host "Start it now without logging off:  Start-ScheduledTask -TaskName $TaskName"
+if ($StartNow) {
+    Start-ScheduledTask -TaskName $TaskName
+    Write-Host "Started it now. Check: Get-ScheduledTask -TaskName $TaskName" -ForegroundColor Green
+} else {
+    Write-Host "Start it now without logging off:  Start-ScheduledTask -TaskName $TaskName"
+}
+Write-Host "Stop it:                           scripts\stop-jobs-task.ps1   (also kills the npm/node tree)"
 Write-Host "Check status:                      Get-ScheduledTask -TaskName $TaskName | Get-ScheduledTaskInfo"
 Write-Host "Remove it:                         scripts\uninstall-jobs-task.ps1"
 Write-Host ""
-Write-Host "Tip: if you already have 'npm run jobs' in a terminal, stop that one so you"
-Write-Host "don't run two schedulers against the same database."
+Write-Host "Note: the scheduler holds a single-instance lock — a manual 'npm run jobs'"
+Write-Host "exits immediately while the task is running (and vice versa)."
