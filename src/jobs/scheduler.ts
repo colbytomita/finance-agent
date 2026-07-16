@@ -1,8 +1,7 @@
 // Standalone background-job runner: `npm run jobs`
-// Market-state-aware refresh cadence + daily catalyst maintenance.
+// Market-state-aware refresh cadence + due-check-driven daily/4-hourly jobs (no cron: roadmap #52).
 // Runs alongside `npm run dev`/`start` and shares the same SQLite database.
 
-import cron from "node-cron";
 import { loadDotEnv } from "@/lib/loadEnv";
 // Plain tsx doesn't load .env like Next does (roadmap #40) — without this the
 // scheduler ran keyless: Yahoo-only quotes, no broker order sync, no LLM.
@@ -35,12 +34,7 @@ import { applyEntityEdge } from "@/services/catalystEdge";
 import { fetchEarningsForTickers, fetchUpcomingEarningsForTickers } from "@/services/earnings";
 import { runPerformanceBacktest } from "@/services/signalPerformance";
 import { runRetention, runSqliteHousekeeping } from "@/services/retention";
-import {
-  recordJobRun,
-  getJobHealth,
-  isDailyJobDue,
-  isMaintenanceCatchupDue,
-} from "@/services/jobHealth";
+import { recordJobRun, getJobHealth, isMaintenanceDue, isCatalystScanDue } from "@/services/jobHealth";
 import { integrationsStatus } from "@/services/integrations";
 import { runBackup } from "@/services/backup";
 import { acquireSchedulerLock, releaseSchedulerLock } from "@/services/schedulerLock";
@@ -137,8 +131,8 @@ async function maybeRefresh(): Promise<void> {
   }
 }
 
-// One maintenance at a time, whichever path triggers it (the 08:00 cron, the
-// startup catch-up, or the minute loop's missed-tick catch-up — roadmap #48).
+// One maintenance at a time — the minute loop can tick again mid-run
+// (maintenance takes minutes; the loop fires every 60s — roadmap #48/#52).
 let maintaining = false;
 
 async function runMaintenanceGuarded(reason: string): Promise<void> {
@@ -356,10 +350,9 @@ async function catalystScan(): Promise<void> {
 log("scheduler starting — Ctrl+C or Stop-ScheduledTask to stop");
 log(`tracked tickers: ${getTrackedTickers().join(", ") || "(none yet)"}`);
 
-// Poll ~every minute; maybeRefresh self-throttles to the phase interval.
-// A self-scheduling timer (not cron) avoids node-cron's "missed execution"
-// warnings when the machine sleeps between ticks — on wake it just fires once
-// and reschedules, instead of flushing one warning per skipped minute.
+// Poll ~every minute; maybeRefresh self-throttles to the phase interval and
+// the due-checks below gate the daily/4-hourly jobs. A self-scheduling timer
+// survives machine sleep: on wake it fires once and reschedules.
 async function refreshLoop(): Promise<void> {
   try {
     // Liveness signal for the UI: ticks every minute even when the refresh
@@ -374,36 +367,26 @@ async function refreshLoop(): Promise<void> {
       `alpaca=${integ.alpacaConfigured ? integ.alpacaMode : "off"} llm=${integ.llmConfigured ? "on" : "off"}`,
     );
     await maybeRefresh();
-    // Missed-tick catch-up (roadmap #48): the 08:00 cron doesn't fire if the
-    // machine is asleep at that minute, and the startup catch-up only covers
-    // restarts. Past 08:00 local with a stale last run, run it from here.
-    const lastMaint = getJobHealth().jobs.find((j) => j.job === "daily_maintenance")?.lastRunAt;
-    if (isMaintenanceCatchupDue(lastMaint)) {
-      await runMaintenanceGuarded("catch-up: missed the 08:00 tick");
+    // One trigger mechanism for every job (roadmap #52): the minute loop.
+    // Cron ticks miss whenever the machine sleeps through the exact minute;
+    // due-checks against the persisted last-run recover on the next tick.
+    const health = getJobHealth().jobs;
+    const lastMaint = health.find((j) => j.job === "daily_maintenance")?.lastRunAt;
+    if (isMaintenanceDue(lastMaint)) {
+      await runMaintenanceGuarded("due for today (08:00 local)");
+    } else {
+      // Skip the scan on maintenance ticks — dailyMaintenance already runs
+      // scanYahooNews; back-to-back scans would double-fetch the same feeds.
+      const lastScan = health.find((j) => j.job === "catalyst_scan")?.lastRunAt;
+      if (isCatalystScanDue(lastScan)) {
+        await catalystScan().catch((e) => {
+          log(`catalyst scan failed: ${errorMessage(e)}`);
+          recordJobRun("catalyst_scan", "error", errorMessage(e));
+        });
+      }
     }
   } finally {
     setTimeout(() => void refreshLoop(), 60_000);
-  }
-}
-
-// Catalyst scan every 4 hours on weekdays.
-cron.schedule("0 */4 * * 1-5", () => void catalystScan());
-// Daily maintenance at 8:00 local time (bars, setups, portfolio sync, news).
-cron.schedule("0 8 * * *", () => void runMaintenanceGuarded("08:00 cron"));
-
-// Startup catch-up (roadmap #43): the 08:00 cron only fires while the runner
-// is alive at 08:00 — an ad-hoc terminal runner misses it routinely, which is
-// how zero daily_maintenance runs (and zero backups) accumulated. If the last
-// completed maintenance is missing or >20h old, run it shortly after boot.
-{
-  const lastMaint = getJobHealth().jobs.find((j) => j.job === "daily_maintenance")?.lastRunAt;
-  if (isDailyJobDue(lastMaint)) {
-    log(
-      lastMaint
-        ? `daily maintenance last ran ${lastMaint} — catch-up run in 30s`
-        : "daily maintenance has never completed — catch-up run in 30s",
-    );
-    setTimeout(() => void runMaintenanceGuarded("startup catch-up"), 30_000);
   }
 }
 

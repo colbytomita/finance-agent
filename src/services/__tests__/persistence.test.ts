@@ -5,7 +5,7 @@ import { useTestDb } from "./dbHarness";
 import { upsertWatchlistItem } from "../watchlist";
 import { emitAlert, generateAlerts, listAlerts } from "../alerts";
 import { closeTrade } from "../trades";
-import { recordJobRun, getJobHealth, isDailyJobDue, isMaintenanceCatchupDue } from "../jobHealth";
+import { recordJobRun, getJobHealth, isMaintenanceDue, isCatalystScanDue } from "../jobHealth";
 import { schedulerEnvFromHeartbeat } from "../status";
 import { addMention, findSameDayMention } from "../entityMentions";
 import { runRetention, runSqliteHousekeeping } from "../retention";
@@ -638,41 +638,51 @@ describe("scheduler env from heartbeat (roadmap #41)", () => {
   });
 });
 
-describe("daily-job catch-up due check (roadmap #43)", () => {
-  const h = 3600_000;
-  const now = Date.parse("2026-07-10T18:00:00Z");
-  it("is due when never run, stale, or unparseable; not when recent", () => {
-    expect(isDailyJobDue(null, now)).toBe(true);
-    expect(isDailyJobDue(undefined, now)).toBe(true);
-    expect(isDailyJobDue("not-a-date", now)).toBe(true);
-    expect(isDailyJobDue(new Date(now - 21 * h).toISOString(), now)).toBe(true);
-    expect(isDailyJobDue(new Date(now - 19 * h).toISOString(), now)).toBe(false);
-    expect(isDailyJobDue(new Date(now - 2 * h).toISOString(), now)).toBe(false);
+describe("isMaintenanceDue (roadmap #52)", () => {
+  // Local-time constructor: 2026-07-13 is a Monday.
+  const at = (day: number, hour: number, min = 0) => new Date(2026, 6, day, hour, min);
+  const iso = (d: Date) => d.toISOString();
+
+  it("is never due before the due hour", () => {
+    expect(isMaintenanceDue(iso(at(12, 22, 35)), at(13, 7, 59))).toBe(false);
+    expect(isMaintenanceDue(null, at(13, 7, 59))).toBe(false);
+  });
+
+  it("is due past the hour when it has not completed for today's local date", () => {
+    expect(isMaintenanceDue(null, at(13, 8, 0))).toBe(true);
+    expect(isMaintenanceDue("not-a-date", at(13, 8, 0))).toBe(true);
+    // Ran yesterday 23:50 — under the old >20h rule this would wait until
+    // 19:50 today (the drift that missed 2026-07-12); calendar anchor fires at 08:00.
+    expect(isMaintenanceDue(iso(at(12, 23, 50)), at(13, 8, 0))).toBe(true);
+    // Killed mid-run yesterday evening: completion stamp stays on yesterday.
+    expect(isMaintenanceDue(iso(at(12, 22, 35)), at(13, 8, 0))).toBe(true);
+  });
+
+  it("is not due again once completed today, whatever the hour", () => {
+    expect(isMaintenanceDue(iso(at(13, 3, 0)), at(13, 8, 30))).toBe(false);
+    expect(isMaintenanceDue(iso(at(13, 8, 5)), at(13, 22, 0))).toBe(false);
   });
 });
 
-describe("missed-tick maintenance catch-up (roadmap #48)", () => {
+describe("isCatalystScanDue (roadmap #52)", () => {
+  const at = (day: number, hour: number, min = 0) => new Date(2026, 6, day, hour, min);
+  const iso = (d: Date) => d.toISOString();
   const h = 3600_000;
-  // Local-time constructor: the due-hour check runs on local wall clock.
-  const at = (hour: number, minute = 0) => new Date(2026, 6, 11, hour, minute);
 
-  it("is never due before the due hour, even when stale", () => {
-    expect(isMaintenanceCatchupDue(null, at(7, 59))).toBe(false);
-    expect(isMaintenanceCatchupDue(new Date(at(7).getTime() - 40 * h).toISOString(), at(7, 30))).toBe(false);
+  it("never fires on weekends", () => {
+    expect(isCatalystScanDue(null, at(11, 12, 0))).toBe(false); // Sat
+    expect(isCatalystScanDue(null, at(12, 12, 0))).toBe(false); // Sun
   });
 
-  it("is due past the due hour when stale, never-run, or unparseable", () => {
-    const stale = new Date(at(8, 30).getTime() - 21 * h).toISOString();
-    expect(isMaintenanceCatchupDue(stale, at(8, 30))).toBe(true);
-    expect(isMaintenanceCatchupDue(null, at(8))).toBe(true);
-    expect(isMaintenanceCatchupDue("not-a-date", at(23))).toBe(true);
+  it("fires on a weekday when never run, unparseable, or older than the interval", () => {
+    expect(isCatalystScanDue(null, at(13, 12, 0))).toBe(true);
+    expect(isCatalystScanDue("not-a-date", at(13, 12, 0))).toBe(true);
+    expect(isCatalystScanDue(new Date(at(13, 12, 0).getTime() - 5 * h).toISOString(), at(13, 12, 0))).toBe(true);
   });
 
-  it("is not due past the due hour when the last run is recent", () => {
-    const recent = new Date(at(9).getTime() - 1 * h).toISOString();
-    expect(isMaintenanceCatchupDue(recent, at(9))).toBe(false);
-    // Yesterday's on-time run (25.0h ago at 09:00) IS due; an 18h-old one is not.
-    expect(isMaintenanceCatchupDue(new Date(at(9).getTime() - 18 * h).toISOString(), at(9))).toBe(false);
+  it("stays quiet inside the interval", () => {
+    expect(isCatalystScanDue(new Date(at(13, 12, 0).getTime() - 3 * h).toISOString(), at(13, 12, 0))).toBe(false);
+    expect(isCatalystScanDue(iso(at(13, 11, 59)), at(13, 12, 0))).toBe(false);
   });
 });
 
