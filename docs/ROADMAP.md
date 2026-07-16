@@ -1,3 +1,52 @@
+# Improvement Roadmap — v7 (2026-07-16)
+
+v7 came from the post-v6 forensics pass (2026-07-16 evening): the new /status
+Data sources card and the run log agree that **GDELT has fetched zero items in
+every recorded run since at least 2026-07-10** — spanning the 07-11 audit, so
+not a regression — while `ingestion_runs.errors` stayed empty every time.
+Live probes: a single simple query returns articles (the API works, the IP is
+not permanently blocked), but the connector's 1.5s spacing violates GDELT's
+stated 1-request-per-5-seconds limit and trips multi-minute penalty windows.
+The smoking gun: a throttled 429 response took **11.7 seconds to arrive —
+past the connector's 10s request timeout** — so in production the abort
+fires first, the empty catch swallows it, and the connector never sees the
+429 at all: no warn, no backoff, and the next query 1.5s later re-triggers
+the penalty. That is why a week of dead runs shows zero errors and only one
+429 warning (the one day GDELT answered fast).
+
+## v7 — Tier 1: data-source truth (continued)
+
+- [ ] **56. GDELT: obey the rate limit and make silent failures loud**
+  *(small–medium)*
+  **Why:** the source has been dark ≥6 days with zero errors recorded.
+  `fetchGdeltNews` never throws: 429 stops the run with only a console.warn,
+  a 200 whose body isn't JSON parses to `{}` → zero articles, and a
+  timeout/network error is swallowed by an empty catch. `ingestCore` records
+  `bySource.gdelt = 0`, `errors: []` — indistinguishable from "no news
+  today". Meanwhile the request spacing (1.5s) is below GDELT's documented
+  1-per-5s minimum, so a run of 8 batched queries self-inflicts throttling,
+  and observed penalty windows extend minutes beyond the nominal 5s.
+  **What:** (a) `fetchGdeltNews` gains a diagnostics channel: return
+  `{ items, failures }` (or accept an errors sink) counting per-run
+  `throttled` / `timedOut` / `badPayload` / `httpError` outcomes, with the
+  first offending body head captured for badPayload; `ingestCore` pushes a
+  one-line summary into `result.errors` whenever gdelt produced 0 items AND
+  failures > 0 — it then flows to `ingestion_runs.errors_json`, the /events
+  run list, and the /status card's context for free. (b) Respect the limit:
+  default `spacingMs` 5500 (>5s), honor a `Retry-After` header when present
+  on 429 before giving up, and raise the per-request timeout to 20s (GDELT
+  is slow; a 10s cap plus silent catch is how whole runs vanished). (c)
+  Rotate batch order across runs (persist a cursor or derive from run count)
+  so companies beyond the first batches still get coverage when a run dies
+  early.
+  **Accept:** unit tests with a scripted fetchFn (429 with/without
+  Retry-After, non-JSON 200, timeout, mixed success) assert both the items
+  and the failure counts, plus the ingestCore error-line wiring. Live: the
+  next scheduled ingestion either produces gdelt items or records a
+  human-readable reason in the run's errors — never again a bare silent 0.
+
+---
+
 # Improvement Roadmap — v6 (2026-07-13) — complete
 
 Roadmaps v1–v6 (#1–#55) are **complete** — see below and the archives. v6
