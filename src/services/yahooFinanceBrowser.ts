@@ -61,6 +61,28 @@ function finStreamerValue(html: string, field: string, ticker?: string): number 
   return null;
 }
 
+/**
+ * 2026-07 layout (roadmap #53): the main quote's price moved off fin-streamer
+ * — no `data-symbol="<ticker>"` element exists on the page at all — into
+ * plain spans tagged `data-testid="qsp-price"` / `qsp-price-change-percent`
+ * inside `section[data-testid="quote-price"]`. Exactly one such span renders
+ * per page (sidebar widgets kept the fin-streamer form), so no symbol filter
+ * is needed — or possible: the spans carry no symbol attribute. Change
+ * percents render as "(+1.42%)"; strip the wrapper but keep the sign.
+ */
+function qspTestIdValue(html: string, testId: string): number | null {
+  const m = html.match(new RegExp(`<[a-z-]+\\b[^>]*data-testid="${testId}"[^>]*>([^<]*)<`, "i"));
+  return m ? num(m[1].replace(/[()%+]/g, "").trim()) : null;
+}
+
+/** 2026-07 layout: 52-week range as `data-value="201.50 - 334.68"` on a fin-streamer. */
+function fiftyTwoWeekRangeFromStreamer(html: string): { low: number | null; high: number | null } {
+  const tag = html.match(/<fin-streamer\b[^>]*data-field="fiftyTwoWeekRange"[^>]*>/i)?.[0];
+  const val = tag?.match(/\bdata-value="([^"]+)"/i)?.[1];
+  const parts = (val ?? "").split("-").map((s) => num(s.trim()));
+  return parts.length === 2 ? { low: parts[0], high: parts[1] } : { low: null, high: null };
+}
+
 function detectMarketState(html: string): MarketState {
   // Yahoo embeds marketState in JSON blobs: "marketState":"PRE" etc.
   const m = html.match(/"marketState"\s*:\s*"(PRE|PREPRE|REGULAR|POST|POSTPOST|CLOSED)"/i);
@@ -114,17 +136,28 @@ export function parseYahooQuoteHtml(
     }
   };
 
-  // Use ONLY the symbol-filtered streamer for prices. The JSON range fallback
-  // grabs the first "regularMarketPrice" on the page — usually a sidebar widget's
-  // — which silently mis-prices the stock; better to return null than a wrong price.
-  const regularPrice = safe("regularPrice", () => finStreamerValue(html, "regularMarketPrice", ticker), null);
+  // Prices: the symbol-filtered streamer (pre-2026-07 layout) or the unique
+  // qsp-* span of the new layout. Never a bare JSON/regex scan of the page —
+  // that grabs a sidebar widget's price, which silently mis-prices the stock;
+  // better to return null than a wrong price.
+  const regularPrice = safe(
+    "regularPrice",
+    () => finStreamerValue(html, "regularMarketPrice", ticker) ?? qspTestIdValue(html, "qsp-price"),
+    null,
+  );
+  const range = safe("fiftyTwoWeekRange", () => fiftyTwoWeekRangeFromStreamer(html), {
+    low: null,
+    high: null,
+  });
   const fields: YahooSummaryFields = {
     ticker: ticker.toUpperCase(),
     companyName: safe("companyName", () => extractCompanyName(html, ticker), null),
     regularPrice,
     regularChangePercent: safe(
       "regularChangePercent",
-      () => finStreamerValue(html, "regularMarketChangePercent", ticker),
+      () =>
+        finStreamerValue(html, "regularMarketChangePercent", ticker) ??
+        qspTestIdValue(html, "qsp-price-change-percent"),
       null,
     ),
     preMarketPrice: safe("preMarketPrice", () => finStreamerValue(html, "preMarketPrice", ticker), null),
@@ -140,8 +173,16 @@ export function parseYahooQuoteHtml(
       null,
     ),
     marketState: safe("marketState", () => detectMarketState(html), "UNKNOWN" as MarketState),
-    fiftyTwoWeekHigh: safe("fiftyTwoWeekHigh", () => extractRangeValue(html, "fiftyTwoWeekHigh"), null),
-    fiftyTwoWeekLow: safe("fiftyTwoWeekLow", () => extractRangeValue(html, "fiftyTwoWeekLow"), null),
+    fiftyTwoWeekHigh: safe(
+      "fiftyTwoWeekHigh",
+      () => extractRangeValue(html, "fiftyTwoWeekHigh") ?? range.high,
+      null,
+    ),
+    fiftyTwoWeekLow: safe(
+      "fiftyTwoWeekLow",
+      () => extractRangeValue(html, "fiftyTwoWeekLow") ?? range.low,
+      null,
+    ),
     source: "yahoo-browser",
     sourceUrl,
     capturedAt: now.toISOString(),

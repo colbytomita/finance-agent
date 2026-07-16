@@ -147,3 +147,39 @@ describe("parseYahooQuoteHtml — sidebar widget / wrong-symbol guard", () => {
     expect(parseYahooQuoteHtml(noAapl, "AAPL", URL).regularPrice).toBeNull();
   });
 });
+
+describe("parseYahooQuoteHtml — 2026-07 layout (roadmap #53)", () => {
+  // Live excerpt from data/probe-AAPL.html, 2026-07-16: the main quote's price
+  // moved off fin-streamer (no data-symbol="AAPL" anywhere on the page) into
+  // data-testid="qsp-*" spans; sidebar widgets kept the old fin-streamer form.
+  const HTML_2026_07 = `<html><head><title>Apple Inc. (AAPL) Stock Price</title></head><body>
+    <fin-streamer data-symbol="HOOD" data-field="regularMarketPrice" data-trend="none" data-pricehint="2" value="105.78" active="true"></fin-streamer>
+    <section data-testid="quote-price"><div class="container yf-10g5312"><section data-testid="price-statistic" class="primary yf-z2uro5">
+      <div class="container yf-z2uro5">
+        <span class="price down2 yf-1n64cj base" data-testid="qsp-price">332.15</span>
+        <span class="priceChange txt-positive down2 yf-1n64cj base" data-testid="qsp-price-change">+4.65</span>
+        <span class="priceChangePercent txt-positive down1 yf-1n64cj base" data-testid="qsp-price-change-percent">(+1.42%)</span>
+      </div>
+    </section></div></section>
+    <fin-streamer data-value="201.50 - 334.68" data-trend="none" active="" data-field="fiftyTwoWeekRange" class="yf-gf32ga">201.50 - 334.68</fin-streamer>
+  </body></html>`;
+
+  it("parses price, change percent, and 52-week range from the new markup", () => {
+    const f = parseYahooQuoteHtml(HTML_2026_07, "AAPL", URL);
+    expect(f.regularPrice).toBeCloseTo(332.15);
+    expect(f.regularChangePercent).toBeCloseTo(1.42);
+    expect(f.fiftyTwoWeekLow).toBeCloseTo(201.5);
+    expect(f.fiftyTwoWeekHigh).toBeCloseTo(334.68);
+    expect(f.extractionErrors).toEqual([]);
+  });
+
+  it("keeps the sign on a negative change percent", () => {
+    const html = HTML_2026_07.replace("(+1.42%)", "(-0.87%)");
+    expect(parseYahooQuoteHtml(html, "AAPL", URL).regularChangePercent).toBeCloseTo(-0.87);
+  });
+
+  it("still refuses a sidebar widget's price when the main quote section is missing", () => {
+    const sidebarOnly = `<html><body><fin-streamer data-symbol="HOOD" data-field="regularMarketPrice" value="105.78"></fin-streamer></body></html>`;
+    expect(parseYahooQuoteHtml(sidebarOnly, "AAPL", URL).regularPrice).toBeNull();
+  });
+});
