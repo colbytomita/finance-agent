@@ -450,3 +450,27 @@ export const jobRuns = sqliteTable("job_runs", {
   status: text("status").notNull().default("ok"), // ok | error
   message: text("message"), // last error message when status = error
 });
+
+// User-curated archive of recommended swing setups (spec 2026-07-16). A
+// snapshot of the trade_setups row at archive time — immune to retention
+// thinning — plus `suppressing`: while true, the (ticker, setupType) pair is
+// hidden from the live Recommended list; scanForSetups flips it false when a
+// scan stops detecting the pair (episode over), so a future NEW episode
+// lists normally while the snapshot stays as history.
+export const archivedSetups = sqliteTable("archived_setups", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticker: text("ticker").notNull(),
+  setupType: text("setup_type").notNull(),
+  setupQualityScore: real("setup_quality_score").notNull(),
+  entryRangeLow: real("entry_range_low").notNull(),
+  entryRangeHigh: real("entry_range_high").notNull(),
+  stopLoss: real("stop_loss").notNull(),
+  targetPrice1: real("target_price_1").notNull(),
+  targetPrice2: real("target_price_2"),
+  riskRewardRatio: real("risk_reward_ratio").notNull(),
+  invalidationCondition: text("invalidation_condition"),
+  detectedAt: text("detected_at").notNull(), // from the source setup row
+  archivedAt: text("archived_at").notNull(),
+  note: text("note"),
+  suppressing: integer("suppressing", { mode: "boolean" }).notNull().default(true),
+});
