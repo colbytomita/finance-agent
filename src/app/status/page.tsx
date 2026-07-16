@@ -1,5 +1,5 @@
 import { loadConfig } from "@/lib/config";
-import { getStatusReport } from "@/services/status";
+import { getStatusReport, AMBER_EMPTY_STREAK } from "@/services/status";
 import { HEARTBEAT_STALE_MINUTES } from "@/services/jobHealth";
 
 export const dynamic = "force-dynamic";
@@ -134,6 +134,58 @@ export default function StatusPage() {
                 ))}
               </tbody>
             </table>
+          )}
+        </section>
+
+        <section className="card">
+          <h2 className="card-title">Data sources</h2>
+          {s.sources.ingestion.length === 0 ? (
+            <p className="text-sm text-zinc-500">No ingestion runs recorded yet.</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr><th>Ingestion source</th><th>Last produced</th><th>Empty streak</th></tr>
+              </thead>
+              <tbody>
+                {s.sources.ingestion.map((src) => (
+                  <tr key={src.source}>
+                    <td>{src.source}</td>
+                    <td>{fmtWhen(src.lastProducedAt)}</td>
+                    <td>
+                      {src.emptyStreak >= AMBER_EMPTY_STREAK ? (
+                        <span className="text-amber-400" title="Nothing from this source in its most recent runs — it may be rate-limited or broken.">
+                          {src.emptyStreak} runs dark
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500">{src.emptyStreak === 0 ? "producing" : `${src.emptyStreak}`}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {s.sources.quotes.length > 0 && (
+            <>
+              <h3 className="mt-3 text-xs font-semibold text-zinc-400">Quote transports</h3>
+              <table className="data-table">
+                <thead>
+                  <tr><th>Transport</th><th>Last produced data</th></tr>
+                </thead>
+                <tbody>
+                  {s.sources.quotes.map((q) => (
+                    <tr key={q.source}>
+                      <td>{q.source}</td>
+                      <td>{fmtWhen(q.lastProducedAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-1 text-[11px] text-zinc-600">
+                A fallback transport that is never invoked legitimately goes stale — old is only
+                a problem for the primary you expect to be active.
+              </p>
+            </>
           )}
         </section>
       </div>
