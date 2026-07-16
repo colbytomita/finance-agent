@@ -43,6 +43,7 @@ import {
 } from "@/services/jobHealth";
 import { integrationsStatus } from "@/services/integrations";
 import { runBackup } from "@/services/backup";
+import { acquireSchedulerLock, releaseSchedulerLock } from "@/services/schedulerLock";
 
 const log = (msg: string) => console.log(`[jobs ${nowIso()}] ${msg}`);
 
@@ -339,7 +340,20 @@ async function catalystScan(): Promise<void> {
   log(`catalyst scan done: ${added} new`);
 }
 
-log("scheduler starting — Ctrl+C to stop");
+// Single-instance guard (roadmap #51): a manual `npm run jobs` and the
+// FinanceAgentJobs scheduled task must never both run against the database.
+{
+  const lock = acquireSchedulerLock();
+  if (!lock.acquired) {
+    log(
+      `another scheduler (pid ${lock.holderPid}) is already running against this database — exiting. ` +
+        `Stop it first (Stop-ScheduledTask -TaskName FinanceAgentJobs, or Ctrl+C the other terminal).`,
+    );
+    process.exit(1);
+  }
+}
+
+log("scheduler starting — Ctrl+C or Stop-ScheduledTask to stop");
 log(`tracked tickers: ${getTrackedTickers().join(", ") || "(none yet)"}`);
 
 // Poll ~every minute; maybeRefresh self-throttles to the phase interval.
@@ -398,6 +412,7 @@ cron.schedule("0 8 * * *", () => void runMaintenanceGuarded("08:00 cron"));
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => {
     log(`${sig} — flushing queued notifications and stopping`);
+    releaseSchedulerLock();
     void flushQueuedNotifications().finally(() => process.exit(0));
   });
 }
