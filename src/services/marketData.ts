@@ -9,6 +9,7 @@ import { computeDrawdown, evaluateBuyZone } from "./buyZone";
 import { scoreStock, scoreRowValues, type CatalystInput } from "./scoring";
 import { evaluateTrade } from "./tradeScoring";
 import { detectSetups } from "./setupDetection";
+import { clearEndedSuppressions, pairKey } from "./setupArchive";
 import { isCatalystStale, EARNINGS_CALENDAR_SOURCE } from "./catalysts";
 import { earningsSignalForTicker } from "./earnings";
 import { upsertPortfolioSnapshot } from "./portfolioHistory";
@@ -350,6 +351,7 @@ export function scanForSetups(): number {
   const db = getDb();
   const tickers = getTrackedTickers();
   let found = 0;
+  const detected = new Set<string>();
   // Expire previous active setups before re-scanning.
   db.update(schema.tradeSetups)
     .set({ status: "expired" })
@@ -359,6 +361,7 @@ export function scanForSetups(): number {
     const bars = getBars(ticker);
     if (bars.length < 30) continue;
     for (const setup of detectSetups(bars)) {
+      detected.add(pairKey(ticker, setup.setupType));
       db.insert(schema.tradeSetups)
         .values({
           ticker,
@@ -378,6 +381,9 @@ export function scanForSetups(): number {
       found++;
     }
   }
+  // Archived pairs the scan no longer detects have finished their episode —
+  // stop hiding them so a future NEW episode lists normally (spec 2026-07-16).
+  clearEndedSuppressions(detected);
   return found;
 }
 
