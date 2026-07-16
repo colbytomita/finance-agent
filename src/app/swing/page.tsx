@@ -17,6 +17,8 @@ import { SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { AddTradeForm, CloseTradeButton } from "@/components/forms";
 import { RefreshButton } from "@/components/RefreshButton";
 import { PlaceOrderButton } from "@/components/TradeOrder";
+import { listArchivedSetups } from "@/services/setupArchive";
+import { ArchiveSetupButton, UnarchiveButton, ArchiveNoteInput } from "@/components/SetupArchive";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,7 @@ export default function SwingPage() {
   const stats = journalStats();
   const journal = journalEntries().slice(0, 25);
   const accountValue = currentAccountValue();
+  const archived = listArchivedSetups();
 
   const integrations = integrationsStatus();
   const alpacaConfigured = integrations.alpacaConfigured;
@@ -83,12 +86,13 @@ export default function SwingPage() {
                 <th>Max loss</th>
                 <th>Invalidation / note</th>
                 <th>Order</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {setups.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="py-4 text-center text-zinc-500">
+                  <td colSpan={14} className="py-4 text-center text-zinc-500">
                     No active setups detected. Setups need daily price history (Alpaca) and a refresh.
                   </td>
                 </tr>
@@ -167,6 +171,7 @@ export default function SwingPage() {
                         }}
                       />
                     </td>
+                    <td><ArchiveSetupButton setupId={s.id} ticker={s.ticker} /></td>
                   </tr>
                 );
               })}
@@ -180,6 +185,105 @@ export default function SwingPage() {
             ? `The Trade button sends a user-confirmed order to Alpaca (${alpacaMode}) and logs it as an open trade — nothing is placed automatically.`
             : "Connect Alpaca in .env to enable the Trade button."}
         </p>
+
+        <details className="mt-2">
+          <summary className="cursor-pointer text-sm text-zinc-400 hover:text-zinc-200">
+            Archived recommendations ({archived.length})
+          </summary>
+          {archived.length === 0 ? (
+            <p className="mt-2 text-sm text-zinc-500">
+              Nothing archived. The Archive button on a recommendation keeps a snapshot here and
+              hides it from the list above while the setup lasts.
+            </p>
+          ) : (
+            <div className="mt-2 overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Ticker</th>
+                    <th>Setup</th>
+                    <th>Archived</th>
+                    <th>Entry range</th>
+                    <th>Stop</th>
+                    <th>Target 1</th>
+                    <th>Target 2</th>
+                    <th>R/R</th>
+                    <th>Quality</th>
+                    <th>Current price</th>
+                    <th>Note</th>
+                    <th>Order</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {archived.map((a) => {
+                    const snap = latestSnapshot(a.ticker);
+                    const mid = (a.entryRangeLow + a.entryRangeHigh) / 2;
+                    return (
+                      <tr key={a.id} className={a.suppressing ? "" : "opacity-60"}>
+                        <td>
+                          <Link href={`/stock/${a.ticker}`} className="font-semibold text-sky-300 hover:underline">
+                            {a.ticker}
+                          </Link>
+                          {!a.suppressing && (
+                            <span
+                              className="block text-[10px] text-zinc-600"
+                              title="The setup episode this was archived from has ended — this row is history."
+                            >
+                              episode ended
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-zinc-300">{a.setupType.replace(/_/g, " ")}</td>
+                        <td className="text-xs">{fmtDate(a.archivedAt)}</td>
+                        <td className="tabular-nums">
+                          {fmtMoney(a.entryRangeLow)}–{fmtMoney(a.entryRangeHigh)}
+                        </td>
+                        <td className="tabular-nums text-red-300">{fmtMoney(a.stopLoss)}</td>
+                        <td className="tabular-nums text-emerald-300">{fmtMoney(a.targetPrice1)}</td>
+                        <td className="tabular-nums">{fmtMoney(a.targetPrice2)}</td>
+                        <td className="tabular-nums">{a.riskRewardRatio.toFixed(1)}:1</td>
+                        <td className="tabular-nums">{a.setupQualityScore.toFixed(1)}</td>
+                        <td className="tabular-nums">
+                          {snap?.regularPrice != null ? (
+                            <span className="inline-flex items-center gap-1">
+                              {fmtMoney(snap.regularPrice)}
+                              <Freshness capturedAt={snap.capturedAt} staleMinutes={cfg.staleDataMinutes} />
+                            </span>
+                          ) : (
+                            <span className="text-zinc-600">—</span>
+                          )}
+                        </td>
+                        <td><ArchiveNoteInput id={a.id} initial={a.note} /></td>
+                        <td>
+                          <PlaceOrderButton
+                            ticker={a.ticker}
+                            direction="long"
+                            entryPrice={mid}
+                            stopLoss={a.stopLoss}
+                            targetPrice1={a.targetPrice1}
+                            mode={alpacaMode}
+                            risk={{
+                              minRiskReward: cfg.minRiskReward,
+                              riskPerTradePercent: cfg.riskPerTradePercent,
+                              accountValue,
+                              maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
+                            }}
+                          />
+                        </td>
+                        <td><UnarchiveButton id={a.id} ticker={a.ticker} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="mt-1 text-[11px] text-zinc-600">
+                Archived numbers are a snapshot from when you archived — the entry range and stop
+                may no longer be valid. Re-check the chart before placing an order.
+              </p>
+            </div>
+          )}
+        </details>
       </section>
 
       {/* Open trades */}
