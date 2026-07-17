@@ -54,8 +54,17 @@ export function acquireSchedulerLock(
   }
   try {
     fs.writeFileSync(lockPath, String(pid)); // steal the stale lock
+    // Re-read after writing: if a simultaneous starter also stole this stale
+    // lock, the LAST writer owns it and everyone else backs off — narrows the
+    // read-then-write race between a logon task start and a manual run to the
+    // width of a single write.
+    const now = fs.readFileSync(lockPath, "utf8").trim();
+    if (now !== String(pid)) {
+      const holder = parseInt(now, 10);
+      return { acquired: false, ...(Number.isFinite(holder) ? { holderPid: holder } : {}) };
+    }
   } catch {
-    /* best effort */
+    /* best effort — lock errors never stop the runner */
   }
   return { acquired: true };
 }
