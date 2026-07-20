@@ -88,16 +88,19 @@ export interface GdeltQueryItem {
 
 /**
  * Build GDELT queries from tracked companies, de-duplicated by ticker and by
- * phrase. Companies are batched into OR-queries (default 6 per query) so a real
- * watchlist fits inside GDELT's tight per-run request budget — the downstream
- * extractor attributes each article by its own title, so batching doesn't blur
- * which ticker an event belongs to. Pure (no IO). Order is preserved.
+ * phrase. One company per query by default (batchSize 1): live probes
+ * (roadmap #57) showed GDELT 429s a 3-phrase OR query even from a cold start
+ * 10 minutes idle, while a single-phrase query is served — its 429 body
+ * literally offers to "contact us for larger queries", so OR-batching trips
+ * the cost limiter. The downstream extractor attributes each article by its
+ * own title, so one-per-query costs nothing but coverage speed, which the
+ * #56 day-rotation spreads across runs. Pure (no IO). Order is preserved.
  */
 export function buildGdeltQueriesFor(
   items: GdeltQueryItem[],
   opts: { batchSize?: number; maxCompanies?: number } = {},
 ): string[] {
-  const batchSize = Math.max(1, opts.batchSize ?? 6);
+  const batchSize = Math.max(1, opts.batchSize ?? 1);
   const maxCompanies = Math.max(1, opts.maxCompanies ?? 48);
   const phrases: string[] = [];
   const seenTicker = new Set<string>();
@@ -169,14 +172,15 @@ export function rotateQueries<T>(queries: T[], seed: number): T[] {
 
 /**
  * Fetch news for each query, reporting every failure class (roadmap #56).
- * GDELT is free but rate-limits hard: its stated floor is ONE request per 5
- * seconds, and observed penalties last minutes — during which even the 429
- * response can take >10s to arrive. The old defaults (1.5s spacing, 10s
- * timeout) therefore self-inflicted throttling and then hid it: the abort
- * fired before the slow 429 landed, the catch swallowed it, and a week of
- * runs recorded zero items with zero errors. Now: spacing above the stated
- * floor, a timeout generous enough to actually SEE a slow 429, one polite
- * Retry-After retry, and a failures tally the caller can surface.
+ * GDELT is free but rate-limits hard, and live probes (roadmap #57) showed
+ * the limiter's real budget is far tighter than the stated 1-per-5s floor:
+ * a ~6s completion-to-start gap tripped a 429, every request made during a
+ * penalty re-armed it, and responses run 13–20s (one 429 took 19.1s — a
+ * whisker under the old 20s timeout). There is no multi-day IP penalty; a
+ * cold start works within hours. So: few queries per run (day-rotation
+ * cycles the tail), 20s spacing, a 30s timeout with real headroom, a
+ * doubled pause after any failure (failed requests still count against the
+ * budget), one polite Retry-After retry, and a hard stop on 429.
  */
 export async function fetchGdeltNews(
   queries: string[],
@@ -187,14 +191,17 @@ export async function fetchGdeltNews(
     maxQueries?: number;
     perRequestTimeoutMs?: number;
     spacingMs?: number;
+    /** Injectable pause, for tests (roadmap #57). */
+    sleepFn?: (ms: number) => Promise<void>;
   } = {},
 ): Promise<GdeltFetchResult> {
   const fetchFn = opts.fetchFn ?? fetch;
-  const maxPerQuery = Math.min(75, Math.max(5, opts.maxPerQuery ?? 25));
+  const sleepFn = opts.sleepFn ?? sleep;
+  const maxPerQuery = Math.min(75, Math.max(5, opts.maxPerQuery ?? 10));
   const timespan = opts.timespan ?? "3d";
-  const maxQueries = Math.max(1, opts.maxQueries ?? 8);
-  const timeoutMs = Math.max(1000, opts.perRequestTimeoutMs ?? 20000);
-  const spacingMs = Math.max(0, opts.spacingMs ?? 5500);
+  const maxQueries = Math.max(1, opts.maxQueries ?? 4);
+  const timeoutMs = Math.max(1000, opts.perRequestTimeoutMs ?? 30000);
+  const spacingMs = Math.max(0, opts.spacingMs ?? 20000);
   const items: RawEventItem[] = [];
   const failures: GdeltFailures = { throttled: 0, timedOut: 0, badPayload: 0, httpError: 0 };
   let retriedAfter429 = false;
@@ -205,6 +212,9 @@ export async function fetchGdeltNews(
     const url =
       `${GDELT_BASE}?query=${encodeURIComponent(q)}` +
       `&mode=ArtList&maxrecords=${maxPerQuery}&format=json&sort=DateDesc&timespan=${encodeURIComponent(timespan)}`;
+    // Doubled after a failed request: failures still count against the
+    // server-side budget, so following one at normal spacing trips the 429.
+    let failedThisQuery = false;
     try {
       const res = await fetchFn(url, {
         headers: { Accept: "application/json" },
@@ -216,7 +226,7 @@ export async function fetchGdeltNews(
         const retryAfter = Number.parseInt(res.headers.get("retry-after") ?? "", 10);
         if (!retriedAfter429 && Number.isFinite(retryAfter) && retryAfter >= 0 && retryAfter <= 15) {
           retriedAfter429 = true;
-          await sleep(retryAfter * 1000);
+          await sleepFn(retryAfter * 1000);
           i--; // re-run this query
           continue;
         }
@@ -229,22 +239,28 @@ export async function fetchGdeltNews(
       }
       if (!res.ok) {
         failures.httpError++;
-        continue;
-      }
-      const text = await res.text();
-      try {
-        items.push(...parseGdelt(JSON.parse(text), q));
-      } catch {
-        // 200 with GDELT's plain-text error body — the old silent-zero path.
-        failures.badPayload++;
-        if (!failures.badPayloadSample) failures.badPayloadSample = text.slice(0, 80).trim();
+        failedThisQuery = true;
+      } else {
+        const text = await res.text();
+        try {
+          items.push(...parseGdelt(JSON.parse(text), q));
+        } catch {
+          // 200 with GDELT's plain-text error body — the old silent-zero path.
+          failures.badPayload++;
+          failedThisQuery = true;
+          if (!failures.badPayloadSample) failures.badPayloadSample = text.slice(0, 80).trim();
+        }
       }
     } catch (e) {
       const name = (e as Error)?.name ?? "";
       if (name === "TimeoutError" || name === "AbortError") failures.timedOut++;
       else failures.httpError++;
+      failedThisQuery = true;
     }
-    if (spacingMs > 0 && i < selected.length - 1) await sleep(spacingMs);
+    if (i < selected.length - 1) {
+      const pause = failedThisQuery ? spacingMs * 2 : spacingMs;
+      if (pause > 0) await sleepFn(pause);
+    }
   }
   return { items, failures };
 }

@@ -26,6 +26,7 @@ import { scoreSeries, upcomingEarningsCalendar } from "@/lib/queries";
 import { industryScanTrend, listSectorPicks } from "../sectorScout";
 import { portfolioHistory, upsertPortfolioSnapshot } from "../portfolioHistory";
 import { dedupeSetups } from "../setupPerformance";
+import { archiveSetup } from "../setupArchive";
 import { saveConfig, loadConfig } from "@/lib/config";
 
 // Write-path integration tests against an in-memory SQLite database
@@ -794,5 +795,140 @@ describe("condition alerts auto-ack when the condition clears (roadmap #49)", ()
     generateAlerts();
     expect(unacked("order_fill")).toHaveLength(1);
     expect(unacked("trade_auto_closed")).toHaveLength(1);
+  });
+});
+
+describe("new_setup alerts follow the condition lifecycle (roadmap #58)", () => {
+  const addSetup = (ticker: string, quality: number, setupType = "breakout") => {
+    getDb()
+      .insert(schema.tradeSetups)
+      .values({
+        ticker,
+        setupType,
+        setupQualityScore: quality,
+        entryRangeLow: 100,
+        entryRangeHigh: 102,
+        stopLoss: 95,
+        targetPrice1: 115,
+        riskRewardRatio: 2.0,
+        detectedAt: new Date().toISOString(),
+        status: "active",
+      })
+      .run();
+    return getDb().select().from(schema.tradeSetups).all().at(-1)!;
+  };
+  const unackedSetupAlerts = () =>
+    getDb().select().from(schema.alerts).all().filter((a) => a.alertType === "new_setup" && !a.acknowledged);
+
+  it("emits once while unacked — quality drift can't mint duplicates", () => {
+    // Observed 2026-07-19: back-to-back refresh + maintenance ticks re-scored
+    // the same setups 7.5 → 7.0 and the exact-message dedupe minted twins.
+    const s = addSetup("UNH", 7.5);
+    generateAlerts();
+    expect(unackedSetupAlerts()).toHaveLength(1);
+    getDb().update(schema.tradeSetups).set({ setupQualityScore: 7.0 }).where(eq(schema.tradeSetups.id, s.id)).run();
+    generateAlerts();
+    expect(unackedSetupAlerts()).toHaveLength(1);
+  });
+
+  it("auto-acks when the episode ends", () => {
+    const s = addSetup("META", 7.5);
+    generateAlerts();
+    expect(unackedSetupAlerts()).toHaveLength(1);
+    getDb().update(schema.tradeSetups).set({ status: "invalidated" }).where(eq(schema.tradeSetups.id, s.id)).run();
+    generateAlerts();
+    expect(unackedSetupAlerts()).toHaveLength(0);
+  });
+
+  it("auto-acks when quality decays below the alert bar", () => {
+    const s = addSetup("GS", 7.0);
+    generateAlerts();
+    expect(unackedSetupAlerts()).toHaveLength(1);
+    getDb().update(schema.tradeSetups).set({ setupQualityScore: 6.0 }).where(eq(schema.tradeSetups.id, s.id)).run();
+    generateAlerts();
+    expect(unackedSetupAlerts()).toHaveLength(0); // no longer a surfaced recommendation
+  });
+
+  it("ack + a fresh episode later re-alerts", () => {
+    const s = addSetup("OKE", 7.5);
+    generateAlerts();
+    getDb().update(schema.alerts).set({ acknowledged: true }).where(eq(schema.alerts.ticker, "OKE")).run();
+    getDb().update(schema.tradeSetups).set({ status: "invalidated" }).where(eq(schema.tradeSetups.id, s.id)).run();
+    generateAlerts();
+    expect(unackedSetupAlerts()).toHaveLength(0);
+    addSetup("OKE", 7.2); // a new episode
+    generateAlerts();
+    expect(unackedSetupAlerts()).toHaveLength(1);
+  });
+
+  it("an archived (suppressed) pair does not alert", () => {
+    // Every user-facing surface filters archived pairs via activeSetups();
+    // the alert stream must too, or Archive doesn't actually quiet the setup.
+    const s = addSetup("AAPL", 8.0);
+    archiveSetup(s.id);
+    generateAlerts();
+    expect(unackedSetupAlerts()).toHaveLength(0);
+  });
+});
+
+describe("total-refresh-failure stale waves collapse into one alert (roadmap #59)", () => {
+  // Observed 2026-07-17T04:37Z: the machine woke into a dead network, every
+  // quote failed, and the per-ticker loop emitted 52 data_stale warnings for
+  // what was one fact: the refresh itself was failing.
+  const track = (ticker: string, fresh: boolean) => {
+    upsertWatchlistItem({ ticker });
+    if (fresh) {
+      getDb()
+        .insert(schema.marketPriceSnapshots)
+        .values({ ticker, regularPrice: 100, source: "manual", capturedAt: new Date().toISOString() })
+        .run();
+    }
+  };
+  const staleRows = () =>
+    getDb().select().from(schema.alerts).all().filter((a) => a.alertType === "data_stale" && !a.acknowledged);
+
+  it("emits ONE aggregate row when most of the board is stale", () => {
+    for (let i = 0; i < 12; i++) track(`T${i}`, false);
+    generateAlerts();
+    const r = staleRows();
+    expect(r).toHaveLength(1);
+    expect(r[0].ticker).toBeNull();
+    expect(r[0].message).toContain("12 of 12");
+  });
+
+  it("keeps per-ticker alerts below the wave threshold", () => {
+    for (let i = 0; i < 9; i++) track(`F${i}`, true);
+    for (let i = 0; i < 3; i++) track(`S${i}`, false);
+    generateAlerts();
+    const r = staleRows();
+    expect(r).toHaveLength(3);
+    expect(r.every((a) => a.ticker != null)).toBe(true);
+  });
+
+  it("a large board with a stale minority stays per-ticker (majority rule)", () => {
+    for (let i = 0; i < 18; i++) track(`F${i}`, true);
+    for (let i = 0; i < 12; i++) track(`S${i}`, false);
+    generateAlerts();
+    const r = staleRows();
+    expect(r).toHaveLength(12); // a chunk of dead symbols is not a total-failure signature
+    expect(r.every((a) => a.ticker != null)).toBe(true);
+  });
+
+  it("the aggregate supersedes older per-ticker rows and auto-acks when data freshens", () => {
+    for (let i = 0; i < 9; i++) track(`F${i}`, true);
+    for (let i = 0; i < 3; i++) track(`S${i}`, false);
+    generateAlerts();
+    expect(staleRows()).toHaveLength(3);
+    // The whole board goes stale — the wave replaces the singles.
+    getDb().delete(schema.marketPriceSnapshots).run();
+    generateAlerts();
+    const r = staleRows();
+    expect(r).toHaveLength(1);
+    expect(r[0].ticker).toBeNull();
+    // Freshness returns everywhere → the aggregate clears too.
+    for (let i = 0; i < 9; i++) track(`F${i}`, true);
+    for (let i = 0; i < 3; i++) track(`S${i}`, true);
+    generateAlerts();
+    expect(staleRows()).toHaveLength(0);
   });
 });

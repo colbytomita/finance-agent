@@ -204,6 +204,15 @@ describe("gdelt auto-queries", () => {
     expect(buildGdeltQueriesFor([{ ticker: "F", companyName: null }])).toEqual([]);
     expect(buildGdeltQueriesFor([])).toEqual([]);
   });
+
+  it("puts one company per query by default — GDELT 429s multi-phrase OR queries even cold (roadmap #57)", () => {
+    const queries = buildGdeltQueriesFor([
+      { ticker: "AAPL", companyName: "Apple Inc." },
+      { ticker: "MSFT", companyName: "Microsoft Corporation" },
+      { ticker: "TSLA", companyName: "Tesla, Inc." },
+    ]);
+    expect(queries).toEqual(['"Apple"', '"Microsoft"', '"Tesla"']);
+  });
 });
 
 describe("irRss", () => {

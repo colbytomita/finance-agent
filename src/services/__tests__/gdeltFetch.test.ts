@@ -12,9 +12,13 @@ type Step =
   | { kind: "nonjson"; body: string }
   | { kind: "timeout" };
 
-const scripted = (steps: Step[]): { fetchFn: typeof fetch; calls: () => number } => {
+const scripted = (
+  steps: Step[],
+): { fetchFn: typeof fetch; calls: () => number; urls: string[] } => {
   let calls = 0;
-  const fetchFn = (async () => {
+  const urls: string[] = [];
+  const fetchFn = (async (url: unknown) => {
+    urls.push(String(url));
     const step = steps[Math.min(calls, steps.length - 1)];
     calls++;
     if (step.kind === "timeout") {
@@ -28,7 +32,19 @@ const scripted = (steps: Step[]): { fetchFn: typeof fetch; calls: () => number }
     }
     return new Response(step.body ?? "", { status: step.status, headers: step.headers });
   }) as unknown as typeof fetch;
-  return { fetchFn, calls: () => calls };
+  return { fetchFn, calls: () => calls, urls };
+};
+
+/** Instant sleep that records every requested pause (roadmap #57). */
+const recordingSleep = (): { sleepFn: (ms: number) => Promise<void>; pauses: number[] } => {
+  const pauses: number[] = [];
+  return {
+    sleepFn: (ms: number) => {
+      pauses.push(ms);
+      return Promise.resolve();
+    },
+    pauses,
+  };
 };
 
 const art = (n: number) => ({ url: `https://x.test/${n}`, title: `Headline number ${n}` });
@@ -73,6 +89,32 @@ describe("fetchGdeltNews diagnostics (roadmap #56)", () => {
     expect(res.items).toHaveLength(0);
     expect(res.failures.badPayload).toBe(1);
     expect(res.failures.badPayloadSample).toContain("Please limit requests");
+  });
+
+  it("spaces requests 20s apart by default and caps a run at 4 queries (roadmap #57)", async () => {
+    const { fetchFn, calls, urls } = scripted([{ kind: "ok", articles: [art(1)] }]);
+    const { sleepFn, pauses } = recordingSleep();
+    await fetchGdeltNews(["\"A\"", "\"B\"", "\"C\"", "\"D\"", "\"E\"", "\"F\""], { fetchFn, sleepFn });
+    expect(calls()).toBe(4); // day-rotation (#56) cycles the tail across runs
+    expect(pauses).toEqual([20000, 20000, 20000]); // between requests, none after the last
+    expect(urls[0]).toContain("maxrecords=10"); // "larger queries" get shed — ask for less
+  });
+
+  it("doubles the pause after a non-429 failure — failed requests still count against the budget (roadmap #57)", async () => {
+    const { fetchFn } = scripted([
+      { kind: "ok", articles: [art(1)] },
+      { kind: "status", status: 500 },
+      { kind: "ok", articles: [art(2)] },
+      { kind: "ok", articles: [art(3)] },
+    ]);
+    const { sleepFn, pauses } = recordingSleep();
+    const res = await fetchGdeltNews(["\"A\"", "\"B\"", "\"C\"", "\"D\""], {
+      fetchFn,
+      sleepFn,
+      spacingMs: 100,
+    });
+    expect(res.failures.httpError).toBe(1);
+    expect(pauses).toEqual([100, 200, 100]); // doubled once after the failure, then back to normal
   });
 
   it("counts other HTTP errors without stopping", async () => {

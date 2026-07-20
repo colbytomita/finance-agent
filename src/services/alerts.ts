@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
+import { activeSetups } from "@/lib/queries";
 import { freshness } from "@/lib/format";
 import { nowIso } from "@/lib/util";
 import { currentAccountValue, getLatestSnapshot } from "./marketData";
@@ -25,6 +26,12 @@ export interface EmitAlertOptions {
 
 /** Shorthand for the condition-state alerts in generateAlerts (roadmap #45). */
 const ONCE: EmitAlertOptions = { onceWhileUnacked: true };
+
+/**
+ * Minimum stale tickers before a majority-stale board collapses into one
+ * aggregate alert instead of a per-ticker wave (roadmap #59).
+ */
+const STALE_WAVE_MIN = 10;
 
 /**
  * Emit one alert (de-duplicated: an identical type+message within the last 20h
@@ -96,8 +103,11 @@ function emit(
 // A condition alert should live exactly as long as its condition: #45 stops
 // re-emits while one is unacked; this closes the other half by auto-acking
 // rows whose condition has cleared. Event alerts (order fills/cancels,
-// auto-closes, new_setup, major_catalyst, mentions, morning brief) are
-// records of things that happened — they are never auto-acked here.
+// auto-closes, major_catalyst, mentions, morning brief) are records of
+// things that happened — they are never auto-acked here. new_setup joined
+// the fluid conditions in #58: a setup is not an event but a state with a
+// natural end (its episode), and treating it as an event let quality drift
+// mint duplicate rows while a 113-row unacked backlog accumulated.
 
 /** Condition types that clear as soon as a scan stops finding them true. */
 const FLUID_CONDITION_TYPES = [
@@ -111,6 +121,7 @@ const FLUID_CONDITION_TYPES = [
   "entry_range_reached",
   "concentration",
   "data_stale",
+  "new_setup",
 ];
 
 /**
@@ -304,19 +315,19 @@ export function generateAlerts(): number {
       count(emit("entry_range_reached", "info", `${w.ticker}: price entered your buy zone.`, w.ticker, ONCE));
     }
   }
-  const setups = db
-    .select()
-    .from(schema.tradeSetups)
-    .where(eq(schema.tradeSetups.status, "active"))
-    .all();
-  for (const s of setups) {
+  // activeSetups(), not raw trade_setups: archived (suppressed) pairs are
+  // hidden from every other surface — the alert stream must respect the
+  // archive too (roadmap #58).
+  for (const s of activeSetups()) {
     if (s.setupQualityScore >= 7) {
+      mark("new_setup", s.ticker);
       count(
         emit(
           "new_setup",
           "info",
           `${s.ticker}: ${s.setupType.replace(/_/g, " ")} setup (quality ${s.setupQualityScore.toFixed(1)}, R/R ${s.riskRewardRatio.toFixed(1)}:1).`,
           s.ticker,
+          ONCE,
         ),
       );
     }
@@ -346,13 +357,34 @@ export function generateAlerts(): number {
     ...trades.map((t) => t.ticker),
     ...watch.map((w) => w.ticker),
   ]);
+  const stale: { ticker: string; label: string }[] = [];
   for (const ticker of tickers) {
     const snap = getLatestSnapshot(ticker);
     const f = freshness(snap?.capturedAt ?? null, cfg.staleDataMinutes * 8);
-    if (f.isStale) {
+    if (f.isStale) stale.push({ ticker, label: f.label });
+  }
+  // A majority-stale board is one fact, not N (roadmap #59): when the machine
+  // wakes into a dead network every tracked ticker goes stale at once —
+  // observed 2026-07-17: 52 warnings for a WiFi blip. Collapse the wave into
+  // a single aggregate row (ticker null); below the threshold a stale ticker
+  // is its own story (a delisted symbol, one broken transport) and stays
+  // individually visible.
+  if (stale.length >= STALE_WAVE_MIN && stale.length * 2 >= tickers.size) {
+    mark("data_stale", null);
+    count(
+      emit(
+        "data_stale",
+        "warning",
+        `${stale.length} of ${tickers.size} tracked tickers have stale market data — the refresh can't reach market data (network down or every quote provider failing). Recommendations may be outdated.`,
+        null,
+        ONCE,
+      ),
+    );
+  } else {
+    for (const { ticker, label } of stale) {
       mark("data_stale", ticker);
       count(
-        emit("data_stale", "warning", `${ticker}: market data is ${f.label}. Recommendations may be outdated.`, ticker, ONCE),
+        emit("data_stale", "warning", `${ticker}: market data is ${label}. Recommendations may be outdated.`, ticker, ONCE),
       );
     }
   }

@@ -505,10 +505,11 @@ export async function gatherThesisEvidence(opts: {
       maxQueries: 1,
       timespan: "30d",
       spacingMs: 0,
-      // 20s, not 8s: inside a GDELT penalty window even the 429 response
-      // takes >10s to arrive (measured 11.7s, roadmap #56) — an 8s abort
-      // hides the throttle AND still counts against the penalty server-side.
-      perRequestTimeoutMs: 20000,
+      // 30s, not 8s: GDELT responses run 13–20s even when healthy, and a
+      // throttled 429 took 19.1s to arrive (roadmap #57 probes) — a short
+      // abort hides the throttle AND still counts against the penalty
+      // server-side.
+      perRequestTimeoutMs: 30000,
     })
       .then((r) => r.items)
       .catch(() => []);

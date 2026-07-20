@@ -1,6 +1,75 @@
 # Agent Memory
 
-Last updated: 2026-07-16.
+Last updated: 2026-07-20.
+
+## 2026-07-20 session — roadmap v8 (#57–#59): GDELT budget + alert hygiene
+
+Post-v7 forensics pass over the running system (DB + jobs.log + live GDELT
+probes) → wrote roadmap **v8** in `docs/ROADMAP.md`. Tests 470/40 (was 458),
+typecheck clean, nothing committed (finance-agent rule). Also live-restarted
+the runner (stop-jobs-task.ps1 → Start-ScheduledTask; Running, lock held).
+
+- **#57 GDELT — CODE SHIPPED + TESTED, live fetch UNCONFIRMED (honest
+  blocker).** The v7 "multi-day IP penalty, needs days to decay" theory was
+  **WRONG**: a cold single query returned 200 within hours. Real problem is
+  query **cost + spacing**, proven by probes — a 3-phrase OR at maxrecords=15
+  got 429 on the FIRST request after 10 min idle (idle time didn't reset it →
+  not purely time-based; GDELT's 429 body offers "contact us for larger
+  queries"). Only shape served cold: a single phrase at low maxrecords. Fix
+  in `fetchGdeltNews`/`buildGdeltQueriesFor`: **batchSize 6→1** (one company
+  per query — the extractor attributes by article title, so batching only
+  bought coverage speed, which #56 rotation restores), **maxPerQuery 25→10**,
+  **spacingMs 5500→20000**, **timeout 20s→30s** (a 429 took 19.1s — nearly
+  mis-timed-out), **maxQueries 8→4**, and a **doubled pause after any
+  non-429 failure** (failed requests still count against the budget). New
+  `sleepFn` injection makes the spacing schedule unit-testable. Thesis-scout's
+  single query → 30s timeout too. **The catch:** I ran ~8 probes today and
+  put my OWN IP into a persistent penalty — the only 200 was the session's
+  first request; everything after (incl. single-phrase maxrecords=10 after
+  8 min idle) 429'd. So I could NOT prove a clean fetch tonight and stopped
+  (probing a free API more = rude + self-defeating). Loud-failure path IS
+  proven (07-19 scheduled run recorded `gdelt: 0 items — 1 throttled (429),
+  1 http error`). **NEXT SESSION: (1) the RUNNER is on the 06:13
+  interim build (batchSize=3) — it has final #58 but NOT the final
+  batchSize=1 GDELT code; restart it (`scripts/stop-jobs-task.ps1` then
+  `Start-ScheduledTask -TaskName FinanceAgentJobs`) ONLY after the penalty
+  clears, since a restart immediately fires the overdue catalyst_scan → a
+  GDELT hit. (2) Then check /status Data sources card; if gdelt still 0
+  after a clean window, it's too rate-limited for per-company polling —
+  pivot to their ngrams dataset or drop GDELT.** Item left `[~]` in the
+  roadmap, not `[x]`. Nothing committed — `git status` shows 8 modified
+  files (gdelt.ts, alerts.ts, companyThesisScout.ts, 3 test files, ROADMAP,
+  agent-memory); ready to commit when Colby asks.
+
+- **#58 `new_setup` alert lifecycle — DONE + live-verified.** `new_setup`
+  was an "event" alert (never auto-acked), deduped only by exact message,
+  so quality drift 7.5→7.0 minted duplicates and 113 unacked rows piled up.
+  Reclassified it as a **fluid condition**: added to `FLUID_CONDITION_TYPES`,
+  emitted from `activeSetups()` (so it also honors the swing archive) with
+  `onceWhileUnacked`, marked per ticker with a q≥7 active setup, drained by
+  `ackClearedConditionAlerts` when the episode ends. Trade-off: a 2nd setup
+  type on an already-alerted ticker adds no 2nd row while unacked (/swing
+  shows all). Live: the runner's first new-code scan added **0 new rows**;
+  backlog 113→65 (the 65 are legacy pre-fix duplicates for the 13 tickers
+  whose episodes are STILL active — can't consolidate retroactively, but
+  stop growing and drain as episodes end / #36's 14-day sweep).
+
+- **#59 stale-wave aggregate — DONE (persistence-tested; not live-
+  triggerable without a real outage).** On a machine wake-into-dead-network
+  the per-ticker loop emitted **52 data_stale warnings for one WiFi blip**
+  (observed 07-17T04:37Z). Now `generateAlerts` gathers stale tickers first
+  and, when `≥ STALE_WAVE_MIN` (10) AND ≥50% of the board is stale, emits
+  ONE aggregate `data_stale` warning (ticker null, `onceWhileUnacked`);
+  below threshold stays per-ticker. Marked so #49 auto-ack supersedes older
+  per-ticker rows on the transition and clears the aggregate when freshness
+  returns.
+
+**v8 open discussion (needs Colby, NOT code):** the laptop slept Thu 22:27 →
+Sun 15:43 HST — Friday's whole market session had no refresh/scan/watchdog
+(watchdog shares the machine). Options: `-WakeToRun` pre-market task (changes
+power behavior — ask first), leave machine on during market hours, or accept
+the gaps (equity curve keeps honest holes 07-17/07-18; real-data-only = no
+backfill). Not yet decided.
 
 ## 2026-07-16 session — roadmap v6 (#51–#55): runner resilience
 

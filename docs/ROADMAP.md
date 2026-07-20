@@ -1,4 +1,139 @@
-# Improvement Roadmap — v7 (2026-07-16)
+# Improvement Roadmap — v8 (2026-07-19)
+
+v8 came from the post-v7 forensics pass (2026-07-19 evening), three days
+after #56 shipped. The loud-failure plumbing works — the 07-19 scheduled
+ingestion recorded `gdelt: 0 items — 1 throttled (429), 1 http error` — but
+GDELT is still dark, and live probes **overturned v7's penalty-decay
+theory**: a cold simple query returned 200 just 4 hours after the runner's
+own 429 (no multi-day IP penalty exists), while a connector-shaped batched
+query got 429 even after 30 seconds of politeness, and every request made
+during a penalty re-armed it (4 consecutive 429s at 10–30s spacing).
+Responses are also slow — 13.2s for a successful trivial query, 429s
+arriving at 11–19s — so the current 20s timeout has almost no headroom and
+the 5.5s completion-to-start spacing trips the limiter on the second
+request of nearly every run. Separately, the alert scan showed two hygiene
+problems: a machine-wake network blip on 07-17 emitted **52 `data_stale`
+warnings in one minute**, and back-to-back refresh+maintenance ticks on
+07-19 emitted **duplicate `new_setup` alerts one minute apart** (quality
+drifted 7.5→7.0, defeating the exact-message dedupe) on top of a
+113-row unacked `new_setup` backlog that nothing ever drains.
+
+## v8 — Tier 1: data-source truth (continued)
+
+- [~] **57. GDELT: run within the limiter's real budget** *(small–medium —
+  CODE SHIPPED + TESTED 2026-07-20; loud-failure path verified live;
+  fetch-success UNCONFIRMED and must be watched on /status over the coming
+  days. Honest blocker: I ran ~8 diagnostic requests at GDELT today and put
+  my own IP into a persistent penalty — the only 200 all session was the
+  very first request, hours ago, before any others; every request since
+  (including a single-phrase maxrecords=10 query after 8 min idle) 429'd.
+  So I could not prove a clean fetch tonight without abusing a free API,
+  and stopped. The design (one company/query, maxrecords 10, 20s spacing,
+  30s timeout) is evidence-consistent but the shape-vs-penalty variables
+  stayed confounded. NEXT: once the penalty decays (hours, not days),
+  watch the /status Data sources card / /events. If scheduled runs still
+  show gdelt=0 after a clean window, GDELT is simply too rate-limited for
+  per-company polling — pivot to their suggested ngrams dataset or drop it.)*
+  **Why:** post-#56 runs fail honestly but still fetch zero. Probes
+  (2026-07-19): no long-lived IP penalty — cold start returns articles —
+  but a ~6s completion-to-start gap trips the 429 despite the stated
+  1-per-5s floor, requests during a penalty re-arm it indefinitely, and
+  responses take 13–20s (a 429 took 19.1s — a whisker under the 20s
+  timeout, one jitter away from being miscounted as a timeout). With 5.5s
+  spacing the second request of a run nearly always trips, the run dies,
+  and the source looks permanently dark.
+  **What:** in `fetchGdeltNews`: `spacingMs` 5500 → 20000, per-request
+  timeout 20s → 30s, `maxQueries` 8 → 4 (day-rotation #56 already cycles
+  the tail across runs), and after any non-429 failure double the pause
+  before the next request (failed requests still count against the
+  budget — tonight's run: query 1 http error, query 2 429). Batch cost
+  down: `buildGdeltQueriesFor` batchSize 6 → **1** and `maxPerQuery` 25 →
+  **10**. (Started at batch 3 / maxrecords 15, but a second clean probe
+  settled it: a 3-phrase OR at maxrecords=15 got 429 on the FIRST request
+  after 10 minutes idle — since idle time didn't reset it, the limiter is
+  rejecting on query COST, not spacing. The one shape that returned 200
+  cold was a single phrase at low maxrecords. So one company per query is
+  the only shape reliably served; the extractor attributes by article
+  title, so batching only ever bought coverage speed, which rotation
+  restores.) Thesis-scout's single query gets the same 30s timeout.
+  Worst-case run: 4 × (30s + 20s) ≈ 3.3 min — inside `maxDuration = 300`.
+  **Accept:** unit tests with scripted fetchFn + injected sleep assert the
+  spacing schedule (normal, doubled-after-failure, stop-on-429), one
+  company per query, and maxrecords=10. Live: a cold scheduled run's
+  leading single-phrase query fetches >0 items, or /events records an
+  honest per-class reason (the loud-failure path is already proven — the
+  07-19 run recorded `gdelt: 0 items — 1 throttled (429), 1 http error`).
+
+## v8 — Tier 2: alert hygiene
+
+- [x] **58. `new_setup` alert lifecycle: once-while-unacked + auto-ack when
+  the episode ends** *(small–medium — done 2026-07-20; `new_setup` is now a
+  FLUID_CONDITION_TYPE emitted with `onceWhileUnacked` and marked from
+  `activeSetups()` so it also honors the archive. Live: the runner's first
+  new-code scan added 0 new rows (`0 new alert(s)` in jobs.log) — the
+  onceWhileUnacked guard held against the existing backlog — and the
+  113-row backlog had already dropped to 65 as ended-episode tickers
+  auto-acked. The 65 survivors are legacy duplicates for the 13 tickers
+  whose episodes are STILL active (each was a separate pre-fix daily
+  re-emit >20h apart); they can't consolidate retroactively but stop
+  growing now and drain as each episode ends / #36's 14-day auto-ack
+  sweeps them.)*
+  **Why:** `new_setup` re-emits on every scan for every active q≥7 setup,
+  deduped only by exact message — quality drifting 7.5→7.0 between the
+  01:43 refresh and 01:44 maintenance tick minted duplicate rows for the
+  same setups one minute apart, and 113 unacked rows have accumulated
+  because event alerts are never auto-acked. But a setup is not an event —
+  it is a condition with a natural end (`scanForSetups` already computes
+  episode-end for archive suppression, #swing-archive).
+  **What:** reclassify `new_setup` as a fluid condition at (type, ticker)
+  granularity: emit with `onceWhileUnacked`, `mark("new_setup", ticker)`
+  while any q≥7 active setup exists for the ticker, and let
+  `ackClearedConditionAlerts` drain rows when no such setup remains.
+  Trade-off (documented): a second setup type on an already-alerted ticker
+  won't add a row while the first is unacked — /swing shows every setup
+  regardless.
+  **Accept:** persistence tests — same setup two scans running → one row;
+  quality drift → still one row; episode ends → row auto-acked; ack + new
+  episode → fresh row. Live: the 113-row backlog drains to just tickers
+  with currently-active quality setups on the first scan.
+
+- [x] **59. Collapse total-refresh-failure stale waves into one alert**
+  *(small — done 2026-07-20; `generateAlerts` gathers stale tickers first,
+  then emits ONE aggregate `data_stale` warning (ticker null,
+  `onceWhileUnacked`) when ≥`STALE_WAVE_MIN` (10) AND ≥50% of the board is
+  stale; below that it stays per-ticker. The aggregate is marked so #49
+  auto-ack supersedes older per-ticker rows on the transition and clears
+  the aggregate once freshness returns. Persistence-tested (12/12 → one
+  aggregate; 3/12 → per-ticker; 12/30 minority → per-ticker; supersede +
+  freshen round-trip). Not live-triggerable without a real network
+  outage — the tests stand in for it.)*
+  **Why:** when the machine wakes into a dead network, every tracked
+  ticker is stale at once and the per-ticker loop emits a wave — observed
+  2026-07-17T04:37Z: **52 `data_stale` warnings + one digest push for a
+  WiFi blip**. A wave of identical warnings is one fact wearing 52 rows.
+  **What:** in `generateAlerts`, count stale tickers first; when ≥10 AND
+  ≥50% of tracked, emit ONE aggregate warning (`data_stale`, ticker null:
+  "N of M tracked tickers have stale data — refresh has been failing;
+  check network / runner") instead of per-ticker rows, marked so #49
+  auto-ack clears it when freshness returns. Below threshold, per-ticker
+  behavior unchanged (a single dead symbol stays individually visible).
+  **Accept:** persistence tests — 52/52 stale → exactly one row; 3/52
+  stale → per-ticker rows; aggregate auto-acks when data freshens. Live:
+  present on the next wake-into-blip instead of a wave.
+
+## v8 — Discussion (needs Colby's call, not code yet)
+
+- **Machine-sleep market blindness:** the laptop slept Thu 22:27 →
+  Sun 15:43 HST — Friday's entire market session had no refreshes, no
+  catalyst scan, and no watchdog (it lives on the same machine; #55 noted
+  this). Options when wanted: `-WakeToRun` on a pre-market scheduled
+  task (changes power behavior — ask first), leaving the machine on
+  during market hours, or accepting the gap (equity curve keeps honest
+  holes for 07-17/07-18 — real-data-only means no backfill).
+
+---
+
+# Improvement Roadmap — v7 (2026-07-16) — complete
 
 v7 came from the post-v6 forensics pass (2026-07-16 evening): the new /status
 Data sources card and the run log agree that **GDELT has fetched zero items in
