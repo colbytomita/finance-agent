@@ -64,12 +64,25 @@ the runner (stop-jobs-task.ps1 → Start-ScheduledTask; Running, lock held).
   per-ticker rows on the transition and clears the aggregate when freshness
   returns.
 
-**v8 open discussion (needs Colby, NOT code):** the laptop slept Thu 22:27 →
-Sun 15:43 HST — Friday's whole market session had no refresh/scan/watchdog
-(watchdog shares the machine). Options: `-WakeToRun` pre-market task (changes
-power behavior — ask first), leave machine on during market hours, or accept
-the gaps (equity curve keeps honest holes 07-17/07-18; real-data-only = no
-backfill). Not yet decided.
+- **#60 wake task — BUILT (Colby chose `-WakeToRun`).** The laptop slept
+  Thu 22:27 → Sun 15:43 HST and missed Friday's whole session (the runner is
+  only SUSPENDED while asleep, so it does nothing; watchdog shares the
+  machine). New opt-in `FinanceAgentWake` task: weekday `-WakeToRun` trigger
+  (default 03:10 local, `-WakeAt` param) wakes the machine pre-open, then
+  `scripts/keep-awake.ps1` holds it awake via `SetThreadExecutionState`
+  (ES_SYSTEM_REQUIRED) until 16:05 ET — window computed in US Eastern → local
+  so it's DST-correct for HST; weekends self-skip; released in a `finally`, no
+  permanent power-plan edits. Launched hidden by NEW `scripts/run-hidden-ps.vbs`
+  (mirrors `run-hidden.vbs` for a .ps1 — **needs `cmd /c` or `>>` isn't
+  interpreted**, caught in test). Install/uninstall mirror the watchdog
+  scripts; README section added. **Gotcha caught live: under PS 5.1
+  `[uint32]0x80000000` THROWS** (hex parses as signed int32) — use decimal
+  `[uint32]2147483648`. **Two OS deps `-WakeToRun` can't override (documented):
+  "Allow wake timers" must be ON; a lid-close still forces sleep.** Verified:
+  DST math, PS-5.1 P/Invoke, hidden launcher chain, BOM/CRLF. NOT verified:
+  the multi-hour hold (first proof = next weekday wake). **Colby still needs to
+  run `scripts/install-wake-task.ps1` from an elevated PS** (opt-in, needs
+  elevation like the other task installers).
 
 ## 2026-07-16 session — roadmap v6 (#51–#55): runner resilience
 

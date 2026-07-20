@@ -121,15 +121,33 @@ drifted 7.5→7.0, defeating the exact-message dedupe) on top of a
   stale → per-ticker rows; aggregate auto-acks when data freshens. Live:
   present on the next wake-into-blip instead of a wave.
 
-## v8 — Discussion (needs Colby's call, not code yet)
+## v8 — Tier 3: coverage
 
-- **Machine-sleep market blindness:** the laptop slept Thu 22:27 →
-  Sun 15:43 HST — Friday's entire market session had no refreshes, no
-  catalyst scan, and no watchdog (it lives on the same machine; #55 noted
-  this). Options when wanted: `-WakeToRun` on a pre-market scheduled
-  task (changes power behavior — ask first), leaving the machine on
-  during market hours, or accepting the gap (equity curve keeps honest
-  holes for 07-17/07-18 — real-data-only means no backfill).
+- [x] **60. Wake task: don't sleep through market hours** *(small–medium —
+  done 2026-07-20; Colby chose `-WakeToRun`. The runner is only SUSPENDED
+  while the laptop sleeps, so a machine asleep during market hours does
+  nothing — Friday 07-17's entire session was missed (laptop slept Thu
+  22:27 → Sun 15:43 HST). New opt-in `FinanceAgentWake` task
+  (`scripts/install-wake-task.ps1`, uninstall mirror): a weekday
+  `-WakeToRun` daily trigger (default 03:10 local, `-WakeAt` overridable)
+  wakes the machine pre-open, then `scripts/keep-awake.ps1` — launched
+  hidden via a new `run-hidden-ps.vbs` (mirrors #51's `run-hidden.vbs`
+  but for a .ps1; needs `cmd /c` so `>>` redirection works) — asserts
+  `SetThreadExecutionState(ES_SYSTEM_REQUIRED)` to hold the system awake
+  until 16:05 ET (computed in US Eastern → local, so DST-correct for HST;
+  weekends self-skip) and releases in a `finally`. No permanent power-plan
+  edits. Verified live: DST math (close = 10:05 HST under EDT), the P/Invoke
+  under PS 5.1 (**decimal literals, not hex — `[uint32]0x80000000` throws
+  under 5.1**), the hidden vbs→cmd→powershell→log chain, BOM/CRLF on the
+  new .ps1 files. NOT verifiable tonight: the multi-hour hold itself (a
+  Start-Sleep loop around the proven assertion) — first real proof is the
+  next weekday wake. Two OS deps `-WakeToRun` can't override, documented in
+  README + the install script: "Allow wake timers" must be on, and a
+  lid-close can still force sleep. Colby installs it (needs elevated PS).)*
+  **Why:** every liveness surface plus the whole trading day depends on the
+  machine being awake during market hours; his laptop is his only host and
+  it sleeps. Equity-curve holes for 07-17/07-18 stay honest — real-data
+  only means no backfill.
 
 ---
 

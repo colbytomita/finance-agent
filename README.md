@@ -91,6 +91,7 @@ This is a **single-user, localhost tool** — it has no authentication or CSRF p
 | `npm run db:seed` | optional demo data — not required; the app is designed to run on your real data |
 | `scripts/install-jobs-task.ps1` | (Windows, opt-in) register a Scheduled Task so `npm run jobs` starts at logon and restarts on failure; `uninstall-jobs-task.ps1` removes it |
 | `scripts/install-watchdog-task.ps1` | (Windows, opt-in) register a task that runs the watchdog every 30 min; `uninstall-watchdog-task.ps1` removes it |
+| `scripts/install-wake-task.ps1` | (Windows, opt-in) wake the machine before the US market open and hold it awake through the session; `uninstall-wake-task.ps1` removes it |
 
 ### Keeping the scheduler running (Windows)
 
@@ -126,6 +127,25 @@ Settings) — one alert per outage, repeated every 6 hours while it stays down.
 
     scripts\install-watchdog-task.ps1      # register (runs `npm run watchdog` every 30 min)
     scripts\uninstall-watchdog-task.ps1    # remove it
+
+### Not sleeping through market hours (Windows, opt-in)
+
+The runner is only *suspended* while the laptop sleeps, so a machine asleep
+during market hours does nothing — no refreshes, no catalyst scan, no watchdog
+(that shares the machine). If you don't leave the machine on, register the
+**wake task**: it fires on weekdays with `-WakeToRun` to wake the machine
+before the open, then holds it awake until just after the close (16:00 ET,
+computed DST-correctly for your local clock) and releases. The hold is a
+transient `SetThreadExecutionState` assertion — it makes no permanent power-plan
+changes, and the runner resumes on its own once the system is awake.
+
+    scripts\install-wake-task.ps1          # register (default wake 03:10 local; pass -WakeAt "HH:mm" to change)
+    scripts\uninstall-wake-task.ps1        # remove it
+
+Two OS-level dependencies `-WakeToRun` can't override, so check them or the
+wake won't fire: **"Allow wake timers"** must be on in the active power plan,
+and **closing the lid** can still force sleep — leave it open (or set "do
+nothing" on lid close) during market hours. Logs to `data/logs/wake.log`.
 
 ### Restoring a backup
 
