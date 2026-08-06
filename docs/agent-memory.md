@@ -89,25 +89,31 @@ the fix and not an idle loop. After #62 the 20:38Z refresh appended **0** to
 both. UI re-verified: /stock/NVDA header and its sparkline's 08-06 point both
 read 6.7, matching the in-place-updated row.
 
-**OPEN — needs Colby, do not do it unasked (#65):** the *historical* 50 MB is
-untouched; #61/#62 only stop the growth. A retroactive last-per-ticker-per-day
-thin would delete **63,228 of 64,773 score rows (97.6%, ~49 MB)**. The evidence
-that this loses nothing: the 1,545 rows it would keep is **exactly** the
-`sampledEvents: 1545` in the stored `performance_report_v2` — it deletes
-precisely what `buildScoreEvents` already discards. Still a real deletion, so
-it waits for his word.
+**#65 DONE (Colby approved "shorten the window to ~2 days").**
+`SCORE_THIN_AFTER_DAYS` 30 → **2**, new `DRAWDOWN_THIN_AFTER_DAYS` = 2, and a
+shared `thinToLastPerDay()` helper — `drawdown_metrics` previously had *no*
+thin at all (only an outright delete at 30 days), so its intraday backlog would
+have sat for a month. Live: thinned **38,106 score + 38,106 drawdown rows**,
+deleted 2,915 snapshots; a one-off `VACUUM` (runner stopped for the exclusive
+lock — `PRAGMA optimize` + `wal_checkpoint` do **not** shrink the file, only
+VACUUM does) took it **88.5 MB → 45.2 MB**. Still falling: 25,069 of the 26,667
+remaining score rows are inside the 2-day window and thin to ~106 as they age.
+**Integrity proof:** a full `POST /api/performance` re-run against the thinned
+data returned **sampledEvents 1545 / analyzed 1543 / tickers 55 / calibration
+"mixed" — identical to pre-purge**; only `totalScoreRows` moved (61,805 →
+26,667), which is the raw-row stat by definition.
 
-**OPEN — needs Colby (#63): GDELT is now conclusively dead.** #57's clean
-window has been observed and the answer is no: **12 consecutive scheduled runs,
-07-21 → 08-06, fetched 0 items**, each 24h apart, with the most conservative
-shape the connector can make (1 company/query, maxrecords=10, 20s spacing).
-A single manual probe on 08-06 after ~2.5h idle still returned **429 in
-11.5s**, body: *"…All high-traffic users should switch to our ngrams
-dataset."* Decision is retire / disable+mark-unavailable / pivot to ngrams.
-Note the failure mix also shifted to mostly `http error`, and that class is the
-one #56 left opaque — `GdeltFailures.httpError` merges "non-ok status" and
-"thrown network error" with no status code, no error name, and no log line. If
-GDELT is kept in any form, make that loud first.
+**~~OPEN — needs Colby (#63): GDELT is now conclusively dead.~~ WRONG —
+superseded by the later 2026-08-06 entry at the top of this file. Do not act on
+this paragraph.** It read: 12 consecutive scheduled runs (07-21 → 08-06) fetched
+0 items, plus a manual probe that 429'd, therefore GDELT is too rate-limited to
+use. **The inference was unsound**: those zeros are fully explained by *our*
+connector breaking the run on its first 429 (its only escape was a `Retry-After`
+header GDELT never sends — my own probe that session recorded
+`retry-after: null` and I failed to connect the two). A source returning nothing
+is not evidence about the source until the client has been tested independently.
+GDELT works; the client was throwing the data away. Kept here rather than
+deleted because the reasoning error is the useful part.
 
 **Still not installed:** `FinanceAgentWake` (#60). `Get-ScheduledTask` shows
 only `FinanceAgentJobs` (Running) and `FinanceAgentWatchdog` (Ready). Needs
