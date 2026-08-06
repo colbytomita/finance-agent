@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  canUpdateLiveScoreRow,
   catalystScore,
   combineStockScore,
   DEFAULT_STOCK_WEIGHTS,
+  MATERIAL_SCORE_DELTA,
   momentumScore,
   riskScore,
   scoreStock,
@@ -273,5 +275,39 @@ describe("valuationScore + sentimentScore", () => {
     const pos = sentimentScore([{ impactScore: 4, confidence: "high", status: "occurred" }]);
     const neg = sentimentScore([{ impactScore: -4, confidence: "high", status: "occurred" }]);
     expect(pos.score).toBeGreaterThan(neg.score);
+  });
+});
+
+describe("canUpdateLiveScoreRow (roadmap #61)", () => {
+  const prev = (overallScore: number, calculatedAt: string) => ({ overallScore, calculatedAt });
+
+  it("reuses the row when the same day's score has not moved materially", () => {
+    expect(
+      canUpdateLiveScoreRow(prev(6.4, "2026-08-06T14:02:00.000Z"), 6.4, "2026-08-06T14:04:00.000Z"),
+    ).toBe(true);
+  });
+
+  it("reuses the row for a sub-threshold drift", () => {
+    const drifted = 6.4 + MATERIAL_SCORE_DELTA / 2;
+    expect(
+      canUpdateLiveScoreRow(prev(6.4, "2026-08-06T14:02:00.000Z"), drifted, "2026-08-06T14:04:00.000Z"),
+    ).toBe(true);
+  });
+
+  it("appends a new row once the move reaches the material threshold", () => {
+    const moved = 6.4 + MATERIAL_SCORE_DELTA;
+    expect(
+      canUpdateLiveScoreRow(prev(6.4, "2026-08-06T14:02:00.000Z"), moved, "2026-08-06T14:04:00.000Z"),
+    ).toBe(false);
+    // ...in either direction.
+    expect(
+      canUpdateLiveScoreRow(prev(6.4, "2026-08-06T14:02:00.000Z"), 6.4 - MATERIAL_SCORE_DELTA, "2026-08-06T14:04:00.000Z"),
+    ).toBe(false);
+  });
+
+  it("appends a new row when the UTC day rolls over, however small the move", () => {
+    expect(
+      canUpdateLiveScoreRow(prev(6.4, "2026-08-05T23:58:00.000Z"), 6.4, "2026-08-06T00:00:00.000Z"),
+    ).toBe(false);
   });
 });

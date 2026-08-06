@@ -16,8 +16,27 @@ const SNAPSHOT_RETENTION_DAYS = 7;
 const DRAWDOWN_RETENTION_DAYS = 30;
 /** Score-change feed: the dashboard shows only recent entries. */
 const SCORE_HISTORY_RETENTION_DAYS = 90;
-/** Scores older than this are thinned to the last row per ticker per day. */
-const SCORE_THIN_AFTER_DAYS = 30;
+/**
+ * Scores older than this are thinned to the last row per ticker per day.
+ *
+ * Two days, not thirty (roadmap #65). Before #61 the refresh loop appended a
+ * score row per ticker every ~2 minutes, so a 30-day window meant holding a
+ * month of intraday rows — ~372,000 of them, 50 MB, 57% of the database — to
+ * serve readers that only ever want one row per ticker per day. #61 stopped
+ * the appends at the source; this shortens the window so the backlog they
+ * already produced drains instead of aging out over a month. Keeping two days
+ * still leaves same-day and previous-day rows (including every material
+ * intraday move #61 records) untouched for anything looking at "today".
+ */
+const SCORE_THIN_AFTER_DAYS = 2;
+/**
+ * Drawdown rows older than this are thinned the same way (roadmap #65). Same
+ * history as the scores: #62 stopped the per-refresh appends, and this drains
+ * the ~63,000 intraday rows already banked. Distinct from
+ * DRAWDOWN_RETENTION_DAYS below, which deletes outright at 30 days — this only
+ * collapses a day to its last row, so daily drawdown history survives.
+ */
+const DRAWDOWN_THIN_AFTER_DAYS = 2;
 /**
  * Alerts (roadmap #36): a non-critical alert nobody acknowledged in this many
  * days is no longer actionable — auto-ack it so the unacked feed reflects
@@ -42,6 +61,7 @@ const SETUP_THIN_AFTER_DAYS = 30;
 export interface RetentionResult {
   snapshotsDeleted: number;
   drawdownsDeleted: number;
+  drawdownsThinned: number;
   scoreHistoryDeleted: number;
   scoresThinned: number;
   alertsAutoAcked: number;
@@ -51,6 +71,20 @@ export interface RetentionResult {
 
 const isoDaysAgo = (days: number) =>
   new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+
+/**
+ * Collapse each (ticker, day) older than `cutoff` to that day's last row.
+ * MAX(id) is the day's last row because inserts are chronological and the
+ * in-place updates from #61/#62 only ever touch a ticker's newest row.
+ */
+function thinToLastPerDay(table: string, timeCol: string, cutoff: string): number {
+  const res = getDb().run(
+    sql`DELETE FROM ${sql.raw(table)} WHERE ${sql.raw(timeCol)} < ${cutoff} AND id NOT IN (
+      SELECT MAX(id) FROM ${sql.raw(table)} GROUP BY ticker, substr(${sql.raw(timeCol)}, 1, 10)
+    )`,
+  );
+  return Number(res.changes);
+}
 
 /**
  * Delete rows of `table` older than `cutoff`, keeping each ticker's newest row
@@ -79,6 +113,11 @@ export function runRetention(): RetentionResult {
     "calculated_at",
     isoDaysAgo(DRAWDOWN_RETENTION_DAYS),
   );
+  const drawdownsThinned = thinToLastPerDay(
+    "drawdown_metrics",
+    "calculated_at",
+    isoDaysAgo(DRAWDOWN_THIN_AFTER_DAYS),
+  );
 
   const historyCutoff = isoDaysAgo(SCORE_HISTORY_RETENTION_DAYS);
   const scoreHistoryDeleted = Number(
@@ -87,13 +126,10 @@ export function runRetention(): RetentionResult {
 
   // Thin (don't truncate) old stock scores: for days past the window keep the
   // last score per ticker per day, which is what buildScoreEvents() samples.
-  const thinCutoff = isoDaysAgo(SCORE_THIN_AFTER_DAYS);
-  const scoresThinned = Number(
-    db.run(
-      sql`DELETE FROM stock_scores WHERE calculated_at < ${thinCutoff} AND id NOT IN (
-        SELECT MAX(id) FROM stock_scores GROUP BY ticker, substr(calculated_at, 1, 10)
-      )`,
-    ).changes,
+  const scoresThinned = thinToLastPerDay(
+    "stock_scores",
+    "calculated_at",
+    isoDaysAgo(SCORE_THIN_AFTER_DAYS),
   );
 
   // Alerts (roadmap #36): auto-ack stale non-critical noise, then prune the
@@ -127,6 +163,7 @@ export function runRetention(): RetentionResult {
   return {
     snapshotsDeleted,
     drawdownsDeleted,
+    drawdownsThinned,
     scoreHistoryDeleted,
     scoresThinned,
     alertsAutoAcked,

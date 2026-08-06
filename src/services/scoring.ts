@@ -3,6 +3,7 @@ import type {
   ScoreComponents,
   StockRecommendationLabel,
 } from "@/lib/types";
+import { isSameUtcDay } from "@/lib/util";
 import type { IndicatorSnapshot } from "./indicators";
 import type { DrawdownReport } from "./buyZone";
 
@@ -390,4 +391,36 @@ export function scoreRowValues(score: StockScoreResult) {
     recommendation: score.recommendation,
     confidence: score.confidence,
   };
+}
+
+/**
+ * How far an overall score must move to count as a real change. Shared by the
+ * `score_history` feed and by `canUpdateLiveScoreRow` below — both answer the
+ * same question ("did this score actually move?"), so they must not drift.
+ */
+export const MATERIAL_SCORE_DELTA = 0.5;
+
+/**
+ * Whether a recompute can refresh the ticker's existing `stock_scores` row in
+ * place instead of appending a new one (roadmap #61).
+ *
+ * The refresh loop recomputes every tracked ticker roughly every 2 minutes
+ * while the market is open, but nothing reads intraday score resolution:
+ * `latestScore()` takes the newest row per ticker, and `scoreSeries()` and
+ * `buildScoreEvents()` both collapse to the last row per ticker per day.
+ * Appending regardless cost ~12,400 rows/day (~50 MB, 57% of the database) to
+ * record the 9–34 moves a day that were real. So a row is reused only while it
+ * is still the same UTC day — guaranteeing at least one row per ticker per day
+ * for the daily readers — and the score has not moved materially; a material
+ * move gets its own row, so intraday movement is never lost. Pure.
+ */
+export function canUpdateLiveScoreRow(
+  prev: { overallScore: number; calculatedAt: string },
+  nextOverallScore: number,
+  nowTs: string,
+): boolean {
+  return (
+    isSameUtcDay(prev.calculatedAt, nowTs) &&
+    Math.abs(prev.overallScore - nextOverallScore) < MATERIAL_SCORE_DELTA
+  );
 }

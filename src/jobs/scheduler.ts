@@ -261,6 +261,7 @@ async function dailyMaintenance(): Promise<void> {
       const total =
         ret.snapshotsDeleted +
         ret.drawdownsDeleted +
+        ret.drawdownsThinned +
         ret.scoreHistoryDeleted +
         ret.scoresThinned +
         ret.alertsAutoAcked +
@@ -270,7 +271,8 @@ async function dailyMaintenance(): Promise<void> {
         log(
           `retention: pruned ${ret.snapshotsDeleted} snapshot(s), ${ret.drawdownsDeleted} drawdown(s), ` +
             `${ret.scoreHistoryDeleted} score change(s), thinned ${ret.scoresThinned} score(s) + ` +
-            `${ret.setupsThinned} setup(s), auto-acked ${ret.alertsAutoAcked} stale alert(s), ` +
+            `${ret.drawdownsThinned} drawdown(s) + ${ret.setupsThinned} setup(s), ` +
+            `auto-acked ${ret.alertsAutoAcked} stale alert(s), ` +
             `deleted ${ret.alertsDeleted} old acked alert(s)`,
         );
     } catch (e) {

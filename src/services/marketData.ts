@@ -6,14 +6,20 @@ import { refreshPrices, type RefreshResult } from "./quotes";
 import { getBars, refreshBars } from "./bars";
 import { computeIndicators, type IndicatorSnapshot } from "./indicators";
 import { computeDrawdown, evaluateBuyZone } from "./buyZone";
-import { scoreStock, scoreRowValues, type CatalystInput } from "./scoring";
+import {
+  scoreStock,
+  scoreRowValues,
+  canUpdateLiveScoreRow,
+  MATERIAL_SCORE_DELTA,
+  type CatalystInput,
+} from "./scoring";
 import { evaluateTrade } from "./tradeScoring";
 import { detectSetups } from "./setupDetection";
 import { clearEndedSuppressions, pairKey } from "./setupArchive";
 import { isCatalystStale, EARNINGS_CALENDAR_SOURCE } from "./catalysts";
 import { earningsSignalForTicker } from "./earnings";
 import { upsertPortfolioSnapshot } from "./portfolioHistory";
-import { errorMessage, nowIso } from "@/lib/util";
+import { errorMessage, isSameUtcDay, nowIso } from "@/lib/util";
 import { getTrackedTickers, latestSnapshot } from "@/lib/queries";
 
 // Analysis orchestration: recompute drawdowns, stock scores, trade scores,
@@ -184,23 +190,43 @@ export function recomputeStockAnalysis(ticker: string): TickerAnalysis {
       : null,
   });
 
-  // Persist drawdown metrics.
+  // Persist drawdown metrics. Like the score below (roadmap #61), this used to
+  // append on every ~2-minute refresh — ~12,400 rows/day — even though every
+  // reader (`latestDrawdown()`, the buy-zone alert scan) takes only the newest
+  // row per ticker. Roadmap #62: keep one row per ticker per UTC day, updated
+  // in place. There is no material-change threshold here because there is no
+  // history feed to preserve, unlike `score_history`.
   if (drawdown && price != null) {
-    db.insert(schema.drawdownMetrics)
-      .values({
-        ticker,
-        currentPrice: price,
-        highWaterMark: drawdown.fiftyTwoWeekHigh,
-        drawdownPercent: drawdown.drawdownFrom52wHighPercent,
-        fiftyTwoWeekHigh: drawdown.fiftyTwoWeekHigh,
-        fiftyTwoWeekLow: drawdown.fiftyTwoWeekLow,
-        thirtyDayHigh: drawdown.thirtyDayHigh,
-        drawdownFrom30dHighPercent: drawdown.drawdownFrom30dHighPercent,
-        distanceFromBuyZonePercent: buyZone?.distanceFromBuyZonePercent ?? null,
-        buyZoneStatus: buyZone?.status ?? null,
-        calculatedAt: nowIso(),
-      })
-      .run();
+    const drawdownAt = nowIso();
+    const drawdownRow = {
+      currentPrice: price,
+      highWaterMark: drawdown.fiftyTwoWeekHigh,
+      drawdownPercent: drawdown.drawdownFrom52wHighPercent,
+      fiftyTwoWeekHigh: drawdown.fiftyTwoWeekHigh,
+      fiftyTwoWeekLow: drawdown.fiftyTwoWeekLow,
+      thirtyDayHigh: drawdown.thirtyDayHigh,
+      drawdownFrom30dHighPercent: drawdown.drawdownFrom30dHighPercent,
+      distanceFromBuyZonePercent: buyZone?.distanceFromBuyZonePercent ?? null,
+      buyZoneStatus: buyZone?.status ?? null,
+      calculatedAt: drawdownAt,
+    };
+    const prevDrawdown = db
+      .select({ id: schema.drawdownMetrics.id, calculatedAt: schema.drawdownMetrics.calculatedAt })
+      .from(schema.drawdownMetrics)
+      .where(eq(schema.drawdownMetrics.ticker, ticker))
+      .orderBy(desc(schema.drawdownMetrics.calculatedAt))
+      .limit(1)
+      .get();
+    if (prevDrawdown && isSameUtcDay(prevDrawdown.calculatedAt, drawdownAt)) {
+      db.update(schema.drawdownMetrics)
+        .set(drawdownRow)
+        .where(eq(schema.drawdownMetrics.id, prevDrawdown.id))
+        .run();
+    } else {
+      db.insert(schema.drawdownMetrics)
+        .values({ ticker, ...drawdownRow })
+        .run();
+    }
   }
 
   // Persist stock score + history when it changed.
@@ -211,19 +237,29 @@ export function recomputeStockAnalysis(ticker: string): TickerAnalysis {
     .orderBy(desc(schema.stockScores.calculatedAt))
     .limit(1)
     .get();
-  db.insert(schema.stockScores)
-    .values({
-      ticker,
-      ...scoreRowValues(stockScore),
-      technicalScore: null,
-      reasoningJson: JSON.stringify({
-        ...stockScore.reasoning,
-        weightsUsed: stockScore.weightsUsed,
-      }),
-      calculatedAt: nowIso(),
-    })
-    .run();
-  if (prev && Math.abs(prev.overallScore - stockScore.overallScore) >= 0.5) {
+  const calculatedAt = nowIso();
+  const scoreRow = {
+    ...scoreRowValues(stockScore),
+    technicalScore: null,
+    reasoningJson: JSON.stringify({
+      ...stockScore.reasoning,
+      weightsUsed: stockScore.weightsUsed,
+    }),
+    calculatedAt,
+  };
+  if (prev && canUpdateLiveScoreRow(prev, stockScore.overallScore, calculatedAt)) {
+    // Roadmap #61: same ticker, same day, no material move — refresh the live
+    // row rather than appending a near-duplicate every ~2 minutes.
+    db.update(schema.stockScores)
+      .set(scoreRow)
+      .where(eq(schema.stockScores.id, prev.id))
+      .run();
+  } else {
+    db.insert(schema.stockScores)
+      .values({ ticker, ...scoreRow })
+      .run();
+  }
+  if (prev && Math.abs(prev.overallScore - stockScore.overallScore) >= MATERIAL_SCORE_DELTA) {
     db.insert(schema.scoreHistory)
       .values({
         ticker,

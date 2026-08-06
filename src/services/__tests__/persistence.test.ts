@@ -21,8 +21,8 @@ import {
   upsertUpcomingEarningsCatalyst,
   EARNINGS_CALENDAR_SOURCE,
 } from "../catalysts";
-import { daysToNextEarnings, getCatalystInputs } from "../marketData";
-import { scoreSeries, upcomingEarningsCalendar } from "@/lib/queries";
+import { daysToNextEarnings, getCatalystInputs, recomputeStockAnalysis } from "../marketData";
+import { latestScore, scoreSeries, upcomingEarningsCalendar } from "@/lib/queries";
 import { industryScanTrend, listSectorPicks } from "../sectorScout";
 import { portfolioHistory, upsertPortfolioSnapshot } from "../portfolioHistory";
 import { dedupeSetups } from "../setupPerformance";
@@ -311,6 +311,33 @@ describe("retention", () => {
     const scores = db.select().from(schema.stockScores).all();
     expect(scores).toHaveLength(2);
     expect(scores.some((s) => s.calculatedAt === daysAgo(45, 15))).toBe(true); // kept the day's last
+  });
+
+  it("thins pre-#61 intraday drawdown rows to one per ticker per day (roadmap #65)", () => {
+    const db = getDb();
+    const dd = (ticker: string, at: string) =>
+      db
+        .insert(schema.drawdownMetrics)
+        .values({ ticker, currentPrice: 100, drawdownPercent: -5, calculatedAt: at })
+        .run();
+    // A pre-fix day: three intraday rows for one ticker. Plus a row inside the
+    // 2-day window, which must survive untouched however recent-and-noisy.
+    dd("AAPL", daysAgo(10, 9));
+    dd("AAPL", daysAgo(10, 12));
+    dd("AAPL", daysAgo(10, 15));
+    dd("MSFT", daysAgo(10, 9));
+    dd("AAPL", daysAgo(1, 9));
+    dd("AAPL", daysAgo(1, 15));
+
+    const res = runRetention();
+    expect(res.drawdownsThinned).toBe(2); // the two earlier AAPL rows on the old day
+
+    const rows = db.select().from(schema.drawdownMetrics).all();
+    // AAPL keeps the old day's LAST row + both rows inside the window; MSFT keeps its one.
+    expect(rows).toHaveLength(4);
+    expect(rows.some((r) => r.calculatedAt === daysAgo(10, 15))).toBe(true);
+    expect(rows.some((r) => r.calculatedAt === daysAgo(10, 9) && r.ticker === "MSFT")).toBe(true);
+    expect(rows.filter((r) => r.calculatedAt.startsWith(daysAgo(1).slice(0, 10)))).toHaveLength(2);
   });
 
   it("thins old setups to first-per-day without changing the backtest's episodes (roadmap #38)", () => {
@@ -930,5 +957,130 @@ describe("total-refresh-failure stale waves collapse into one alert (roadmap #59
     for (let i = 0; i < 3; i++) track(`S${i}`, true);
     generateAlerts();
     expect(staleRows()).toHaveLength(0);
+  });
+});
+
+describe("stock score write path — live row, not an append per refresh (roadmap #61)", () => {
+  const TICKER = "ZZTEST";
+  const scoreRows = () =>
+    getDb()
+      .select()
+      .from(schema.stockScores)
+      .where(eq(schema.stockScores.ticker, TICKER))
+      .all();
+
+  it("refreshes the existing row in place when the score has not moved", () => {
+    recomputeStockAnalysis(TICKER);
+    const first = scoreRows();
+    expect(first).toHaveLength(1);
+
+    recomputeStockAnalysis(TICKER);
+    recomputeStockAnalysis(TICKER);
+    const after = scoreRows();
+    // Three refreshes of an unchanged score = one row, freshly timestamped.
+    expect(after).toHaveLength(1);
+    expect(after[0].id).toBe(first[0].id);
+    expect(after[0].calculatedAt >= first[0].calculatedAt).toBe(true);
+    expect(latestScore(TICKER)?.overallScore).toBe(first[0].overallScore);
+  });
+
+  it("appends a new row when the UTC day rolls over", () => {
+    recomputeStockAnalysis(TICKER);
+    const first = scoreRows();
+    expect(first).toHaveLength(1);
+    // Backdate the live row: same score, previous day — the only difference
+    // from the test above, so a second row can only be the day rollover.
+    getDb()
+      .update(schema.stockScores)
+      .set({ calculatedAt: daysAgo(1) })
+      .where(eq(schema.stockScores.id, first[0].id))
+      .run();
+
+    recomputeStockAnalysis(TICKER);
+    expect(scoreRows()).toHaveLength(2);
+    // Each day keeps exactly one point for the sparkline / backtest readers.
+    expect(scoreSeries(TICKER)).toHaveLength(2);
+  });
+
+  it("appends a new row when the score moves materially", () => {
+    recomputeStockAnalysis(TICKER);
+    const first = scoreRows();
+    const moved = first[0].overallScore - 3;
+    getDb()
+      .update(schema.stockScores)
+      .set({ overallScore: moved })
+      .where(eq(schema.stockScores.id, first[0].id))
+      .run();
+
+    recomputeStockAnalysis(TICKER);
+    const after = scoreRows();
+    expect(after).toHaveLength(2);
+    // Same day, so the daily readers still collapse it to one point...
+    expect(scoreSeries(TICKER)).toHaveLength(1);
+    // ...but the move itself is preserved, both as a row and in the feed.
+    expect(after.map((r) => r.overallScore)).toContain(moved);
+    const history = getDb()
+      .select()
+      .from(schema.scoreHistory)
+      .where(eq(schema.scoreHistory.ticker, TICKER))
+      .all();
+    expect(history).toHaveLength(1);
+    expect(history[0].previousScore).toBe(moved);
+  });
+});
+
+describe("drawdown write path — one live row per ticker per day (roadmap #62)", () => {
+  const TICKER = "ZZDD";
+  const ddRows = () =>
+    getDb()
+      .select()
+      .from(schema.drawdownMetrics)
+      .where(eq(schema.drawdownMetrics.ticker, TICKER))
+      .all();
+
+  // A drawdown row is only written when there are bars AND a price, so give
+  // the ticker a real (if tiny) bar history to exercise the path at all.
+  const seedBars = () => {
+    const rows = Array.from({ length: 30 }, (_, i) => ({
+      ticker: TICKER,
+      timeframe: "1Day",
+      barDate: daysAgo(30 - i).slice(0, 10),
+      open: 100 + i,
+      high: 105 + i,
+      low: 95 + i,
+      close: 100 + i,
+      volume: 1_000_000,
+      source: "test",
+    }));
+    getDb().insert(schema.priceBars).values(rows).run();
+  };
+
+  it("refreshes the existing row in place across repeated refreshes", () => {
+    seedBars();
+    recomputeStockAnalysis(TICKER);
+    const first = ddRows();
+    expect(first).toHaveLength(1);
+
+    recomputeStockAnalysis(TICKER);
+    recomputeStockAnalysis(TICKER);
+    const after = ddRows();
+    expect(after).toHaveLength(1);
+    expect(after[0].id).toBe(first[0].id);
+    expect(after[0].calculatedAt >= first[0].calculatedAt).toBe(true);
+  });
+
+  it("appends a new row when the UTC day rolls over", () => {
+    seedBars();
+    recomputeStockAnalysis(TICKER);
+    const first = ddRows();
+    expect(first).toHaveLength(1);
+    getDb()
+      .update(schema.drawdownMetrics)
+      .set({ calculatedAt: daysAgo(1) })
+      .where(eq(schema.drawdownMetrics.id, first[0].id))
+      .run();
+
+    recomputeStockAnalysis(TICKER);
+    expect(ddRows()).toHaveLength(2);
   });
 });
