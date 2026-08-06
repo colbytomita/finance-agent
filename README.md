@@ -28,7 +28,7 @@ It is **decision support, not an autopilot** — it never trades on its own and 
 
 **Research briefs.** Per-stock bull/bear/risk briefs, LLM-generated when an Anthropic key is configured and rule-based otherwise — same shape either way.
 
-**Operational trust.** A header badge shows whether the background job runner is alive ("Jobs 2m ago", red when the heartbeat stops), and `/status` shows integrations health, per-job last runs, database size and row counts, per-ticker price-bar coverage, and backups. Scores and drawdown metrics are written as **one live row per ticker per UTC day, updated in place** rather than appended on every ~2-minute refresh (a score that moves materially still gets its own row, so intraday moves are never lost) — before this the database grew ~13 MB per market day to record a few dozen real changes. Daily maintenance prunes the remaining append-only tables (snapshots, drawdowns, score history; old stock scores are thinned to one per ticker/day, never truncated — Signal Performance replays them), re-runs the Signal Performance backtest so its cached report never goes stale, and writes a daily `VACUUM INTO` backup to `data/backups/` (keeps 7). The watchlist supports **bulk import**: paste a comma/newline ticker list and each symbol is validated against real market data before it's added with a suggested buy zone.
+**Operational trust.** A header badge shows whether the background job runner is alive ("Jobs 2m ago", red when the heartbeat stops), and `/status` shows integrations health, per-job last runs, database size and row counts, per-ticker price-bar coverage, and backups. Scores and drawdown metrics are written as **one live row per ticker per UTC day, updated in place** rather than appended on every ~2-minute refresh (a score that moves materially still gets its own row, so intraday moves are never lost) — before this the database grew ~13 MB per market day to record a few dozen real changes. Daily maintenance prunes the remaining append-only tables (snapshots, drawdowns, score history; stock scores and drawdowns older than two days are thinned to one per ticker/day, never truncated — Signal Performance replays them), re-runs the Signal Performance backtest so its cached report never goes stale, and writes a daily `VACUUM INTO` backup to `data/backups/` (keeps 7). The watchlist supports **bulk import**: paste a comma/newline ticker list and each symbol is validated against real market data before it's added with a suggested buy zone.
 
 ## Catalyst Edge (event study + ingestion + scoring loop)
 
@@ -84,7 +84,7 @@ This is a **single-user, localhost tool** — it has no authentication or CSRF p
 | `npm run dev` / `build` / `start` | Next.js app |
 | `npm run jobs` | background scheduler (market-aware refresh + due-check-driven catalyst scan and daily maintenance incl. retention, backtest, backup) |
 | `npm run watchdog` | one heartbeat check; notifies if the job runner is down — normally run by the watchdog task |
-| `npm test` | vitest suite (pure logic + in-memory-SQLite persistence tests — 500 tests) |
+| `npm test` | vitest suite (pure logic + in-memory-SQLite persistence tests — 501 tests) |
 | `npm run typecheck` | strict TypeScript check |
 | `npm run db:generate` | generate a SQL migration in `drizzle/` after editing `src/db/schema.ts` |
 | `npm run db:restore -- <file>` | restore the database from a `data/backups/` file (see below); snapshots the current DB first |
