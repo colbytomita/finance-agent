@@ -139,6 +139,13 @@ export interface GdeltFailures {
   httpError: number;
   /** Head of the first non-JSON body, for diagnosis. */
   badPayloadSample?: string;
+  /**
+   * What the first http error actually was — "HTTP 503", or an error name and
+   * undici cause code. Without this the class is opaque: it collapses a status
+   * response and a thrown network error into one number, which is exactly why a
+   * month of "N http error" runs could not be diagnosed from the logs.
+   */
+  httpErrorSample?: string;
 }
 
 export interface GdeltFetchResult {
@@ -155,7 +162,10 @@ export function describeGdeltFailures(f: GdeltFailures): string {
     parts.push(
       `${f.badPayload} bad payload` + (f.badPayloadSample ? ` (e.g. "${f.badPayloadSample}")` : ""),
     );
-  if (f.httpError > 0) parts.push(`${f.httpError} http error`);
+  if (f.httpError > 0)
+    parts.push(
+      `${f.httpError} http error` + (f.httpErrorSample ? ` (e.g. ${f.httpErrorSample})` : ""),
+    );
   return parts.join(", ");
 }
 
@@ -180,7 +190,17 @@ export function rotateQueries<T>(queries: T[], seed: number): T[] {
  * cold start works within hours. So: few queries per run (day-rotation
  * cycles the tail), 20s spacing, a 30s timeout with real headroom, a
  * doubled pause after any failure (failed requests still count against the
- * budget), one polite Retry-After retry, and a hard stop on 429.
+ * budget), and one polite Retry-After retry.
+ *
+ * **A single 429 does not end the run** (fixed 2026-08-06). It used to, and the
+ * only escape was a Retry-After retry — a header GDELT does not send, verified
+ * live (`retry-after: null` on every 429). So one throttle killed every run, and
+ * GDELT returned 0 items across all 24 recorded runs while looking "rate
+ * limited" rather than broken. A live run of the exact production shape went
+ * 429, 429, 429, then **200 with 10 articles**: the budget recovers within a
+ * run, so the run has to keep going to see it. `maxConsecutiveThrottled` keeps
+ * that from becoming hammering — a wall of consecutive 429s still stops, and the
+ * day-rotation picks the tail up next run.
  */
 export async function fetchGdeltNews(
   queries: string[],
@@ -193,6 +213,8 @@ export async function fetchGdeltNews(
     spacingMs?: number;
     /** Injectable pause, for tests (roadmap #57). */
     sleepFn?: (ms: number) => Promise<void>;
+    /** Consecutive 429s that end the run. A non-429 outcome resets the count. */
+    maxConsecutiveThrottled?: number;
   } = {},
 ): Promise<GdeltFetchResult> {
   const fetchFn = opts.fetchFn ?? fetch;
@@ -202,9 +224,11 @@ export async function fetchGdeltNews(
   const maxQueries = Math.max(1, opts.maxQueries ?? 4);
   const timeoutMs = Math.max(1000, opts.perRequestTimeoutMs ?? 30000);
   const spacingMs = Math.max(0, opts.spacingMs ?? 20000);
+  const maxConsecutiveThrottled = Math.max(1, opts.maxConsecutiveThrottled ?? 3);
   const items: RawEventItem[] = [];
   const failures: GdeltFailures = { throttled: 0, timedOut: 0, badPayload: 0, httpError: 0 };
   let retriedAfter429 = false;
+  let consecutiveThrottled = 0;
 
   const selected = queries.slice(0, maxQueries);
   for (let i = 0; i < selected.length; i++) {
@@ -222,7 +246,10 @@ export async function fetchGdeltNews(
       });
       if (res.status === 429) {
         failures.throttled++;
-        // One polite retry when GDELT tells us exactly how long to wait.
+        consecutiveThrottled++;
+        // One polite retry when GDELT tells us exactly how long to wait. It
+        // never has in practice — kept because honouring the header is correct
+        // if it ever appears, but nothing below may depend on it.
         const retryAfter = Number.parseInt(res.headers.get("retry-after") ?? "", 10);
         if (!retriedAfter429 && Number.isFinite(retryAfter) && retryAfter >= 0 && retryAfter <= 15) {
           retriedAfter429 = true;
@@ -230,17 +257,24 @@ export async function fetchGdeltNews(
           i--; // re-run this query
           continue;
         }
-        // Otherwise stop; remaining queries retry next run — continuing would
-        // just extend the penalty window.
-        console.warn(
-          `[gdelt] rate limited (429) after ${items.length} item(s); stopping this run — try again in a few minutes`,
-        );
-        break;
-      }
-      if (!res.ok) {
+        if (consecutiveThrottled >= maxConsecutiveThrottled) {
+          console.warn(
+            `[gdelt] ${consecutiveThrottled} consecutive 429s after ${items.length} item(s); ` +
+              `stopping this run — the day-rotation resumes the tail next run`,
+          );
+          break;
+        }
+        // Otherwise carry on to the next query after a longer pause: the budget
+        // recovers within a run, and abandoning here is what kept this source at
+        // zero items for a month.
+        failedThisQuery = true;
+      } else if (!res.ok) {
+        consecutiveThrottled = 0;
         failures.httpError++;
+        if (!failures.httpErrorSample) failures.httpErrorSample = `HTTP ${res.status}`;
         failedThisQuery = true;
       } else {
+        consecutiveThrottled = 0;
         const text = await res.text();
         try {
           items.push(...parseGdelt(JSON.parse(text), q));
@@ -252,9 +286,22 @@ export async function fetchGdeltNews(
         }
       }
     } catch (e) {
-      const name = (e as Error)?.name ?? "";
-      if (name === "TimeoutError" || name === "AbortError") failures.timedOut++;
-      else failures.httpError++;
+      consecutiveThrottled = 0;
+      const err = e as Error & { cause?: { code?: string } };
+      const name = err?.name ?? "";
+      const code = err?.cause?.code ?? "";
+      // Node's own connect/headers/body timeouts are NOT governed by
+      // AbortSignal.timeout and surface as a bare TypeError, so matching on the
+      // name alone files a 10s connect timeout under "http error". That
+      // misclassification is why a month of logs was undiagnosable.
+      if (name === "TimeoutError" || name === "AbortError" || /^UND_ERR_.*TIMEOUT$/.test(code)) {
+        failures.timedOut++;
+      } else {
+        failures.httpError++;
+        if (!failures.httpErrorSample) {
+          failures.httpErrorSample = code ? `${name || "Error"}: ${code}` : name || "network error";
+        }
+      }
       failedThisQuery = true;
     }
     if (i < selected.length - 1) {

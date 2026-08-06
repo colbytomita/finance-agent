@@ -1,3 +1,216 @@
+# Improvement Roadmap — v9 (2026-08-06)
+
+v9 came from the post-v8 forensics pass (2026-08-06). v8 shipped 2026-07-20;
+since then the runner has been up continuously and the machine stayed awake
+through several full market days — the first time the system has run at its
+real duty cycle. That exposed a cost nobody had measured: **the database more
+than doubled in twelve days, 41 MB (07-25 backup) → 88 MB, now +13 MB per
+awake market day.** `dbstat` puts **50.4 MB of the 88 MB (57%) in
+`stock_scores` alone**, and the daily `VACUUM INTO` backup copies the whole
+thing seven times over (`data/backups/` is already 367 MB).
+
+Retention is not broken — it is doing exactly what it says (0 drawdown rows
+past 30d, 0 snapshots past 7d, only 282 score rows past the 30d thin window).
+The write path is the problem: at the market-open cadence the refresh loop
+appends a **full** score row per ticker every ~2 minutes.
+
+Measured on 2026-08-05/06 (the two full awake market days):
+
+| table | rows/day | at steady state (retention window) |
+|---|---|---|
+| `stock_scores` | ~12,400 | ~372,000 (30d thin window) |
+| `drawdown_metrics` | ~12,400 | ~372,000 (30d) |
+| `market_price_snapshots` | ~12,400 | ~87,000 (7d) |
+| `score_history` (material moves) | **9–34** | 90d |
+
+That last row is the whole story: ~12,400 score rows a day are written to
+record 9–34 actual score changes, and **every consumer reads at most one row
+per ticker per day** — `latestScore()` (newest per ticker), `scoreSeries()`
+(sparkline, last-per-day), `buildScoreEvents()` (Signal Performance,
+last-per-day). Nothing reads intraday score resolution.
+
+Separately, GDELT was believed dead for this use — twelve scheduled runs across
+2026-07-21 → 2026-08-06 fetched **0 items every time**, the "clean window" #57
+was left open to observe. **That conclusion was wrong, and #63 records why:** the
+zeros came from our own connector abandoning each run on its first 429, not from
+GDELT withholding data. Fixed 2026-08-06 — a live run of the exact production
+shape now returns real articles.
+
+## v9 — Tier 1: write amplification
+
+- [x] **61. Stop appending a full `stock_scores` row every 2 minutes**
+  *(small–medium — done 2026-08-06. `canUpdateLiveScoreRow` (pure, in
+  `scoring.ts`) + an UPDATE branch in `recomputeStockAnalysis`. The hardcoded
+  `0.5` that gated `score_history` is now the shared `MATERIAL_SCORE_DELTA`,
+  so the two "did the score move?" tests cannot drift apart.
+  **Live-verified with a control:** the runner was restarted onto the new
+  build and ran a full 53-ticker refresh at 20:35:08Z — `stock_scores` for
+  the day stayed at **12,402 → 12,402** (0 appended, 53 rows re-stamped in
+  place), while `drawdown_metrics`, not yet fixed at that point, went
+  **12,402 → 12,455 (+53)** in the same cycle. Same tickers, same refresh, so
+  the difference is the change and not an idle loop. UI re-checked: /stock/NVDA
+  header reads "Watch / Hold" and the sparkline's 2026-08-06 point reads 6.7,
+  both matching the updated row; /, /watchlist, /portfolio, /status,
+  /performance all 200.)*
+  **Why:** `recomputeStockAnalysis` (`src/services/marketData.ts`) runs an
+  unconditional `INSERT` into `stock_scores` on every refresh — including
+  ~640 bytes of `reasoning_json` per row — while the comment directly above
+  it says "Persist stock score + history when it changed". Only the
+  *history* row is conditional; the score row is not. At 53 tickers × a
+  ~2-minute market-open cadence that is ~12,400 rows/day, ~50 MB today and
+  ~290 MB at the 30-day steady state, plus 7× that across backups. The
+  information content is 9–34 material moves per day.
+  **What:** keep the newest row per ticker *live* instead of appending a new
+  one. In `recomputeStockAnalysis`, when the previous row for the ticker is
+  from the **same UTC day** and the overall score moved by **less than the
+  0.5 threshold `score_history` already uses**, `UPDATE` that row in place
+  (all score columns + `reasoning_json` + `calculated_at`) rather than
+  inserting. Insert a new row when the day rolls over or the move is
+  material — so every material intraday move keeps its own row, and each
+  ticker always has at least one row per day.
+  Why in-place rather than the alternatives considered: shortening the
+  retention window alone still writes 12,400 rows/day of WAL churn and only
+  defers the cost; skipping the write entirely would freeze
+  `latest_score.calculated_at` and make the score look stale. In-place
+  update is the only option that preserves every value any consumer reads
+  while writing ~60–90 rows/day instead of ~12,400.
+  **Safe because:** staleness/`data_stale` reads
+  `market_price_snapshots.captured_at`, not `stock_scores` — verified in
+  `generateAlerts` — so freshness alerting is untouched. `score_history`
+  semantics are unchanged: `prev` is still the most recent value, so the
+  ≥0.5 comparison compares the same two numbers it does today.
+  **Accept:** unit tests over a real test DB — two refreshes with an
+  unchanged score leave ONE row with an advanced `calculated_at`; a ≥0.5
+  move inserts a second row; a new UTC day inserts a fresh row;
+  `latestScore`, `scoreSeries` and `buildScoreEvents` return the same values
+  they did under append-only. Live: a market-open refresh cycle adds ~53
+  rows/day instead of ~12,400.
+
+- [x] **62. Same append-per-refresh cost in `drawdown_metrics`** *(small —
+  done 2026-08-06, immediately after #61 proved the shape. One live row per
+  ticker per UTC day, updated in place; no material-change threshold, because
+  unlike scores there is no `score_history` analogue to preserve and every
+  reader (`latestDrawdown()`, the buy-zone alert scan in `generateAlerts`)
+  takes only the newest row. The UTC-day comparison both items need is now
+  the shared `isSameUtcDay` in `lib/util.ts` — UTC deliberately, since every
+  daily reader buckets on `substr(ts,1,10)` and local time would disagree by
+  a day for a UTC-10 user. **Live-verified:** runner restarted, the 20:38:58Z
+  53-ticker refresh appended **0** rows to either table (53 re-stamped in
+  each); /watchlist still renders buy-zone status for all 87 rows
+  (48 Above / 21 In / 18 Below).)*
+  **Why:** `drawdown_metrics` takes the identical unconditional insert in
+  the same function — ~12,400 rows/day, 7.8 MB today, ~372,000 rows at its
+  30-day window. Only `latestDrawdown()` reads it. It is 6× smaller than
+  `stock_scores`, so it is not the emergency, but it is the same bug.
+  **What:** apply #61's pattern, or (simpler, since there is no
+  history-table analogue and no material-change threshold) keep one row per
+  ticker per day updated in place. Decide once #61 is live and its shape is
+  proven.
+  **Accept:** `latestDrawdown()` unchanged for every reader; row growth
+  drops to ~53/day.
+
+## v9 — Tier 2: data-source truth (closing #57)
+
+- [x] **63. GDELT: not rate-limited to death — our connector was throwing the
+  data away** *(done 2026-08-06, uncommitted)*
+  **The retire-vs-pivot decision was never needed: the premise was wrong.**
+  This item originally read "twelve consecutive scheduled runs fetched 0 items,
+  therefore GDELT is too rate-limited for per-company polling — pivot or drop."
+  Both halves of that inference were tested directly on 2026-08-06 and the
+  conclusion does not hold.
+  **What the evidence actually showed:**
+  - A connector-identical request from this machine returned **200 OK with 10
+    articles**. The endpoint works and the IP is not penalised.
+  - Replaying the exact production shape (4 queries, 20s spacing,
+    `maxrecords=10`) gave `429, 429, 429, 200 with 10 articles`. **The budget
+    recovers inside a single run.**
+  - `fetchGdeltNews` did a hard `break` on the first 429. Its only escape was a
+    `Retry-After` retry — and GDELT **never sends that header** (`retry-after:
+    null` on every observed 429), making the retry branch unreachable. So one
+    throttle ended every run before it could reach a query that would succeed.
+    That, not GDELT, is the source of all 24 zero-item runs.
+  - The `http error` runs were a second bug: Node/undici's **connect** timeout
+    is 10s, is not governed by `AbortSignal.timeout(30000)`, and throws a bare
+    `TypeError`. Matching only on `TimeoutError`/`AbortError` filed those under
+    `httpError`, which is why the class looked opaque.
+  **Fixed:** a 429 now backs off and continues to the next query, bounded by
+  `maxConsecutiveThrottled` (default 3, reset by any non-429 outcome) so a real
+  wall of throttling still stops politely and the day-rotation resumes the tail.
+  Undici `UND_ERR_*_TIMEOUT` is counted as a timeout, and `httpError` now
+  records `httpErrorSample` ("HTTP 503", or error name + undici code) which
+  `describeGdeltFailures` surfaces into `ingestion_runs.errors_json`.
+  **Verified:** 5 new unit tests (500 total, typecheck clean) plus a live
+  end-to-end run of the production shape — **10 real articles ingested where the
+  old code returned 0**, reported as "3 throttled (429)".
+  **Note for a future session:** GDELT's 429 body does suggest heavy users move
+  to the ngrams dataset, so a *pivot* remains a legitimate future option for
+  higher volume. It is no longer a rescue mission — the DOC API demonstrably
+  works at this project's volume. #57 can move off `[~]` once a scheduled run
+  lands a nonzero `gdelt` count in `ingestion_runs`.
+
+## v9 — Tier 3: knock-on effects (revisit after #61)
+
+- [x] **64. Backup + backtest cost, once #61 lands** *(measured 2026-08-06 —
+  closed as "no new machinery needed, but see #65")*
+  **Why:** two costs were downstream of the write amplification and might
+  simply evaporate. `data/backups/` holds 7 full copies (367 MB), and
+  `buildScoreEvents()` loads **every** `stock_scores` row into memory with an
+  unfiltered `.all()` purely to collapse them to last-per-day.
+  **Measured:** #61/#62 stop the *growth* (from ~24,800 rows/day across the
+  two tables to ~106), but they do not shrink what is already there — the
+  50.4 MB of historical intraday rows ages out only as the 30-day thin
+  window reaches it. So both costs are now bounded and shrinking rather than
+  unbounded, and neither justifies new machinery: `buildScoreEvents`'s scan
+  falls to ~5k rows on its own once the backlog ages out, and the backup
+  copies shrink with the database. **Reclaiming the existing 50 MB now is a
+  data-deletion decision, split out as #65.**
+
+- [x] **65. Reclaim the 50 MB of pre-#61 intraday rows** *(done 2026-08-06 —
+  Colby chose "shorten the window to ~2 days" permanently.
+  `SCORE_THIN_AFTER_DAYS` 30 → **2**, plus a new `DRAWDOWN_THIN_AFTER_DAYS`
+  = 2 and a shared `thinToLastPerDay()` helper (the score thin's SQL, which
+  `drawdown_metrics` had no equivalent of — its only rule deleted outright at
+  30 days, so the intraday backlog would have sat for a month).
+  **Result, live:** thinned **38,106 score rows + 38,106 drawdown rows**,
+  deleted 2,915 snapshots, auto-acked 3 stale alerts; then a one-off
+  `VACUUM` (runner stopped for the exclusive lock, restarted after) took the
+  file from **88.5 MB → 45.2 MB**. `stock_scores` 50.4 MB → 20.8 MB, and
+  still falling: 25,069 of its remaining 26,667 rows are from the last two
+  days and thin to ~106 as they age past the window, so this lands near
+  ~1,650 rows / ~1.3 MB.
+  **The integrity check that matters:** a full `POST /api/performance`
+  re-run against the thinned data returned **sampledEvents 1545, analyzed
+  1543, tickers 55, calibration "mixed" — identical to the pre-purge
+  report**. Only `totalScoreRows` moved (61,805 → 26,667), which is the raw
+  row-count stat by definition. All 8 pages 200.)*
+  **Why:** #61/#62 fixed the write path going forward; the historical bloat
+  remains. Applying the same rule retroactively — keep the last row per
+  ticker per UTC day — would delete **63,228 of 64,773 `stock_scores` rows
+  (97.6%, ~49 MB)** and **63,281 of 64,499 `drawdown_metrics` rows**.
+  The strong argument that this loses nothing: the 1,545 rows the thin would
+  keep is **exactly** the `sampledEvents: 1545` figure in the stored
+  `performance_report_v2` — i.e. it deletes precisely the rows
+  `buildScoreEvents` already throws away, and no other consumer reads
+  intraday resolution at all (`latestScore`/`latestDrawdown` take the newest
+  row; `scoreSeries` takes last-per-day).
+  **What:** either (a) run the existing `runRetention()` thin with
+  `SCORE_THIN_AFTER_DAYS` temporarily at 0 as a one-off, or (b) shorten
+  `SCORE_THIN_AFTER_DAYS` 30 → ~2 permanently so the window itself stops
+  holding a month of intraday rows. (b) is the better default now that the
+  write path no longer produces them in bulk.
+  **Do not do this without asking** — it is irreversible for anything older
+  than the newest backup, and "real data only" cuts both ways.
+  **Accept:** DB back to roughly 35–40 MB, `/performance` regenerates with
+  an unchanged report (same 1,545 sampled events), backups shrink
+  proportionally.
+
+**Operational, not a code item:** `FinanceAgentWake` is still **not
+installed** (`Get-ScheduledTask` shows only `FinanceAgentJobs` Running and
+`FinanceAgentWatchdog` Ready). #60 shipped the script; it needs Colby to run
+`scripts/install-wake-task.ps1` from an elevated PowerShell.
+
+---
+
 # Improvement Roadmap — v8 (2026-07-19)
 
 v8 came from the post-v7 forensics pass (2026-07-19 evening), three days
@@ -33,7 +246,10 @@ drifted 7.5→7.0, defeating the exact-message dedupe) on top of a
   stayed confounded. NEXT: once the penalty decays (hours, not days),
   watch the /status Data sources card / /events. If scheduled runs still
   show gdelt=0 after a clean window, GDELT is simply too rate-limited for
-  per-company polling — pivot to their suggested ngrams dataset or drop it.)*
+  per-company polling — pivot to their suggested ngrams dataset or drop it.
+  **2026-08-06 — the clean window has now been observed and the answer is
+  no: 12 consecutive scheduled runs, 07-21 → 08-06, all fetched 0 items.
+  Superseded by v9 #63, which carries the evidence and the decision.**)*
   **Why:** post-#56 runs fail honestly but still fetch zero. Probes
   (2026-07-19): no long-lived IP penalty — cold start returns articles —
   but a ~6s completion-to-start gap trips the 429 despite the stated

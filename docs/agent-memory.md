@@ -1,6 +1,117 @@
 # Agent Memory
 
-Last updated: 2026-07-20.
+Last updated: 2026-08-06.
+
+## 2026-08-06 session (later) — #63: GDELT was never rate-limited to death; our connector threw the data away
+
+**Read this before acting on anything that calls GDELT "dead".** The entry below
+concluded GDELT was unusable from twelve consecutive zero-item runs and filed #63
+as a retire-vs-pivot decision. That inference was wrong, and the trap is easy to
+repeat: *a source returning nothing is not evidence the source is at fault until
+the client has been tested independently.* A connector-identical request from
+this machine returned 200 OK with 10 articles.
+
+**Two defects in `src/services/sources/gdelt.ts`:**
+
+1. **A single 429 ended the whole run.** `fetchGdeltNews` did a hard `break` on
+   the first 429, and its only escape was a `Retry-After` retry. GDELT **never
+   sends `Retry-After`** (`null` on every observed 429), so that branch was
+   unreachable and every run died on its first throttle. Replaying the exact
+   production shape live gave `429, 429, 429, 200 with 10 articles` — the budget
+   recovers *within* a run, so abandoning it guarantees zero.
+2. **Connect timeouts were misfiled as `http error`.** Node/undici's connect
+   timeout is **10s**, is **not** governed by `AbortSignal.timeout(30000)`, and
+   throws a bare `TypeError`. The catch matched only `TimeoutError`/`AbortError`,
+   so those landed in `httpError` — the "opaque class" the entry below noticed
+   but attributed to missing instrumentation rather than misclassification.
+
+**Fixed:** a 429 now backs off and continues, bounded by
+`maxConsecutiveThrottled` (default 3, reset by any non-429 outcome) so a genuine
+wall of throttling still stops politely and the day-rotation resumes the tail;
+`UND_ERR_*_TIMEOUT` counts as a timeout; `httpErrorSample` records "HTTP 503" or
+`name: UND_ERR_CODE`, surfaced by `describeGdeltFailures` into
+`ingestion_runs.errors_json`.
+
+**Verified:** 5 new tests (**500/41**, typecheck clean) plus a live
+production-shape run — **10 real articles where the old code returned 0**.
+Nothing committed (finance-agent rule).
+
+**Gotcha worth keeping:** `AbortSignal.timeout(n)` does **not** cover connection
+establishment in Node `fetch`. Any connector relying on it for "my timeout is n"
+is wrong about connect-phase failures and will see them as a generic
+`TypeError: fetch failed`. Check `err.cause.code` for the real reason.
+
+## 2026-08-06 session — roadmap v9 (#61, #62): the database was doubling every 12 days
+
+Post-v8 forensics pass → wrote roadmap **v9** in `docs/ROADMAP.md` and shipped
+#61 + #62 the same session. Tests **496/41** (was 487), typecheck clean,
+nothing committed (finance-agent rule). Runner restarted twice onto the new
+builds; `FinanceAgentJobs` Running, lock held.
+
+**The finding.** v8 shipped 07-20; since then the machine stayed awake through
+several *full* market days for the first time, which exposed a cost nobody had
+measured. The DB went **41 MB (07-25 backup) → 88 MB**, +13 MB per awake market
+day. `dbstat` located **50.4 MB of the 88 MB (57%) in `stock_scores`**.
+Retention was *not* broken — it was doing exactly what it says (0 drawdown rows
+past 30d, 0 snapshots past 7d, only 282 score rows past the thin window). The
+**write path** was the problem: `recomputeStockAnalysis` appended a full score
+row (~640 bytes of `reasoning_json`) **and** a full drawdown row per ticker on
+every ~2-minute refresh — ~12,400 rows/day each — while `score_history`
+recorded only **9–34 real score moves/day** and *every* consumer reads at most
+one row per ticker per day (`latestScore`/`latestDrawdown` = newest row;
+`scoreSeries` and `buildScoreEvents` = last-per-day). The comment above the
+insert already said "Persist stock score + history when it changed" — only the
+*history* row was ever conditional.
+
+- **#61 DONE + live-verified.** New pure `canUpdateLiveScoreRow` in
+  `scoring.ts`; `recomputeStockAnalysis` UPDATEs the ticker's existing row in
+  place when it is the **same UTC day** and the score moved **less than
+  `MATERIAL_SCORE_DELTA`**, else INSERTs. So: ≥1 row per ticker per day for the
+  daily readers, plus a real row for every material intraday move — nothing a
+  consumer reads is lost. The hardcoded `0.5` that gated `score_history` is now
+  that same shared constant, so the two "did it move?" tests can't drift.
+  **Checked before building:** `data_stale` reads
+  `market_price_snapshots.captured_at`, *not* `stock_scores`, so freshness
+  alerting is untouched. Retention's `MAX(id) GROUP BY ticker, day` thin still
+  works because in-place updates only ever touch the newest row, so MAX(id)
+  stays the latest `calculated_at`.
+- **#62 DONE + live-verified.** Same treatment for `drawdown_metrics`, minus
+  the threshold (no history feed to preserve; every reader takes the newest
+  row). The UTC-day test both need is now shared `isSameUtcDay` in
+  `lib/util.ts` — **UTC deliberately**: every daily reader buckets on
+  `substr(ts,1,10)`, and local time would disagree by a day for a UTC-10 user.
+
+**The live check worth copying.** Restarting the runner between the two items
+gave a natural control: the 20:35Z 53-ticker refresh (with #61 only) left
+`stock_scores` at **12,402 → 12,402** while `drawdown_metrics` went
+**12,402 → 12,455 (+53)**. Same tickers, same cycle — proof the flat count was
+the fix and not an idle loop. After #62 the 20:38Z refresh appended **0** to
+both. UI re-verified: /stock/NVDA header and its sparkline's 08-06 point both
+read 6.7, matching the in-place-updated row.
+
+**OPEN — needs Colby, do not do it unasked (#65):** the *historical* 50 MB is
+untouched; #61/#62 only stop the growth. A retroactive last-per-ticker-per-day
+thin would delete **63,228 of 64,773 score rows (97.6%, ~49 MB)**. The evidence
+that this loses nothing: the 1,545 rows it would keep is **exactly** the
+`sampledEvents: 1545` in the stored `performance_report_v2` — it deletes
+precisely what `buildScoreEvents` already discards. Still a real deletion, so
+it waits for his word.
+
+**OPEN — needs Colby (#63): GDELT is now conclusively dead.** #57's clean
+window has been observed and the answer is no: **12 consecutive scheduled runs,
+07-21 → 08-06, fetched 0 items**, each 24h apart, with the most conservative
+shape the connector can make (1 company/query, maxrecords=10, 20s spacing).
+A single manual probe on 08-06 after ~2.5h idle still returned **429 in
+11.5s**, body: *"…All high-traffic users should switch to our ngrams
+dataset."* Decision is retire / disable+mark-unavailable / pivot to ngrams.
+Note the failure mix also shifted to mostly `http error`, and that class is the
+one #56 left opaque — `GdeltFailures.httpError` merges "non-ok status" and
+"thrown network error" with no status code, no error name, and no log line. If
+GDELT is kept in any form, make that loud first.
+
+**Still not installed:** `FinanceAgentWake` (#60). `Get-ScheduledTask` shows
+only `FinanceAgentJobs` (Running) and `FinanceAgentWatchdog` (Ready). Needs
+Colby to run `scripts/install-wake-task.ps1` from an elevated PowerShell.
 
 ## 2026-07-20 session — roadmap v8 (#57–#59): GDELT budget + alert hygiene
 

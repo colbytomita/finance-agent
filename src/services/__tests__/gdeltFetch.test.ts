@@ -10,7 +10,8 @@ type Step =
   | { kind: "ok"; articles: { url: string; title: string }[] }
   | { kind: "status"; status: number; body?: string; headers?: Record<string, string> }
   | { kind: "nonjson"; body: string }
-  | { kind: "timeout" };
+  | { kind: "timeout" }
+  | { kind: "connectTimeout" };
 
 const scripted = (
   steps: Step[],
@@ -23,6 +24,17 @@ const scripted = (
     calls++;
     if (step.kind === "timeout") {
       throw Object.assign(new Error("timed out"), { name: "TimeoutError" });
+    }
+    if (step.kind === "connectTimeout") {
+      // Exactly what Node/undici throws when the TCP connect exceeds its own
+      // 10s ceiling: a plain TypeError whose cause carries the real code. This
+      // is NOT governed by AbortSignal.timeout, so it arrives as a TypeError
+      // rather than a TimeoutError — observed live against GDELT on 2026-08-06.
+      throw Object.assign(new TypeError("fetch failed"), {
+        cause: Object.assign(new Error("Connect Timeout Error"), {
+          code: "UND_ERR_CONNECT_TIMEOUT",
+        }),
+      });
     }
     if (step.kind === "ok") {
       return new Response(JSON.stringify({ articles: step.articles }), { status: 200 });
@@ -57,12 +69,68 @@ describe("fetchGdeltNews diagnostics (roadmap #56)", () => {
     expect(res.failures).toEqual({ throttled: 0, timedOut: 0, badPayload: 0, httpError: 0 });
   });
 
-  it("counts a fast 429 as throttled and stops the run", async () => {
-    const { fetchFn, calls } = scripted([{ kind: "status", status: 429, body: "slow down" }]);
+  it("carries on to the next query after a 429 instead of abandoning the run", async () => {
+    // The old behaviour broke the whole run on the first 429, and its escape
+    // hatch was a Retry-After retry — a header GDELT never sends. Result: GDELT
+    // returned 0 items in all 24 recorded runs. A live run on 2026-08-06 showed
+    // 429, 429, 429, then 200 with 10 articles: the run has to reach query 4.
+    const { fetchFn, calls } = scripted([
+      { kind: "status", status: 429, body: "slow down" },
+      { kind: "status", status: 429, body: "slow down" },
+      { kind: "ok", articles: [art(1), art(2)] },
+    ]);
     const res = await fetchGdeltNews(["\"A\"", "\"B\"", "\"C\""], { fetchFn, spacingMs: 0 });
-    expect(res.items).toHaveLength(0);
-    expect(res.failures.throttled).toBe(1);
-    expect(calls()).toBe(1); // stopped — no pointless throttled calls
+    expect(calls()).toBe(3);
+    expect(res.failures.throttled).toBe(2);
+    expect(res.items).toHaveLength(2);
+  });
+
+  it("gives up after enough CONSECUTIVE throttles to stay polite", async () => {
+    // Carrying on must not become hammering. A wall of 429s means the budget is
+    // genuinely gone, so stop; the day-rotation picks the tail up next run.
+    const { fetchFn, calls } = scripted([{ kind: "status", status: 429, body: "slow down" }]);
+    const res = await fetchGdeltNews(["\"A\"", "\"B\"", "\"C\"", "\"D\""], {
+      fetchFn,
+      spacingMs: 0,
+      maxConsecutiveThrottled: 2,
+    });
+    expect(calls()).toBe(2);
+    expect(res.failures.throttled).toBe(2);
+  });
+
+  it("resets the consecutive-throttle count after a success", async () => {
+    // Two 429s, a success, then two more 429s is not a wall — the budget
+    // recovered in between, so a limit of 2 consecutive must not end the run early.
+    const { fetchFn, calls } = scripted([
+      { kind: "status", status: 429 },
+      { kind: "ok", articles: [art(1)] },
+      { kind: "status", status: 429 },
+      { kind: "ok", articles: [art(2)] },
+    ]);
+    const res = await fetchGdeltNews(["\"A\"", "\"B\"", "\"C\"", "\"D\""], {
+      fetchFn,
+      spacingMs: 0,
+      maxConsecutiveThrottled: 2,
+    });
+    expect(calls()).toBe(4);
+    expect(res.items).toHaveLength(2);
+  });
+
+  it("counts an undici connect timeout as a timeout, not an opaque http error", async () => {
+    // Node's connect timeout is 10s and AbortSignal.timeout does not govern it,
+    // so it surfaces as a bare TypeError. Filing that under httpError is what
+    // made a month of "N http error" logs undiagnosable.
+    const { fetchFn } = scripted([{ kind: "connectTimeout" }]);
+    const res = await fetchGdeltNews(["\"A\""], { fetchFn, spacingMs: 0 });
+    expect(res.failures.timedOut).toBe(1);
+    expect(res.failures.httpError).toBe(0);
+  });
+
+  it("records what an http error actually was, so the class is not opaque", async () => {
+    const { fetchFn } = scripted([{ kind: "status", status: 503 }]);
+    const res = await fetchGdeltNews(["\"A\""], { fetchFn, spacingMs: 0 });
+    expect(res.failures.httpError).toBe(1);
+    expect(res.failures.httpErrorSample).toContain("503");
   });
 
   it("honors a small Retry-After by retrying the same query once", async () => {
