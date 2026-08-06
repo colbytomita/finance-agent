@@ -1,9 +1,10 @@
-import { closedTrades, journalEntries } from "@/lib/queries";
-
 // Realized trade performance — what your *closed* trades actually did. Unlike the
 // score/pick backtests (forward windows that need to mature), these are settled
-// outcomes, so the numbers are usable immediately. Pure aggregation in
-// `summarizeClosedTrades` (unit-tested); `getTradePerformance` wires up the reads.
+// outcomes, so the numbers are usable immediately.
+//
+// NO IO here: `getTradePerformance` (lib/queries.ts) wires up the reads. Keeping
+// this module pure is what lets the Signal Performance page re-summarize trades in
+// the browser as the date filter moves.
 
 export interface ClosedTradeInput {
   id: number;
@@ -178,7 +179,3 @@ export function summarizeClosedTrades(
   };
 }
 
-/** Realized stats over all closed trades in the DB. */
-export function getTradePerformance(): TradeStats {
-  return summarizeClosedTrades(closedTrades() as ClosedTradeInput[], journalEntries() as JournalInput[]);
-}

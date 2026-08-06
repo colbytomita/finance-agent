@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { IndustryGuide, IndustryScanPoint } from "@/services/sectorScout";
-import type { IndustryPerformanceResult } from "@/services/signalPerformance";
+import type { IndustryPerformanceResult } from "@/services/signalPerformanceCore";
 import { useApiAction } from "./useApiAction";
 
 /**

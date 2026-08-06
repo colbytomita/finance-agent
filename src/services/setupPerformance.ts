@@ -1,14 +1,15 @@
-import { getDb, schema } from "@/db";
 import type { Bar } from "@/lib/types";
-import { AlpacaService } from "./alpaca";
-import { ensureBarsCover } from "./entityMentions";
 
 // Setup outcome backtest (roadmap #17). trade_setups accumulates every detected
 // swing setup (entry range, stop, target) but nothing ever measured whether they
-// worked. This walks the daily bars after each detection and resolves it to a
-// win / loss / expired outcome with an R-multiple, then aggregates per setup type
-// — win rate, average R, expectancy. Historical outcomes of past detections, not
-// a prediction or advice. The resolver is pure (no IO) and unit-tested.
+// worked. This resolves each detection against the daily bars that follow it —
+// win / loss / expired with an R-multiple — then aggregates per setup type into
+// win rate, average R and expectancy. Historical outcomes of past detections, not
+// a prediction or advice.
+//
+// NO IO here: the bar loading and DB reads live in runSetupPerformance
+// (signalPerformance.ts). Keeping this module pure is what lets the Signal
+// Performance page re-aggregate setups in the browser as the date filter moves.
 
 /** Forward window (trading days) a setup gets to reach its target or stop. */
 export const SETUP_HORIZON_DAYS = 20;
@@ -206,68 +207,15 @@ export interface SetupPerformance {
 }
 
 /**
- * Backtest every detected setup: backfill each ticker's bars once, resolve each
- * setup, and aggregate. Setups without enough forward data are counted as
- * pending (not failures). Runs inside runPerformanceBacktest so the cached
- * report — and daily maintenance — pick it up automatically.
+ * One deduped setup episode with its resolved outcome, kept alongside the pooled
+ * stats so the Signal Performance page can re-pool any date range (see
+ * performanceFilter.ts). `day` is the episode's detection day — the anchor the
+ * date filter matches on.
  */
-export async function runSetupPerformance(alpaca: AlpacaService | null): Promise<SetupPerformance> {
-  // scanForSetups re-inserts a persistent setup every refresh, so collapse those
-  // repeats into one signal (earliest detection) before measuring anything.
-  const setups = dedupeSetups(getDb().select().from(schema.tradeSetups).all());
-  const notes: string[] = [];
-  if (setups.length === 0) {
-    return {
-      horizonDays: SETUP_HORIZON_DAYS,
-      totalSetups: 0,
-      matured: 0,
-      pending: 0,
-      byType: [],
-      overall: statsFor("All setups", []),
-      notes: ["No setups detected yet — they appear on the Swing Trading page as the detector finds them."],
-    };
-  }
-
-  // Group by ticker so bars are backfilled once per name (reaching back to its
-  // earliest detection; the forward window is covered by the normal refresh).
-  const byTicker = new Map<string, typeof setups>();
-  for (const s of setups) {
-    const arr = byTicker.get(s.ticker) ?? [];
-    arr.push(s);
-    byTicker.set(s.ticker, arr);
-  }
-
-  const resolved: { setupType: string; outcome: SetupOutcome }[] = [];
-  let pending = 0;
-  for (const [ticker, list] of byTicker) {
-    const earliest = list.reduce((min, s) => (s.detectedAt < min ? s.detectedAt : min), list[0].detectedAt);
-    const bars = await ensureBarsCover(ticker, earliest, alpaca).catch(() => [] as Bar[]);
-    for (const s of list) {
-      const outcome = resolveSetupOutcome(s, bars);
-      if (outcome) resolved.push({ setupType: s.setupType, outcome });
-      else pending++;
-    }
-  }
-
-  const { byType, overall } = aggregateSetups(resolved);
-  if (overall.noFill > 0)
-    notes.push(
-      `${overall.noFill} matured setup(s) never reached their entry zone (no fill) — price ran away before the trade would have triggered; these are excluded from win rate and average R.`,
-    );
-  if (pending > 0)
-    notes.push(
-      `${pending} setup(s) not yet matured — a setup needs ${SETUP_HORIZON_DAYS} trading days of forward data (or an earlier fill + target/stop touch) before it counts.`,
-    );
-  if (overall.triggered === 0 && pending > 0)
-    notes.push("No matured setups have triggered yet — check back once the earliest detections have run their course.");
-
-  return {
-    horizonDays: SETUP_HORIZON_DAYS,
-    totalSetups: setups.length,
-    matured: resolved.length,
-    pending,
-    byType,
-    overall,
-    notes,
-  };
+export interface PerformanceSetupEvent {
+  setupType: string;
+  day: string;
+  result: SetupResult | "pending";
+  rMultiple?: number; // absent while pending
 }
+

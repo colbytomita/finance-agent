@@ -5,18 +5,36 @@ import { nowIso } from "@/lib/util";
 import { AlpacaService } from "./alpaca";
 import { ensureBarsCover } from "./entityMentions";
 import { getBars, saveBars } from "./bars";
-import {
-  eventStudy,
-  aggregateEventStudies,
-  type EventStudyResult,
-  type EventWindowKey,
-  type WindowEdge,
-} from "./eventStudy";
+import { eventStudy, type EventStudyResult, type EventWindowKey } from "./eventStudy";
 import { stockRecommendationLabel } from "./scoring";
-import { runSetupPerformance, type SetupPerformance } from "./setupPerformance";
+import {
+  aggregateSetups,
+  dedupeSetups,
+  resolveSetupOutcome,
+  SETUP_HORIZON_DAYS,
+  type PerformanceSetupEvent,
+  type SetupOutcome,
+  type SetupPerformance,
+} from "./setupPerformance";
+import {
+  bucketAndAggregate,
+  calibrationVerdict,
+  PICK_SOURCES,
+  poolByIndustry,
+  poolBySource,
+  type PerformanceAbn,
+  type PerformancePickEvent,
+  type PerformanceReport,
+  type PerformanceScoreEvent,
+  type PickPerformance,
+  type ScoreCalibration,
+} from "./signalPerformanceCore";
 import type { StockRecommendationLabel } from "@/lib/types";
 
-// Signal-performance ("does any of this actually work?") backtest.
+// Signal-performance ("does any of this actually work?") backtest — the DB/network
+// half. The pure types and pooling math live in signalPerformanceCore.ts so the
+// browser can import them for the page's date filter; everything here touches the
+// DB, Alpaca or Playwright and must stay server-side.
 //
 // The app appends a stock_scores row on every recompute and records every
 // discovery/sector pick, so we already have a time-series of its own calls. We
@@ -27,147 +45,7 @@ import type { StockRecommendationLabel } from "@/lib/types";
 // live in tradePerformance.ts.
 //
 // Historical correlation across the app's own past calls — not a prediction and
-// not advice. Pure aggregation (bucketAndAggregate / poolBySource /
-// calibrationVerdict) is unit-tested; the run* functions add the DB/network IO.
-
-/** Recommendation bands, best → worst, with their score ranges (see scoring.ts). */
-export const SCORE_BANDS: { label: StockRecommendationLabel; range: string }[] = [
-  { label: "Strong Buy Candidate", range: "9–10" },
-  { label: "Buy Candidate", range: "7–9" },
-  { label: "Watch / Hold", range: "5–7" },
-  { label: "Avoid / Risk Elevated", range: "3–5" },
-  { label: "Strong Avoid", range: "1–3" },
-];
-
-export const PICK_SOURCES = ["Agent Picks", "Sector Scout"] as const;
-
-export interface SignalBucketResult {
-  bucket: StockRecommendationLabel;
-  scoreRange: string;
-  totalEvents: number;
-  windows: WindowEdge[];
-}
-
-export interface PickSourceResult {
-  source: string;
-  totalEvents: number;
-  windows: WindowEdge[];
-}
-
-export interface IndustryPerformanceResult {
-  industry: string;
-  totalEvents: number;
-  windows: WindowEdge[];
-}
-
-export interface ScoreCalibration {
-  totalScoreRows: number;
-  sampledEvents: number;
-  analyzed: number;
-  tickers: number;
-  spyAvailable: boolean;
-  primaryWindow: EventWindowKey;
-  calibration: "improves" | "mixed" | "inverts" | "n/a";
-  buckets: SignalBucketResult[];
-  notes: string[];
-}
-
-export interface PickPerformance {
-  sampledEvents: number;
-  analyzed: number;
-  spyAvailable: boolean;
-  sources: PickSourceResult[];
-  byIndustry: IndustryPerformanceResult[];
-  notes: string[];
-}
-
-export interface PerformanceReport {
-  generatedAt: string;
-  score: ScoreCalibration;
-  picks: PickPerformance;
-  setups?: SetupPerformance; // optional so an older cached report still parses
-}
-
-/**
- * Pool score "events" into per-band forward-return summaries. Pure (no IO): each
- * event carries its recommendation band and a resolved event study. Always
- * returns all five bands (empty bands report n = 0) so the table is complete.
- */
-export function bucketAndAggregate(
-  events: { bucket: StockRecommendationLabel; study: EventStudyResult }[],
-): SignalBucketResult[] {
-  return SCORE_BANDS.map(({ label, range }) => {
-    const studies = events.filter((e) => e.bucket === label).map((e) => e.study);
-    const summary = aggregateEventStudies(studies);
-    return { bucket: label, scoreRange: range, totalEvents: summary.totalEvents, windows: summary.windows };
-  });
-}
-
-/**
- * Pool pick "events" by source (e.g. Agent Picks vs Sector Scout). Pure. Returns
- * one row per requested source, in order, empty sources reporting n = 0.
- */
-export function poolBySource(
-  events: { source: string; study: EventStudyResult }[],
-  sources: readonly string[],
-): PickSourceResult[] {
-  return sources.map((source) => {
-    const studies = events.filter((e) => e.source === source).map((e) => e.study);
-    const summary = aggregateEventStudies(studies);
-    return { source, totalEvents: summary.totalEvents, windows: summary.windows };
-  });
-}
-
-/**
- * Per-industry forward-return rows for picks that carry industry tags. Pure: each
- * studied event fans out to every industry in its `groups`, so a pick that
- * surfaced under multiple industries on the same day counts once per industry.
- * Rows are ordered most-sampled first, then alphabetically. Studies without
- * industries (e.g. Agent Picks) are ignored.
- */
-export function poolByIndustry(
-  studies: { groups?: string[]; study: EventStudyResult }[],
-): IndustryPerformanceResult[] {
-  const fanned: { source: string; study: EventStudyResult }[] = [];
-  for (const s of studies) {
-    for (const industry of s.groups ?? []) fanned.push({ source: industry, study: s.study });
-  }
-  const industries = [...new Set(fanned.map((f) => f.source))];
-  return poolBySource(fanned, industries)
-    .map((r) => ({ industry: r.source, totalEvents: r.totalEvents, windows: r.windows }))
-    .sort((a, b) => b.totalEvents - a.totalEvents || a.industry.localeCompare(b.industry));
-}
-
-/** Mean forward abnormal return for a band's window, or null if no samples. */
-function bandMean(b: SignalBucketResult, window: EventWindowKey): number | null {
-  return b.windows.find((w) => w.key === window)?.meanAbnormalReturnPct ?? null;
-}
-
-/**
- * Verdict: do mean forward abnormal returns rise as the band improves? Compares
- * the ordered (best → worst) band means for `window`, ignoring empty bands.
- * "improves" = strictly higher for better bands, "inverts" = strictly lower,
- * "mixed" = neither, "n/a" = fewer than two populated bands.
- */
-export function calibrationVerdict(
-  buckets: SignalBucketResult[],
-  window: EventWindowKey,
-): ScoreCalibration["calibration"] {
-  const means = buckets
-    .map((b) => bandMean(b, window))
-    .filter((v): v is number => v != null && isFinite(v));
-  if (means.length < 2) return "n/a";
-  let up = true;
-  let down = true;
-  for (let i = 1; i < means.length; i++) {
-    // means[] is best→worst; "improves" means earlier (better) > later (worse).
-    if (!(means[i - 1] > means[i])) up = false;
-    if (!(means[i - 1] < means[i])) down = false;
-  }
-  if (up) return "improves";
-  if (down) return "inverts";
-  return "mixed";
-}
+// not advice.
 
 const CACHE_KEY = "performance_report_v2";
 
@@ -229,7 +107,7 @@ interface SignalEvent {
 }
 
 interface StudiedEvents {
-  studies: { key: string; groups?: string[]; study: EventStudyResult }[];
+  studies: { key: string; ticker: string; day: string; groups?: string[]; study: EventStudyResult }[];
   sampledEvents: number;
   analyzed: number;
   tickers: number;
@@ -274,14 +152,14 @@ async function studyEvents(
     byTicker.set(e.ticker, list);
   }
 
-  const studies: { key: string; groups?: string[]; study: EventStudyResult }[] = [];
+  const studies: StudiedEvents["studies"] = [];
   for (const [ticker, list] of byTicker) {
     const earliestForTicker = list.reduce((min, e) => (e.day < min ? e.day : min), list[0].day);
     const bars = await ensureBarsCover(ticker, earliestForTicker, alpaca).catch(() => []);
     if (bars.length === 0) continue;
     for (const e of list) {
       const study = eventStudy(bars, spyBars, e.day);
-      if (study) studies.push({ key: e.key, groups: e.groups, study });
+      if (study) studies.push({ key: e.key, ticker, day: e.day, groups: e.groups, study });
     }
   }
 
@@ -295,6 +173,19 @@ async function studyEvents(
     latest,
     lastBarDay,
   };
+}
+
+/**
+ * Pull the three rendered windows' abnormal returns off a study for storage.
+ * Rounded to 4dp — the page shows one decimal, so this is lossless on screen and
+ * roughly halves the stored payload.
+ */
+function abnOf(study: EventStudyResult): PerformanceAbn {
+  const at = (k: EventWindowKey): number | null => {
+    const v = study.windows[k]?.abnormalReturnPct;
+    return v != null && isFinite(v) ? Math.round(v * 10000) / 10000 : null;
+  };
+  return { post1: at("post1"), post5: at("post5"), post20: at("post20") };
 }
 
 /** Maturity/coverage note shared by the score and pick backtests. */
@@ -314,7 +205,12 @@ function coverageNote(s: StudiedEvents, primaryN: number, label: string): string
 }
 
 /** Build deduped score events (one per ticker per day, latest score that day). */
-function buildScoreEvents(): { events: SignalEvent[]; totalRows: number } {
+function buildScoreEvents(): {
+  events: SignalEvent[];
+  totalRows: number;
+  rowsByDay: Record<string, number>;
+  sampledByDay: Record<string, number>;
+} {
   const rows = getDb()
     .select({
       ticker: schema.stockScores.ticker,
@@ -324,20 +220,32 @@ function buildScoreEvents(): { events: SignalEvent[]; totalRows: number } {
     .from(schema.stockScores)
     .all();
   const byKey = new Map<string, { e: SignalEvent; at: string }>();
+  const rowsByDay: Record<string, number> = {};
   for (const r of rows) {
     if (!r.calculatedAt) continue;
     const day = r.calculatedAt.slice(0, 10);
+    rowsByDay[day] = (rowsByDay[day] ?? 0) + 1;
     const k = `${r.ticker}|${day}`;
     const prev = byKey.get(k);
     if (!prev || r.calculatedAt > prev.at) {
       byKey.set(k, { e: { ticker: r.ticker, day, key: stockRecommendationLabel(r.overallScore) }, at: r.calculatedAt });
     }
   }
-  return { events: [...byKey.values()].map((v) => v.e), totalRows: rows.length };
+  const events = [...byKey.values()].map((v) => v.e);
+  const sampledByDay: Record<string, number> = {};
+  for (const e of events) sampledByDay[e.day] = (sampledByDay[e.day] ?? 0) + 1;
+  return { events, totalRows: rows.length, rowsByDay, sampledByDay };
 }
 
-async function runScoreCalibration(alpaca: AlpacaService | null): Promise<ScoreCalibration> {
-  const { events, totalRows } = buildScoreEvents();
+async function runScoreCalibration(
+  alpaca: AlpacaService | null,
+): Promise<{
+  calibration: ScoreCalibration;
+  events: PerformanceScoreEvent[];
+  rowsByDay: Record<string, number>;
+  sampledByDay: Record<string, number>;
+}> {
+  const { events, totalRows, rowsByDay, sampledByDay } = buildScoreEvents();
   const studied = await studyEvents(events, alpaca);
   const buckets = bucketAndAggregate(
     studied.studies.map((s) => ({ bucket: s.key as StockRecommendationLabel, study: s.study })),
@@ -355,15 +263,25 @@ async function runScoreCalibration(alpaca: AlpacaService | null): Promise<ScoreC
   if (cn) notes.push(cn);
 
   return {
-    totalScoreRows: totalRows,
-    sampledEvents: studied.sampledEvents,
-    analyzed: studied.analyzed,
-    tickers: studied.tickers,
-    spyAvailable: studied.spyAvailable,
-    primaryWindow: PRIMARY_WINDOW,
-    calibration,
-    buckets,
-    notes,
+    calibration: {
+      totalScoreRows: totalRows,
+      sampledEvents: studied.sampledEvents,
+      analyzed: studied.analyzed,
+      tickers: studied.tickers,
+      spyAvailable: studied.spyAvailable,
+      primaryWindow: PRIMARY_WINDOW,
+      calibration,
+      buckets,
+      notes,
+    },
+    events: studied.studies.map((s) => ({
+      ticker: s.ticker,
+      day: s.day,
+      band: s.key as StockRecommendationLabel,
+      abn: abnOf(s.study),
+    })),
+    rowsByDay,
+    sampledByDay,
   };
 }
 
@@ -412,7 +330,9 @@ function buildPickEvents(): SignalEvent[] {
   return out;
 }
 
-async function runPickPerformance(alpaca: AlpacaService | null): Promise<PickPerformance> {
+async function runPickPerformance(
+  alpaca: AlpacaService | null,
+): Promise<{ performance: PickPerformance; events: PerformancePickEvent[] }> {
   const events = buildPickEvents();
   const studied = await studyEvents(events, alpaca);
   const sources = poolBySource(
@@ -430,12 +350,103 @@ async function runPickPerformance(alpaca: AlpacaService | null): Promise<PickPer
   if (cn) notes.push(cn);
 
   return {
-    sampledEvents: studied.sampledEvents,
-    analyzed: studied.analyzed,
-    spyAvailable: studied.spyAvailable,
-    sources,
-    byIndustry,
-    notes,
+    performance: {
+      sampledEvents: studied.sampledEvents,
+      analyzed: studied.analyzed,
+      spyAvailable: studied.spyAvailable,
+      sources,
+      byIndustry,
+      notes,
+    },
+    events: studied.studies.map((s) => ({
+      ticker: s.ticker,
+      day: s.day,
+      source: s.key,
+      industries: s.groups,
+      abn: abnOf(s.study),
+    })),
+  };
+}
+
+/**
+ * Backtest every detected setup: backfill each ticker's bars once, resolve each
+ * setup, and aggregate. Setups without enough forward data are counted as pending
+ * (not failures). The per-setup rows are returned alongside the pooled stats so
+ * the page can re-pool them by date.
+ */
+async function runSetupPerformance(
+  alpaca: AlpacaService | null,
+): Promise<{ performance: SetupPerformance; events: PerformanceSetupEvent[] }> {
+  // scanForSetups re-inserts a persistent setup every refresh, so collapse those
+  // repeats into one signal (earliest detection) before measuring anything.
+  const setups = dedupeSetups(getDb().select().from(schema.tradeSetups).all());
+  const notes: string[] = [];
+  if (setups.length === 0) {
+    return {
+      performance: {
+        horizonDays: SETUP_HORIZON_DAYS,
+        totalSetups: 0,
+        matured: 0,
+        pending: 0,
+        byType: [],
+        overall: aggregateSetups([]).overall,
+        notes: ["No setups detected yet — they appear on the Swing Trading page as the detector finds them."],
+      },
+      events: [],
+    };
+  }
+
+  // Group by ticker so bars are backfilled once per name (reaching back to its
+  // earliest detection; the forward window is covered by the normal refresh).
+  const byTicker = new Map<string, typeof setups>();
+  for (const s of setups) {
+    const arr = byTicker.get(s.ticker) ?? [];
+    arr.push(s);
+    byTicker.set(s.ticker, arr);
+  }
+
+  const resolved: { setupType: string; outcome: SetupOutcome }[] = [];
+  const events: PerformanceSetupEvent[] = [];
+  let pending = 0;
+  for (const [ticker, list] of byTicker) {
+    const earliest = list.reduce((min, s) => (s.detectedAt < min ? s.detectedAt : min), list[0].detectedAt);
+    const bars = await ensureBarsCover(ticker, earliest, alpaca).catch(() => [] as Bar[]);
+    for (const s of list) {
+      const outcome = resolveSetupOutcome(s, bars);
+      const day = s.detectedAt.slice(0, 10);
+      if (outcome) {
+        resolved.push({ setupType: s.setupType, outcome });
+        events.push({ setupType: s.setupType, day, result: outcome.result, rMultiple: outcome.rMultiple });
+      } else {
+        pending++;
+        events.push({ setupType: s.setupType, day, result: "pending" });
+      }
+    }
+  }
+
+  const { byType, overall } = aggregateSetups(resolved);
+  if (overall.noFill > 0)
+    notes.push(
+      `${overall.noFill} matured setup(s) never reached their entry zone (no fill) — price ran away before the trade would have triggered; these are excluded from win rate and average R.`,
+    );
+  if (pending > 0)
+    notes.push(
+      `${pending} setup(s) not yet matured — a setup needs ${SETUP_HORIZON_DAYS} trading days of forward data (or an earlier fill + target/stop touch) before it counts.`,
+    );
+  if (overall.triggered === 0 && pending > 0)
+    notes.push("No matured setups have triggered yet — check back once the earliest detections have run their course.");
+
+  return {
+    performance: {
+      horizonDays: SETUP_HORIZON_DAYS,
+      totalSetups: setups.length,
+      matured: resolved.length,
+      pending,
+      byType,
+      overall,
+      notes,
+    },
+    events,
   };
 }
 
@@ -447,9 +458,17 @@ export async function runPerformanceBacktest(): Promise<PerformanceReport> {
   const setups = await runSetupPerformance(alpaca);
   const report: PerformanceReport = {
     generatedAt: nowIso(),
-    score,
-    picks,
-    setups,
+    score: score.calibration,
+    picks: picks.performance,
+    setups: setups.performance,
+    // Per-event rows powering the page's date-range filter (performanceFilter.ts).
+    events: {
+      scores: score.events,
+      picks: picks.events,
+      setups: setups.events,
+      scoreRowsByDay: score.rowsByDay,
+      scoreSampledByDay: score.sampledByDay,
+    },
   };
   writeCachedReport(report);
   return report;

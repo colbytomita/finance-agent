@@ -3,6 +3,12 @@ import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { isCatalystStale } from "@/services/catalysts";
 import { pairKey, suppressedSetupPairs } from "@/services/setupArchive";
+import {
+  summarizeClosedTrades,
+  type ClosedTradeInput,
+  type JournalInput,
+  type TradeStats,
+} from "@/services/tradePerformance";
 
 // Read-side helpers used by server components and services. Latest-row
 // lookups per ticker, plus the tracked-ticker set.
@@ -151,6 +157,11 @@ export function journalEntries() {
     .from(schema.tradeJournalEntries)
     .orderBy(desc(schema.tradeJournalEntries.createdAt))
     .all();
+}
+
+/** Realized stats over all closed trades in the DB. */
+export function getTradePerformance(): TradeStats {
+  return summarizeClosedTrades(closedTrades() as ClosedTradeInput[], journalEntries() as JournalInput[]);
 }
 
 export function recentScoreChanges(limit = 15) {

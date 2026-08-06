@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readCachedReport, runPerformanceBacktest } from "@/services/signalPerformance";
-import { getTradePerformance } from "@/services/tradePerformance";
+import { getTradePerformance } from "@/lib/queries";
 import { errorMessage } from "@/lib/util";
 
 export const maxDuration = 300;

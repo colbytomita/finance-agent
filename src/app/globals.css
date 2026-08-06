@@ -62,3 +62,60 @@ label {
 .btn-danger {
   @apply border-red-800 bg-red-950/60 hover:bg-red-900/50 text-red-200;
 }
+
+/* Dual-thumb range slider (Signal Performance date filter). Two native range
+   inputs are overlaid on a container-drawn track: each input is transparent and
+   click-through, contributing only its thumb, so both handles keep native
+   keyboard support. Written as plain CSS — vendor-prefixed thumb pseudo-elements
+   need -webkit-appearance, which Tailwind's `appearance-none` doesn't emit. */
+.range-thumb {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  width: 100%;
+  height: 1.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-thumb:focus {
+  outline: none;
+}
+.range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  height: 0.875rem;
+  width: 0.875rem;
+  border-radius: 9999px;
+  border: 2px solid rgb(56 189 248);
+  background: rgb(9 9 11);
+  cursor: pointer;
+}
+.range-thumb::-moz-range-thumb {
+  pointer-events: auto;
+  height: 0.875rem;
+  width: 0.875rem;
+  border-radius: 9999px;
+  border: 2px solid rgb(56 189 248);
+  background: rgb(9 9 11);
+  cursor: pointer;
+}
+.range-thumb:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgb(56 189 248 / 0.35);
+}
+.range-thumb:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgb(56 189 248 / 0.35);
+}
+.range-thumb:disabled::-webkit-slider-thumb {
+  border-color: rgb(82 82 91);
+  cursor: not-allowed;
+}
+.range-thumb:disabled::-moz-range-thumb {
+  border-color: rgb(82 82 91);
+  cursor: not-allowed;
+}

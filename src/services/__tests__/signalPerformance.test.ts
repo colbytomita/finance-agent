@@ -5,7 +5,7 @@ import {
   poolByIndustry,
   poolBySource,
   SCORE_BANDS,
-} from "../signalPerformance";
+} from "../signalPerformanceCore";
 import {
   EVENT_WINDOWS,
   type EventStudyResult,
