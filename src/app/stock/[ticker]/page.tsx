@@ -7,6 +7,7 @@ import {
   openTrades,
   tickerBars,
   tickerCatalysts,
+  tickersMissingStops,
 } from "@/lib/queries";
 import { getLatestNote } from "@/services/researchAgent";
 import { isCatalystStale } from "@/services/catalysts";
@@ -22,7 +23,13 @@ import { PriceChart, type ChartEvent } from "@/components/PriceChart";
 import { ScoreSparkline } from "@/components/ScoreSparkline";
 import { GenerateBriefButton } from "@/components/GenerateBriefButton";
 import { RefreshButton } from "@/components/RefreshButton";
-import { AddEarningsForm, FetchEarningsButton, DeleteButton } from "@/components/forms";
+import {
+  AddEarningsForm,
+  FetchEarningsButton,
+  DeleteButton,
+  ExitTradeButton,
+  RestoreStopButton,
+} from "@/components/forms";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +79,13 @@ export default async function StockDetailPage({
       .map((mn) => ({ date: mn.eventDate as string, type: "mention" as const, title: `${mn.entity}: ${mn.claim ?? "mentioned"}` })),
   ];
   const note = getLatestNote(ticker);
-  const trade = openTrades().find((t) => t.ticker === ticker) ?? null;
+  // A ticker can carry several open trades at once (scaling in, or separate
+  // setups on the same name), so this is a list. It used to be a `.find()`,
+  // which silently hid every trade after the first.
+  const tradesOnTicker = openTrades().filter((t) => t.ticker === ticker);
+  // Which tickers currently have no working stop at the broker (roadmap #75).
+  const missingStops = tickersMissingStops();
+  const trade = tradesOnTicker[0] ?? null; // chart levels follow the first
   const reasoning: Record<string, unknown> = score?.reasoningJson
     ? JSON.parse(score.reasoningJson)
     : {};
@@ -120,6 +133,79 @@ export default async function StockDetailPage({
             volumes={bars.map((b) => b.volume)}
             events={chartEvents}
           />
+
+          {/* Your open position(s) in this name — the first thing you want when
+              you land on a ticker you are actually in. */}
+          {tradesOnTicker.length > 0 && (
+            <section className="card">
+              <h2 className="card-title">
+                Your swing {tradesOnTicker.length === 1 ? "trade" : `trades (${tradesOnTicker.length})`}
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-zinc-500">
+                      <th>Entry</th>
+                      <th>Now</th>
+                      <th>Shares</th>
+                      <th>Stop</th>
+                      <th>Target</th>
+                      <th>P/L</th>
+                      <th>Score</th>
+                      <th>Action</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tradesOnTicker.map((t) => (
+                      <tr key={t.id} className="border-t border-zinc-800">
+                        <td className="tabular-nums">{fmtMoney(t.entryPrice)}</td>
+                        <td className="tabular-nums">{fmtMoney(price ?? t.currentPrice)}</td>
+                        <td className="tabular-nums">{fmtNum(t.shares)}</td>
+                        <td className="tabular-nums text-red-300">
+                          {fmtMoney(t.stopLoss)}
+                          {missingStops.has(t.ticker) && (
+                            <span className="ml-1 text-amber-400" title="No stop order is working at the broker">
+                              ⚠
+                            </span>
+                          )}
+                        </td>
+                        <td className="tabular-nums text-emerald-300">{fmtMoney(t.targetPrice1)}</td>
+                        <td className="tabular-nums">
+                          <Pct value={t.unrealizedGainLossPercent} />
+                        </td>
+                        <td className="tabular-nums">{fmtScore(t.tradeScore)}</td>
+                        <td>
+                          <RecBadge rec={t.recommendation} />
+                        </td>
+                        <td className="whitespace-nowrap">
+                          {missingStops.has(t.ticker) && t.stopLoss != null && (
+                            <RestoreStopButton
+                              tradeId={t.id}
+                              ticker={t.ticker}
+                              stopPrice={t.stopLoss}
+                              shares={t.shares}
+                              isLive={t.broker === "alpaca-live"}
+                            />
+                          )}{" "}
+                          <ExitTradeButton
+                            tradeId={t.id}
+                            ticker={t.ticker}
+                            shares={t.shares}
+                            isLive={t.broker === "alpaca-live"}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[10px] text-zinc-600">
+                Exit sells the position at market through {tradesOnTicker[0].broker ?? "your broker"} and records
+                the close at the actual fill. Any resting stop/target legs are cancelled first.
+              </p>
+            </section>
+          )}
 
           {/* Technicals (raw data) */}
           <section className="card">
@@ -310,6 +396,7 @@ export default async function StockDetailPage({
                     </div>
                   </div>
                 )}
+
                 <p className="text-[10px] text-zinc-600">
                   Scored {fmtDate(score.calculatedAt)} · heuristic model output, not advice.
                 </p>

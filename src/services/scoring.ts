@@ -20,12 +20,19 @@ export interface StockScoreWeights {
   sentiment: number;
 }
 
+/**
+ * Blend weights. `sentiment` carries **0** since roadmap #67: it is derived from
+ * the same catalyst inputs as `catalystScore`, so it was ~collinear with it while
+ * contributing 0.19 points of possible movement at weight 0.10 — it could not
+ * change a recommendation under any circumstance. Its weight was folded into
+ * catalyst. The component is still computed and displayed, just not blended.
+ */
 export const DEFAULT_STOCK_WEIGHTS: StockScoreWeights = {
   valuation: 0.2,
   momentum: 0.2,
-  catalyst: 0.25,
+  catalyst: 0.35,
   risk: 0.25,
-  sentiment: 0.1,
+  sentiment: 0,
 };
 
 export const clampScore = (v: number): number => Math.min(10, Math.max(1, v));
@@ -138,12 +145,17 @@ export function valuationScore(dd: DrawdownReport | null): ComponentResult {
   else if (ddPct >= -30) score = 7;
   else if (ddPct >= -50) score = 6; // deep discount but riskier
   else score = 4.5; // possible broken story
-  return {
-    score: clampScore(score),
-    reasons: [
-      `Trading ${Math.abs(ddPct).toFixed(1)}% below 52-week high (range-based heuristic, not fundamental valuation).`,
-    ],
-  };
+  const reasons = [
+    `Trading ${Math.abs(ddPct).toFixed(1)}% below 52-week high (range-based heuristic, not fundamental valuation).`,
+  ];
+  // A discount that has already started recovering is the value sweet spot. The
+  // flat lookup above topped out at 7.0, which helped make the 9-10 band
+  // unreachable; the recovery bonus lets a genuinely well-priced name reach 8.5.
+  if (dd.trend === "improving" && ddPct < -15 && ddPct >= -50) {
+    score += 1.5;
+    reasons.push("Discount is already recovering.");
+  }
+  return { score: clampScore(score), reasons };
 }
 
 /**
@@ -159,6 +171,33 @@ export interface CatalystInput {
 
 const CONF_WEIGHT: Record<Confidence, number> = { low: 0.4, medium: 0.7, high: 1 };
 
+/** How many recent directional catalysts the score considers (roadmap #67). */
+export const CATALYST_SCORING_WINDOW = 30;
+
+/**
+ * The catalysts that should actually drive a SCORE, as opposed to the full set
+ * shown on the stock page timeline.
+ *
+ * Two filters, both measured against the real database:
+ *  - **Impact 0 is dropped.** 6,616 of 8,991 stored catalysts (74%) are neutral
+ *    `yahoo-news` items. They carry no direction, but because the score is a
+ *    *mean*, hundreds of them averaged real signals into nothing: NVDA's mean
+ *    impact over everything was 0.31 versus 1.09 over directional items alone.
+ *  - **Only the most recent N.** Mega-caps accumulate 300+ rows; without a
+ *    window a stale backlog outvotes what just happened.
+ *
+ * Consequence worth knowing: a ticker whose catalysts are ALL neutral returns []
+ * here, so `scoreStock` treats it as having no catalysts and redistributes the
+ * catalyst weight — which is right. Neutral news is an absence of signal, not a
+ * neutral signal, and it should not drag a score toward the middle.
+ */
+export function directionalCatalysts<T extends { impactScore: number }>(
+  catalysts: T[],
+  limit = CATALYST_SCORING_WINDOW,
+): T[] {
+  return catalysts.filter((c) => c.impactScore !== 0).slice(-limit);
+}
+
 export function catalystScore(catalystsIn: CatalystInput[]): ComponentResult {
   const active = catalystsIn.filter((c) => c.status !== "expired");
   if (active.length === 0) {
@@ -172,7 +211,11 @@ export function catalystScore(catalystsIn: CatalystInput[]): ComponentResult {
     weightSum += w;
   }
   const avg = weightSum > 0 ? weighted / weightSum : 0; // -5..+5
-  const score = clampScore(5.5 + avg * 0.9);
+  // Gain raised 0.9 -> 1.6 with #67: now that neutral news no longer dilutes the
+  // mean, the surviving average is both smaller in count and larger in size, and
+  // the component needs the range to actually express it (measured span 1.09 ->
+  // 3.58 across the tracked universe).
+  const score = clampScore(5.5 + avg * 1.6);
   const pos = active.filter((c) => c.impactScore > 0).length;
   const neg = active.filter((c) => c.impactScore < 0).length;
   return {
@@ -192,6 +235,13 @@ export function riskScore(
   dd: DrawdownReport | null,
   catalystsIn: CatalystInput[] = [],
 ): ComponentResult {
+  // Two-sided, but anchored so the TYPICAL stock is unaffected. This used to
+  // start at 7 and only subtract, capping it at 7.5 and (with valuationScore's
+  // 7.0 cap) making the 9-10 band arithmetically unreachable. The penalties are
+  // unchanged; genuinely calm names now earn a bonus instead of merely avoiding
+  // one. NOTE: re-basing to 5.5 was tried and measured — it pushed the median
+  // stock DOWN (Buy 17 -> 7, Watch/Hold 29 -> 38 across the live watchlist) and
+  // compressed the spread further. Keep the base at 7.
   let score = 7;
   const reasons: string[] = [];
   if (ind?.atr14 != null && ind.price > 0) {
@@ -205,8 +255,12 @@ export function riskScore(
     } else if (atrPct > 2.5) {
       score -= 0.5;
       reasons.push(`Moderate volatility (ATR ${atrPct.toFixed(1)}%).`);
-    } else {
+    } else if (atrPct > 1.5) {
+      score += 0.5;
       reasons.push(`Low volatility (ATR ${atrPct.toFixed(1)}%).`);
+    } else {
+      score += 1.5;
+      reasons.push(`Very low volatility (ATR ${atrPct.toFixed(1)}% of price).`);
     }
   } else {
     score -= 1;
@@ -216,6 +270,9 @@ export function riskScore(
     if (dd.drawdownFrom52wHighPercent < -40) {
       score -= 1.5;
       reasons.push("Deep drawdown from 52-week high.");
+    } else if (dd.drawdownFrom52wHighPercent > -10) {
+      score += 0.5;
+      reasons.push("Holding near its 52-week high — structurally intact.");
     }
     if (dd.trend === "worsening") {
       score -= 1;
@@ -283,11 +340,17 @@ export function scoreStock(input: {
   /** Fundamentals read (1–10 quality/value) — when present, it leads the score. */
   fundamentals?: { score: number; reasons: string[] } | null;
 }): StockScoreResult {
+  // The SCORING feed, distinct from the display timeline: neutral news is
+  // excluded and only the recent window counts (roadmap #67). Every
+  // catalyst-derived component reads the same feed so they cannot disagree about
+  // what "has catalysts" means.
+  const scoringCatalysts = directionalCatalysts(input.catalysts);
+
   const m = momentumScore(input.indicators);
   const v = valuationScore(input.drawdown);
-  const c = catalystScore(input.catalysts);
-  const r = riskScore(input.indicators, input.drawdown, input.catalysts);
-  const s = sentimentScore(input.catalysts);
+  const c = catalystScore(scoringCatalysts);
+  const r = riskScore(input.indicators, input.drawdown, scoringCatalysts);
+  const s = sentimentScore(scoringCatalysts);
 
   const components: ScoreComponents = {
     valuationScore: v.score,
@@ -302,7 +365,10 @@ export function scoreStock(input: {
   // stock toward the middle. Drop them from the blend (weight 0) so the score
   // reflects the signals we actually have; `confidence` already flags the gap.
   const baseWeights = input.weights ?? DEFAULT_STOCK_WEIGHTS;
-  const hasCatalysts = input.catalysts.length > 0;
+  // "Has catalysts" means has DIRECTIONAL ones. A ticker with 300 neutral
+  // headlines has no catalyst signal, and letting those hold 35% of the weight
+  // at a flat 5.5 would drag a genuinely strong stock to the middle.
+  const hasCatalysts = scoringCatalysts.length > 0;
   const weightsUsed: StockScoreWeights = hasCatalysts
     ? baseWeights
     : { ...baseWeights, catalyst: 0, sentiment: 0 };

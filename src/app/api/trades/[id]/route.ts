@@ -5,6 +5,24 @@ import { getDb, schema } from "@/db";
 import { nowIso } from "@/lib/util";
 import { closeTrade } from "@/services/trades";
 
+/**
+ * The close form posts strings, and `z.coerce.boolean()` is just `Boolean(v)` —
+ * so "no" and "false" both coerced to TRUE, silently inverting every negative
+ * answer. Map the string forms explicitly; blank means "not recorded" (null).
+ */
+const formBoolean = z
+  .union([z.boolean(), z.string()])
+  .nullish()
+  .transform((v) => {
+    if (v == null) return null;
+    if (typeof v === "boolean") return v;
+    const s = v.trim().toLowerCase();
+    if (s === "") return null;
+    if (["yes", "y", "true", "1"].includes(s)) return true;
+    if (["no", "n", "false", "0"].includes(s)) return false;
+    return null;
+  });
+
 const patchSchema = z.object({
   action: z.enum(["update", "close", "invalidate"]),
   stopLoss: z.coerce.number().positive().nullish(),
@@ -17,7 +35,7 @@ const patchSchema = z.object({
   exitReason: z.string().nullish(),
   lessons: z.string().nullish(),
   mistakes: z.string().nullish(),
-  thesisPlayedOut: z.coerce.boolean().nullish(),
+  thesisPlayedOut: formBoolean,
 });
 
 export async function PATCH(

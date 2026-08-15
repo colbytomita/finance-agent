@@ -5,6 +5,9 @@ import { useTestDb } from "@/services/__tests__/dbHarness";
 import * as watchlistRoute from "../watchlist/route";
 import * as tradesRoute from "../trades/route";
 import * as tradesIdRoute from "../trades/[id]/route";
+import * as tradesIdExitRoute from "../trades/[id]/exit/route";
+import * as portfolioIdExitRoute from "../portfolio/[id]/exit/route";
+import * as exitAllRoute from "../trades/exit-all/route";
 import * as tradesPlaceRoute from "../trades/place/route";
 import * as eventsRoute from "../events/route";
 import * as jobsRoute from "../jobs/route";
@@ -170,6 +173,119 @@ describe("PATCH /api/trades/[id]", () => {
     const journal = getDb().select().from(schema.tradeJournalEntries).all();
     expect(journal).toHaveLength(1);
     expect(journal[0].exitReason).toBe("target");
+  });
+
+  // The close form posts strings, and `z.coerce.boolean()` is just Boolean(v) —
+  // so "no" coerced to TRUE. Every "the thesis did not play out" would have been
+  // recorded as one that did, silently inverting the thesis-played-out rate.
+  it.each([
+    ["yes", true],
+    ["no", false],
+    ["true", true],
+    ["false", false],
+    ["", null],
+  ])("records thesisPlayedOut=%s from the form as %s", async (input, expected) => {
+    getDb()
+      .insert(schema.activeTrades)
+      .values({
+        ticker: "AMZN",
+        direction: "long",
+        entryPrice: 100,
+        entryDate: "2026-06-25T14:30:00Z",
+        shares: 1,
+        positionSize: 100,
+        status: "open",
+        createdAt: "2026-06-25T14:30:00Z",
+        updatedAt: "2026-06-25T14:30:00Z",
+      })
+      .run();
+    const trade = getDb().select().from(schema.activeTrades).all().at(-1)!;
+
+    const res = await tradesIdRoute.PATCH(
+      jsonReq("PATCH", { action: "close", exitPrice: 110, thesisPlayedOut: input }),
+      params(trade.id),
+    );
+    expect(res.status).toBe(200);
+    const journal = getDb()
+      .select()
+      .from(schema.tradeJournalEntries)
+      .all()
+      .filter((j) => j.tradeId === trade.id);
+    expect(journal[0].thesisPlayedOut).toBe(expected);
+  });
+});
+
+// The exit routes send REAL orders, so these cover the guards that run BEFORE
+// the broker is touched. Alpaca is unconfigured in tests, which is itself one of
+// the guards — no order can escape from a test run.
+describe("POST /api/trades/[id]/exit", () => {
+  const openTrade = () => {
+    getDb()
+      .insert(schema.activeTrades)
+      .values({
+        ticker: "NVDA",
+        direction: "long",
+        entryPrice: 100,
+        entryDate: "2026-08-01T14:30:00Z",
+        shares: 5,
+        positionSize: 500,
+        status: "open",
+        broker: "alpaca-paper",
+        brokerOrderId: "entry-x",
+        createdAt: "2026-08-01T14:30:00Z",
+        updatedAt: "2026-08-01T14:30:00Z",
+      })
+      .run();
+    return getDb().select().from(schema.activeTrades).all().at(-1)!;
+  };
+
+  it("404s an unknown trade", async () => {
+    const res = await tradesIdExitRoute.POST(jsonReq("POST", {}), params(9999));
+    expect(res.status).toBe(404);
+  });
+
+  it("refuses to exit a trade that is already closed", async () => {
+    const t = openTrade();
+    getDb().update(schema.activeTrades).set({ status: "closed" }).where(eq(schema.activeTrades.id, t.id)).run();
+    const res = await tradesIdExitRoute.POST(jsonReq("POST", {}), params(t.id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/already closed/i);
+  });
+
+  it("refuses when Alpaca is not configured rather than half-unwinding", async () => {
+    const t = openTrade();
+    const res = await tradesIdExitRoute.POST(jsonReq("POST", {}), params(t.id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/not configured/i);
+    // Critically, the trade is untouched — no partial state.
+    expect(getDb().select().from(schema.activeTrades).all().find((x) => x.id === t.id)!.status).toBe("open");
+  });
+});
+
+describe("POST /api/trades/exit-all", () => {
+  const jsonReqNoParams = (body: unknown) => jsonReq("POST", body);
+
+  it("rejects without the exact typed confirmation", async () => {
+    for (const confirm of ["", "exit all", "EXITALL", "yes"]) {
+      const res = await exitAllRoute.POST(jsonReqNoParams({ confirm }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/type "EXIT ALL"/i);
+    }
+  });
+
+  it("passes the confirmation gate but still refuses when Alpaca is unconfigured", async () => {
+    // Proves the phrase check is not the only guard standing between a stray
+    // request and a batch of real orders.
+    const res = await exitAllRoute.POST(jsonReqNoParams({ confirm: "EXIT ALL" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/not configured/i);
+  });
+});
+
+describe("POST /api/portfolio/[id]/exit", () => {
+  it("404s an unknown holding", async () => {
+    const res = await portfolioIdExitRoute.POST(jsonReq("POST", {}), params(9999));
+    expect(res.status).toBe(404);
   });
 });
 

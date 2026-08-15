@@ -49,6 +49,14 @@ import type { StockRecommendationLabel } from "@/lib/types";
 
 const CACHE_KEY = "performance_report_v2";
 
+/**
+ * The day `detectBreakout` was redefined. Setups detected before this came from
+ * a detector that could never fire on an actual breakout (it keyed off
+ * `resistance`, which is by definition still above price), so breakout stats
+ * pool two different definitions until the older detections age out.
+ */
+export const BREAKOUT_DETECTOR_CHANGED_ON = "2026-08-14";
+
 export function readCachedReport(): PerformanceReport | null {
   const row = getDb()
     .select()
@@ -435,6 +443,27 @@ async function runSetupPerformance(
     );
   if (overall.triggered === 0 && pending > 0)
     notes.push("No matured setups have triggered yet — check back once the earliest detections have run their course.");
+  // Expiry reads like failure and is not. Measured over 9,968 triggered setups
+  // across 288 tickers of history, expectancy RISES monotonically with target
+  // distance (avg R 0.014 at 1R → 0.059 at 2R → 0.108 at 3R) even though expiry
+  // rises with it. Pulling targets in to "fix" expiry would strictly reduce
+  // expectancy — every setup type measured worse at 1.5R than at 2R, and
+  // pullback_to_support went negative. Say so, so nobody optimises the wrong number.
+  if (overall.expired > 0 && overall.triggered > 0 && overall.expired / overall.triggered >= 0.2)
+    notes.push(
+      `${overall.expired} of ${overall.triggered} triggered setup(s) expired — reached neither target nor stop within ` +
+        `${SETUP_HORIZON_DAYS} trading days. That is the cost of a 2R target, not a defect: over 288 tickers of history, ` +
+        `expectancy rose with target distance (avg R 0.014 at 1R, 0.059 at 2R, 0.108 at 3R), so bringing targets closer ` +
+        `would raise the win rate and LOWER the expectancy. The binding constraint is the horizon — the same setups ` +
+        `measured at 40 days expire 11.8% of the time instead of 28.2% and return 0.076R instead of 0.059R.`,
+    );
+  if (setups.some((s) => s.setupType === "breakout" && s.detectedAt < BREAKOUT_DETECTOR_CHANGED_ON))
+    notes.push(
+      `Breakout setups detected before ${BREAKOUT_DETECTOR_CHANGED_ON} came from an earlier detector that fired when price ` +
+        `APPROACHED resistance rather than when it broke through, and backtested at a 23.2% win rate. The current detector ` +
+        `requires a fresh, volume-confirmed break of a cleared level (38.3% over the same history). Breakout figures mix ` +
+        `both definitions until the older detections age out.`,
+    );
 
   return {
     performance: {

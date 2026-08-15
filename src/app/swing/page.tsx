@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   activeSetups,
+  atrByTicker,
   journalStats,
   journalEntries,
   openTrades,
@@ -16,6 +17,7 @@ import { MarketRegimeBanner } from "@/components/MarketRegimeBanner";
 import { SetupInsight, TradeScoreInsight } from "@/components/insights";
 import { AddTradeForm, CloseTradeButton } from "@/components/forms";
 import { RefreshButton } from "@/components/RefreshButton";
+import { ExitAllPanel } from "@/components/ExitAllPanel";
 import { PlaceOrderButton } from "@/components/TradeOrder";
 import { listArchivedSetups } from "@/services/setupArchive";
 import { ArchiveSetupButton, UnarchiveButton, ArchiveNoteInput } from "@/components/SetupArchive";
@@ -30,6 +32,12 @@ export default function SwingPage() {
   const journal = journalEntries().slice(0, 25);
   const accountValue = currentAccountValue();
   const archived = listArchivedSetups();
+  // ATR(14) per ticker so the order dialog can show stop distance in ATR terms (#71).
+  const atrs = atrByTicker([
+    ...setups.map((s) => s.ticker),
+    ...trades.map((t) => t.ticker),
+    ...archived.map((a) => a.ticker),
+  ]);
 
   const integrations = integrationsStatus();
   const alpacaConfigured = integrations.alpacaConfigured;
@@ -168,6 +176,7 @@ export default function SwingPage() {
                           riskPerTradePercent: cfg.riskPerTradePercent,
                           accountValue,
                           maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
+                          atr14: atrs.get(s.ticker) ?? null,
                         }}
                       />
                     </td>
@@ -268,6 +277,7 @@ export default function SwingPage() {
                               riskPerTradePercent: cfg.riskPerTradePercent,
                               accountValue,
                               maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
+                              atr14: atrs.get(a.ticker) ?? null,
                             }}
                           />
                         </td>
@@ -288,7 +298,24 @@ export default function SwingPage() {
 
       {/* Open trades */}
       <section>
-        <h2 className="card-title">Open trades</h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="card-title mb-0">Open trades</h2>
+          {alpacaConfigured && (
+            <ExitAllPanel
+              rows={trades
+                .filter((t) => t.broker)
+                .map((t) => ({
+                  tradeId: t.id,
+                  ticker: t.ticker,
+                  shares: t.shares,
+                  entryPrice: t.entryPrice,
+                  currentPrice: t.currentPrice,
+                  unrealizedPct: t.unrealizedGainLossPercent,
+                  isLive: t.broker === "alpaca-live",
+                }))}
+            />
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>

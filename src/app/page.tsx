@@ -3,7 +3,6 @@ import {
   activeSetups,
   allWatchlist,
   latestDrawdown,
-  latestScore,
   latestSnapshot,
   openTrades,
   recentScoreChanges,

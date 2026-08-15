@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useApiAction } from "./useApiAction";
-import { riskRewardRatio, suggestPositionSize } from "@/services/riskManagement";
+import {
+  riskRewardRatio,
+  stopAtrMultiple,
+  stopNoiseWarning,
+  suggestPositionSize,
+} from "@/services/riskManagement";
 
 // User-initiated trade entry. A "Trade" button on a setup row opens this dialog,
 // pre-filled from the setup, where the user sets size/order type/protective legs
@@ -16,6 +21,8 @@ export interface RiskContext {
   riskPerTradePercent: number;
   accountValue: number;
   maxPositionWeightPercent: number;
+  /** ATR(14) for the ticker, so the dialog can show stop distance in ATR terms (#71). */
+  atr14?: number | null;
 }
 
 export interface PlaceOrderButtonProps {
@@ -124,6 +131,10 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
     entryNum > 0 && stopNum > 0 && targetNum > 0
       ? riskRewardRatio(entryNum, stopNum, targetNum, direction)
       : undefined; // undefined = not enough fields; null = stop on the wrong side
+  // Stop distance vs ATR(14) (roadmap #71) — the context sizing was missing.
+  const atrMultiple =
+    entryNum > 0 && stopNum > 0 ? stopAtrMultiple(entryNum, stopNum, props.risk?.atr14, direction) : null;
+  const noiseWarning = stopNoiseWarning(atrMultiple);
   const suggested =
     props.risk && entryNum > 0 && stopNum > 0
       ? suggestPositionSize({
@@ -301,12 +312,23 @@ export function PlaceOrderButton(props: PlaceOrderButtonProps) {
                           ` — below your ${props.risk.minRiskReward}:1 minimum`}
                       </span>
                     )}
+                    {atrMultiple != null && (
+                      <span className={`ml-2 ${noiseWarning ? "text-amber-400" : "text-zinc-500"}`}>
+                        stop {atrMultiple.toFixed(2)}× ATR(14)
+                      </span>
+                    )}
                     {suggested && suggested.shares > 0 && (
                       <span className="ml-2 text-zinc-500">
                         suggested {suggested.shares} sh · risking ≈ $
                         {suggested.maxLossIfStopped.toFixed(0)} at {props.risk.riskPerTradePercent}%
                       </span>
                     )}
+                  </p>
+                )}
+
+                {noiseWarning && (
+                  <p className="text-[11px] text-amber-400">
+                    ⚠ {noiseWarning} Advisory only — sizing is your call.
                   </p>
                 )}
 

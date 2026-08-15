@@ -15,7 +15,7 @@ import {
   RecommendationInsight,
   StockScoreInsight,
 } from "@/components/insights";
-import { AddHoldingForm, DeleteButton } from "@/components/forms";
+import { AddHoldingForm, DeleteButton, ExitTradeButton } from "@/components/forms";
 import { SyncPortfolioButton } from "@/components/SyncPortfolioButton";
 import { RefreshButton } from "@/components/RefreshButton";
 import { EquityCurve } from "@/components/EquityCurve";
@@ -34,6 +34,8 @@ export default function PortfolioPage() {
   }));
   const totalValue = holdings.reduce((a, h) => a + (h.marketValue ?? 0), 0);
   const totalPL = holdings.reduce((a, h) => a + (h.unrealizedGainLoss ?? 0), 0);
+  // Drives the extra "LIVE — real money" wording on the exit confirmation.
+  const isLiveBroker = process.env.ALPACA_MODE === "live";
 
   // Sector weights (roadmap #37) from the Yahoo-backfilled sector column;
   // holdings still missing one are grouped as "Unclassified".
@@ -110,13 +112,14 @@ export default function PortfolioPage() {
               <th>Top catalyst</th>
               <th>Top risk</th>
               <th>Updated</th>
+              <th>Exit</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={17} className="py-6 text-center text-zinc-500">
+                <td colSpan={18} className="py-6 text-center text-zinc-500">
                   No holdings. Add one above or sync from Alpaca.
                 </td>
               </tr>
@@ -170,6 +173,9 @@ export default function PortfolioPage() {
                   {cat.topRisk ?? "—"}
                 </td>
                 <td><Freshness capturedAt={snap?.capturedAt ?? h.updatedAt} staleMinutes={cfg.staleDataMinutes} /></td>
+                <td>
+                  <ExitTradeButton holdingId={h.id} ticker={h.ticker} shares={h.shares} isLive={isLiveBroker} />
+                </td>
                 <td><DeleteButton url={`/api/portfolio/${h.id}`} /></td>
               </tr>
             ))}

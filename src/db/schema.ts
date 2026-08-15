@@ -100,7 +100,11 @@ export const catalysts = sqliteTable("catalysts", {
   affectsActiveTrade: integer("affects_active_trade", { mode: "boolean" })
     .notNull()
     .default(false),
-});
+  // Scoring calls getCatalystInputs once per tracked ticker on every ~2-minute
+  // refresh, and without this each call was a full SCAN of the table. Measured
+  // over 54 tickers: 27.2ms -> 11.0ms per pass. This table is the news feed and
+  // only grows (9k rows and counting), so the gap widens over time.
+}, (t) => [index("idx_catalysts_ticker_status").on(t.ticker, t.status)]);
 
 export const stockScores = sqliteTable("stock_scores", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -151,6 +155,12 @@ export const activeTrades = sqliteTable("active_trades", {
   // Last synced Alpaca order status (services/orderSync). Terminal statuses
   // (filled/canceled/expired/rejected/replaced) stop polling for that trade.
   brokerOrderStatus: text("broker_order_status"),
+  // Keeps a real trade out of the realized-performance stats without deleting
+  // it. Needed for trades that were closed as a batch during development rather
+  // than as genuine exit decisions — they are real rows, but including them in
+  // win rate / avg R would misreport how the strategy actually did.
+  excludedFromStats: integer("excluded_from_stats", { mode: "boolean" }).notNull().default(false),
+  excludedReason: text("excluded_reason"),
 });
 
 export const tradeSetups = sqliteTable("trade_setups", {

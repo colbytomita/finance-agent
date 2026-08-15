@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   concentrationWarnings,
   riskRewardRatio,
+  stopAtrMultiple,
+  stopNoiseWarning,
   suggestPositionSize,
   validateProposedTrade,
 } from "../riskManagement";
@@ -173,5 +175,35 @@ describe("concentrationWarnings", () => {
     });
     expect(warnings.join(" ")).toMatch(/NVDA is 30%/);
     expect(warnings.join(" ")).toMatch(/Tech sector is 45%/);
+  });
+});
+
+// Roadmap #71. Measured across every closed trade with a stop: 14 of 15 sat at
+// 1.49-2.12x ATR(14) at entry. The one exception was V at 0.61x — a 1.43% stop
+// against a 2.36% ATR, i.e. tighter than a single average day's range. It was hit
+// almost immediately and the position then ran to +3.82R, forgoing 4.83R.
+// This is display-only advice: n=1 does not establish "tight stops lose", but it
+// does establish that this stop was inside the noise.
+describe("stopAtrMultiple (roadmap #71)", () => {
+  it("expresses stop distance as a multiple of ATR", () => {
+    expect(stopAtrMultiple(100, 96, 2)).toBeCloseTo(2);
+    expect(stopAtrMultiple(100, 99, 2)).toBeCloseTo(0.5);
+  });
+
+  it("is direction-aware — a short's stop sits ABOVE entry", () => {
+    expect(stopAtrMultiple(100, 104, 2, "short")).toBeCloseTo(2);
+  });
+
+  it("returns null when ATR is unknown or degenerate", () => {
+    expect(stopAtrMultiple(100, 96, null)).toBeNull();
+    expect(stopAtrMultiple(100, 96, 0)).toBeNull();
+    expect(stopAtrMultiple(100, 100, 2)).toBeNull(); // no stop distance
+  });
+
+  it("warns only below 1x ATR — inside a single day's average range", () => {
+    expect(stopNoiseWarning(0.61)).toMatch(/inside/i);
+    expect(stopNoiseWarning(0.99)).toBeTruthy();
+    expect(stopNoiseWarning(1.5)).toBeNull();
+    expect(stopNoiseWarning(null)).toBeNull();
   });
 });
