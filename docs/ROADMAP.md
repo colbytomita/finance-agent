@@ -1,3 +1,31 @@
+# Improvement Roadmap — v11 (2026-08-15)
+
+- [ ] **80. Multi-account, multi-broker support** *(large — spec written, awaiting
+  review: `docs/superpowers/specs/2026-08-15-multi-account-brokerage-design.md`)*
+  **Goal:** hold many brokerage accounts across different brokers, mixing paper
+  and real money, and switch between them with one active at a time.
+  **Scope decision:** broker-agnostic *seams*, **Alpaca-only implementation**. A
+  second broker later is a new adapter plus a row — not a migration.
+  **Two things the exploration found that would otherwise have bitten us:**
+  1. **Market data is tangled with account credentials.** `bars.ts:55` and
+     `discoveryAgent.ts:279` call `AlpacaService.fromEnv()` to fetch *bars*.
+     With a second broker, "which account is active" would silently decide where
+     price history comes from. Market data gets its own source.
+  2. **The exit path is Alpaca-specific.** It cancels bracket legs then
+     market-sells, because Alpaca brackets are OCO pairs against the same shares.
+     Not every broker has that model, so this cannot simply be repointed.
+  **The safety core:** order routing derives the account from **the record, not
+  the UI** — exiting a trade uses the credentials of the account that owns it,
+  even if the browser shows another. `exit-all` becomes account-scoped with the
+  account label in the typed phrase, and `confirmLive` resolves server-side from
+  `broker_accounts.mode`, never from the client.
+  **Phased 1–4** (data model → adapter seam → routing/safety → second account +
+  UI); phases 1–3 are invisible day to day.
+  **Consequence:** `/performance` realized stats become per-account, so the
+  existing 11-trade sample stays with account 1 rather than blending. Score
+  calibration, picks and setups are unaffected — they measure analysis, not an
+  account.
+
 # Improvement Roadmap — v10 (2026-08-06) — from the first real performance evaluation
 
 v10 does not come from a forensics pass over the *plumbing*. v9 fixed the
