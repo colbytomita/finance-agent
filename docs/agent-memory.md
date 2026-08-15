@@ -100,6 +100,25 @@ shows non-monotone results, **trust the construction and debug the measurement.*
   something good before optimising it away.**
 
 
+### Merged, and the runner-restart trap (2026-08-15)
+
+PR #39 merged to main (`0487c7e`). **The jobs runner does not hot-reload** — it
+is `tsx`, which loads code once at startup — so it had been writing
+**pre-#66/#67 scores for ~32 hours** while the new code sat in the working tree.
+Restart with `scripts/stop-jobs-task.ps1` then `Start-ScheduledTask`; never bare
+`Stop-ScheduledTask`, which orphans the node tree.
+
+Proof the new code is live: the log prints `stop coverage: 3 of 8 position(s)
+with no live stop`, the catalyst component now reaches 9.08 (was capped ~6.66),
+and the overall max is 8.7 (was 7.7).
+
+**Data-hygiene consequence, important for #67b:** the cutover was
+**2026-08-15T16:17:20Z**. `stock_scores` for 2026-08-15 holds **39
+old-methodology rows and 54 new-methodology rows**. Filter to
+`calculated_at >= '2026-08-15T16:17:20Z'` when recalibrating bands, or they will
+be fitted to two different scoring engines. **Restart the runner immediately
+after merging any scoring or detector change.**
+
 ### App review + performance pass (#77-#79)
 
 **`next build` had been broken for three weeks, so the dev server was the only

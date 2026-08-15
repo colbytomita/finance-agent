@@ -167,6 +167,13 @@ None of this is a verdict on the strategy; it is a verdict on what has been
   **Accept:** band boundaries chosen from measured forward returns, with the
   supporting table recorded here — and an explicit note if the data does not
   support five bands.
+  **Data-hygiene note (2026-08-15):** the scoring changes only took effect when
+  the jobs runner was restarted at **2026-08-15T16:17:20Z** — `tsx` loads code
+  once at startup, so the runner had been writing pre-#66/#67 scores for ~32
+  hours after the code was written. `stock_scores` for 2026-08-15 therefore holds
+  **39 old-methodology rows and 54 new-methodology rows** (old max 7.6, new max
+  8.7). **When recalibrating, filter to `calculated_at >= '2026-08-15T16:17:20Z'`
+  or the bands will be fitted to two different scoring engines.**
 
 <details><summary>Original #67 entry (the diagnosis that turned out to be wrong)</summary>
 
