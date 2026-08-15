@@ -11,7 +11,26 @@ and mixing **paper and real-money** — and switch between them, with one accoun
 active at a time.
 
 Today the app assumes exactly one Alpaca account, sourced from a single set of
-env vars in nine places. Every account-scoped table implicitly belongs to it.
+env vars in **16 places**. Every account-scoped table implicitly belongs to it.
+
+Those 16 call sites split almost exactly in half, which is the single most
+useful fact about this change:
+
+| | count | needs |
+|---|---|---|
+| **Account operations** | 8 | per-account credentials |
+| **Market data** | 8 | one shared data source, account-independent |
+
+**Account (8):** `trades/place`, `trades/[id]/exit`, `trades/[id]/restore-stop`,
+`trades/exit-all`, `portfolio/[id]/exit`, `orderSync.syncBrokerOrders`,
+`stopCoverage.checkStopCoverage`, `marketData.syncPortfolio`.
+
+**Market data (8):** `bars.refreshBars`, `quotes` (market clock),
+`entityMentions` (SPY bars), `signalPerformance` (SPY bars),
+`watchlistImport`, `sectorScout`, `discoveryAgent`, `scheduler.detectPhase`.
+
+Half the current coupling to "the Alpaca account" is not about an account at
+all — it is market data that happens to arrive through the same client.
 
 ## What gets built now, and what does not
 
@@ -148,8 +167,9 @@ disagreement.
 
 ## 4. Market data is decoupled from accounts
 
-Today `bars.ts:55` and `discoveryAgent.ts:279` call `AlpacaService.fromEnv()` to
-fetch **bars**. With one account that is harmless. With a second broker it means
+**Eight of the sixteen** `fromEnv()` call sites fetch market data, not account
+data — bars, quotes, the market clock, SPY benchmarks, ticker validation. With
+one account that is harmless. With a second broker it means
 "which account is active" would silently determine where price history comes
 from — different data depending on a UI toggle.
 
