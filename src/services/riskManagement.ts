@@ -94,6 +94,39 @@ export function riskRewardRatio(
   return reward / risk;
 }
 
+/** Below this multiple of ATR(14), a stop sits inside one average day's range. */
+export const STOP_NOISE_ATR_MULTIPLE = 1;
+
+/**
+ * Stop distance expressed in multiples of ATR(14) — the missing context in the
+ * trade dialog (roadmap #71). Across every closed trade with a stop, 14 of 15 sat
+ * at 1.49–2.12x ATR; the exception was a 0.61x stop that was hit almost
+ * immediately on a position that then ran to +3.82R.
+ *
+ * Null when it cannot be judged (no ATR, or no distance between entry and stop).
+ */
+export function stopAtrMultiple(
+  entry: number,
+  stop: number,
+  atr14: number | null | undefined,
+  direction: "long" | "short" = "long",
+): number | null {
+  if (atr14 == null || !(atr14 > 0) || !isFinite(atr14)) return null;
+  const distance = direction === "long" ? entry - stop : stop - entry;
+  if (!(distance > 0) || !isFinite(distance)) return null;
+  return distance / atr14;
+}
+
+/**
+ * Advisory text when a stop is inside the noise band. Advisory only — sizing
+ * stays the user's call and `pretradeRiskProblems` (the server gate) is
+ * deliberately NOT changed, consistent with every other speed bump in the app.
+ */
+export function stopNoiseWarning(multiple: number | null): string | null {
+  if (multiple == null || multiple >= STOP_NOISE_ATR_MULTIPLE) return null;
+  return `Stop is inside the noise band — ${multiple.toFixed(2)}x ATR(14), tighter than one average day's range. Ordinary volatility is likely to hit it.`;
+}
+
 export interface ConcentrationInput {
   positions: { ticker: string; value: number; sector?: string | null }[];
   accountValue: number;

@@ -59,9 +59,16 @@ export interface AlpacaOrderRequest {
   symbol: string;
   qty: number;
   side: "buy" | "sell";
-  type: "market" | "limit";
+  type: "market" | "limit" | "stop";
   timeInForce: "day" | "gtc";
   limitPrice?: number | null;
+  /**
+   * Trigger for a standalone `type: "stop"` order. Distinct from `stopLoss`
+   * below: this IS the order, whereas `stopLoss` attaches a protective leg to an
+   * entry. Used when an exit fails after its bracket legs were cancelled and the
+   * position's stop has to be restored on its own.
+   */
+  stopPrice?: number | null;
   /** Optional protective stop (creates a bracket/OTO order when set). */
   stopLoss?: number | null;
   /** Optional take-profit target (creates a bracket/OTO order when set). */
@@ -98,6 +105,22 @@ const num = (v: unknown): number | null => {
   const n = typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN;
   return isFinite(n) ? n : null;
 };
+
+/**
+ * Order statuses that still represent a working order at the broker. `held` is
+ * included on purpose: a bracket's protective stop rests there until its parent
+ * fills, and Alpaca's `?status=open` filter does NOT return it.
+ */
+const LIVE_ORDER_STATUSES = new Set([
+  "new",
+  "accepted",
+  "held",
+  "partially_filled",
+  "pending_new",
+  "accepted_for_bidding",
+  "calculated",
+  "pending_replace",
+]);
 
 export class AlpacaService {
   private tradingBase: string;
@@ -281,6 +304,70 @@ export class AlpacaService {
   }
 
   /**
+   * Cancel a resting order. Used when exiting a bracketed position: the stop and
+   * take-profit legs are live orders, and selling underneath them either gets
+   * rejected for insufficient quantity or fills and leaves an orphaned stop that
+   * can later execute and flip the account short.
+   *
+   * A 404 counts as success — a leg that already filled or was already cancelled
+   * is in the desired end state, and treating it as an error would abort an exit
+   * halfway through, leaving the position partly unwound.
+   */
+  async cancelOrder(orderId: string): Promise<void> {
+    const res = await this.fetchFn(`${this.tradingBase}/v2/orders/${encodeURIComponent(orderId)}`, {
+      method: "DELETE",
+      headers: {
+        "APCA-API-KEY-ID": this.config.apiKey,
+        "APCA-API-SECRET-KEY": this.config.apiSecret,
+        Accept: "application/json",
+      },
+    });
+    // 204 No Content is the success case; 404 means it is already gone.
+    if (res.ok || res.status === 404) return;
+    const text = await res.text().catch(() => "");
+    let msg = text.slice(0, 300);
+    try {
+      const j = JSON.parse(text) as { message?: string };
+      if (j.message) msg = j.message;
+    } catch {
+      /* not JSON — keep raw text */
+    }
+    throw new AlpacaError(`Alpaca cancel ${orderId} failed: ${res.status} ${msg}`, res.status);
+  }
+
+  /**
+   * Still-working orders for one symbol — the legs an exit must clear first.
+   *
+   * Deliberately NOT `?status=open`, and NOT `nested=true`. Both drop legs that
+   * an exit has to cancel, and both were verified against the live paper account:
+   *  - `nested=true` nests bracket children inside the parent, so they never
+   *    appear as top-level rows (31 orders returned nested vs 77 flat).
+   *  - `status=open` omits orders sitting in **`held`**, which is where a
+   *    bracket's protective stop waits. On the real account this hid 5 stop legs
+   *    (AVGO/V/CVX/SCHW/MA) — an exit would then have sold the position and left
+   *    a live stop behind, which is the exact orphaned-leg failure this is meant
+   *    to prevent.
+   * So: fetch everything and filter on a non-terminal status here.
+   */
+  async openOrdersFor(symbol: string): Promise<AlpacaOrder[]> {
+    const want = symbol.toUpperCase();
+    return (await this.workingOrders()).filter((o) => o.symbol.toUpperCase() === want);
+  }
+
+  /**
+   * Every still-working order across the account, in ONE request. Callers that
+   * need several symbols should use this and group locally rather than calling
+   * `openOrdersFor` per ticker.
+   */
+  async workingOrders(): Promise<AlpacaOrder[]> {
+    const all = await this.request<Record<string, unknown>[]>(
+      this.tradingBase,
+      "/v2/orders?status=all&limit=500&direction=desc&nested=false",
+    );
+    return all.map((o) => this.parseOrder(o)).filter((o) => LIVE_ORDER_STATUSES.has(o.status));
+  }
+
+  /**
    * Build the Alpaca order payload for a trade request. Pure (no IO) so it can be
    * unit-tested. A stop+target becomes a bracket; a single protective leg becomes
    * an OTO; neither yields a plain order.
@@ -296,6 +383,10 @@ export class AlpacaService {
     if (req.type === "limit") {
       if (req.limitPrice == null) throw new AlpacaError("limit order requires a limit price");
       body.limit_price = String(req.limitPrice);
+    }
+    if (req.type === "stop") {
+      if (req.stopPrice == null) throw new AlpacaError("stop order requires a stop price");
+      body.stop_price = String(req.stopPrice);
     }
     const hasStop = req.stopLoss != null;
     const hasTarget = req.takeProfit != null;

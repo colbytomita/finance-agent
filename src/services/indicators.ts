@@ -133,8 +133,8 @@ export function recentLow(bars: Bar[], days: number): number | null {
 export function supportResistance(
   bars: Bar[],
   window = 5,
-): { support: number | null; resistance: number | null } {
-  if (bars.length < window * 2 + 1) return { support: null, resistance: null };
+): { support: number | null; resistance: number | null; clearedHigh: number | null } {
+  if (bars.length < window * 2 + 1) return { support: null, resistance: null, clearedHigh: null };
   const lows: number[] = [];
   const highs: number[] = [];
   for (let i = window; i < bars.length - window; i++) {
@@ -150,7 +150,11 @@ export function supportResistance(
   const price = bars[bars.length - 1].close;
   const support = lows.filter((l) => l < price).sort((a, b) => b - a)[0] ?? null;
   const resistance = highs.filter((h) => h > price).sort((a, b) => a - b)[0] ?? null;
-  return { support, resistance };
+  // The highest swing high price has already CLEARED. `resistance` is by
+  // definition still above price, so it can never describe a level that has been
+  // broken — breakout detection needs this one instead (roadmap: breakout fix).
+  const clearedHigh = highs.filter((h) => h < price).sort((a, b) => b - a)[0] ?? null;
+  return { support, resistance, clearedHigh };
 }
 
 export interface IndicatorSnapshot {
@@ -173,6 +177,7 @@ export interface IndicatorSnapshot {
   swingLow10: number | null;
   support: number | null;
   resistance: number | null;
+  clearedHigh: number | null;
 }
 
 export function computeIndicators(bars: Bar[]): IndicatorSnapshot | null {
@@ -200,5 +205,6 @@ export function computeIndicators(bars: Bar[]): IndicatorSnapshot | null {
     swingLow10: recentLow(bars, 10),
     support: sr.support,
     resistance: sr.resistance,
+    clearedHigh: sr.clearedHigh,
   };
 }

@@ -229,3 +229,71 @@ describe("AlpacaService", () => {
     expect(url).toContain("paper-api.alpaca.markets");
   });
 });
+
+// Exiting a bracketed position is not just a sell. The protective stop/target
+// legs rest at the broker as live orders; selling underneath them either gets
+// rejected for insufficient quantity or fills and leaves an orphaned stop that
+// can later execute and flip the account short. The legs must be cancelled first.
+describe("AlpacaService — cancelling orders (exit support)", () => {
+  it("cancels an order with DELETE and treats 204 No Content as success", async () => {
+    const fetchFn = vi.fn(async () => new Response(null, { status: 204 })) as unknown as typeof fetch;
+    const svc = new AlpacaService({ ...cfg, fetchFn });
+    await expect(svc.cancelOrder("o1")).resolves.toBeUndefined();
+    const call = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(String(call[0])).toContain("/v2/orders/o1");
+    expect(call[1].method).toBe("DELETE");
+    expect(call[1].headers["APCA-API-KEY-ID"]).toBe("key");
+  });
+
+  it("treats a 404 cancel as success — the order is already gone", async () => {
+    // Filled or already-cancelled legs 404. That is the desired end state, so it
+    // must not abort an exit and leave the position half-unwound.
+    const fetchFn = vi.fn(async () => new Response("not found", { status: 404 })) as unknown as typeof fetch;
+    const svc = new AlpacaService({ ...cfg, fetchFn });
+    await expect(svc.cancelOrder("gone")).resolves.toBeUndefined();
+  });
+
+  it("raises on a real cancel failure so the caller does not sell unprotected", async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ message: "boom" }), { status: 500 })) as unknown as typeof fetch;
+    const svc = new AlpacaService({ ...cfg, fetchFn });
+    await expect(svc.cancelOrder("o1")).rejects.toBeInstanceOf(AlpacaError);
+  });
+
+  it("builds a standalone stop order (used to restore a stop after a failed exit)", () => {
+    const svc = new AlpacaService(cfg);
+    const body = svc.buildOrderPayload({
+      symbol: "msft", qty: 6, side: "sell", type: "stop", timeInForce: "gtc", stopPrice: 366.76,
+    });
+    expect(body).toMatchObject({ symbol: "MSFT", type: "stop", stop_price: "366.76", time_in_force: "gtc" });
+    expect(body.order_class).toBeUndefined(); // a plain stop, not a bracket
+  });
+
+  it("rejects a stop order with no stop price", () => {
+    const svc = new AlpacaService(cfg);
+    expect(() =>
+      svc.buildOrderPayload({ symbol: "MSFT", qty: 1, side: "sell", type: "stop", timeInForce: "gtc" }),
+    ).toThrow(AlpacaError);
+  });
+
+  it("lists still-working orders for one symbol, INCLUDING held bracket legs", async () => {
+    // Verified against the live paper account: Alpaca's `?status=open` filter
+    // omits orders in `held`, which is where a bracket's protective stop waits.
+    // Missing them would let an exit sell the position and orphan a live stop.
+    const fetchFn = mockFetch({
+      "/v2/orders": [
+        { id: "target", symbol: "MSFT", side: "sell", status: "new", qty: "6" },
+        { id: "stop", symbol: "MSFT", side: "sell", status: "held", qty: "6" },
+        { id: "done", symbol: "MSFT", side: "sell", status: "filled", qty: "6" },
+        { id: "dead", symbol: "MSFT", side: "sell", status: "canceled", qty: "6" },
+        { id: "other", symbol: "AAPL", side: "sell", status: "new", qty: "3" },
+      ],
+    });
+    const svc = new AlpacaService({ ...cfg, fetchFn });
+    const orders = await svc.openOrdersFor("msft");
+    expect(orders.map((o) => o.id).sort()).toEqual(["stop", "target"]);
+    const url = String((fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    // Must not use status=open (drops `held`) or nested=true (hides legs).
+    expect(url).toContain("status=all");
+    expect(url).toContain("nested=false");
+  });
+});

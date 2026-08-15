@@ -4,6 +4,7 @@ import {
   catalystScore,
   combineStockScore,
   DEFAULT_STOCK_WEIGHTS,
+  directionalCatalysts,
   MATERIAL_SCORE_DELTA,
   momentumScore,
   riskScore,
@@ -17,7 +18,7 @@ import { computeDrawdown } from "../buyZone";
 import { barsFromCloses, trendCloses } from "./helpers";
 
 describe("combineStockScore", () => {
-  it("applies the spec weights (20/20/25/25/10)", () => {
+  it("applies the spec weights (20/20/35/25/0)", () => {
     const score = combineStockScore({
       valuationScore: 10,
       momentumScore: 0, // out-of-range input is fine for the math check
@@ -25,8 +26,19 @@ describe("combineStockScore", () => {
       riskScore: 10,
       sentimentScore: 10,
     });
-    // 10*0.2 + 0*0.2 + 10*0.25 + 10*0.25 + 10*0.1 = 8.0
+    // sentiment carries 0 weight since roadmap #67 folded it into catalyst:
+    // 10*0.2 + 0*0.2 + 10*0.35 + 10*0.25 + 10*0 = 8.0
     expect(score).toBe(8);
+  });
+
+  it("gives sentiment no weight — it is displayed, not blended", () => {
+    // sentimentScore is derived from the SAME catalyst inputs as catalystScore,
+    // so it was ~collinear with it while contributing 0.19 points at weight 0.10.
+    // #67 folded its weight into catalyst; it is still computed for display.
+    const base = { valuationScore: 6, momentumScore: 6, catalystScore: 6, riskScore: 6 };
+    expect(combineStockScore({ ...base, sentimentScore: 1 })).toBe(
+      combineStockScore({ ...base, sentimentScore: 10 }),
+    );
   });
 
   it("returns a perfect 10 only when all components are 10", () => {
@@ -128,6 +140,17 @@ describe("riskScore (10 = low risk)", () => {
     ]).score;
     expect(withNeg).toBeLessThan(base);
   });
+
+  // riskScore used to start at 7 and only ever subtract, so a genuinely calm,
+  // structurally sound stock could never score above 7.5. Combined with
+  // valuationScore's hard 7 ceiling that made the 9-10 "Strong Buy Candidate"
+  // band arithmetically unreachable — it never fired once in two months.
+  it("rewards a genuinely low-risk stock, not just penalizing risky ones", () => {
+    const bars = barsFromCloses(trendCloses(100, 104, 100));
+    const calm = computeIndicators(bars);
+    const dd = computeDrawdown(bars, 104); // sitting at its high
+    expect(riskScore(calm, { ...dd!, trend: "improving" }).score).toBeGreaterThan(7.5);
+  });
 });
 
 describe("scoreStock end-to-end", () => {
@@ -152,6 +175,55 @@ describe("scoreStock end-to-end", () => {
     const result = scoreStock({ indicators: null, drawdown: null, catalysts: [] });
     expect(result.confidence).toBe("low");
     expect(result.overallScore).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("scoreStock — the top recommendation band is reachable", () => {
+  // Regression guard for a structural bug: with riskScore capped at 7.5 and
+  // valuationScore capped at 7.0, the weighted blend could not exceed ~7.8, so
+  // "Strong Buy Candidate" (>= 9) was arithmetically impossible. Across 1,967
+  // real scored events the band never fired once. An excellent stock on every
+  // measured axis must be able to reach it.
+  // The band is reachable iff the blend of each component's ATTAINABLE maximum
+  // clears 9. Before the fix riskScore capped at 7.5 and valuationScore at 7.0,
+  // so this sum could not exceed ~7.8 no matter what the market did.
+  it("blending each component's attainable maximum clears the 9.0 threshold", () => {
+    const attainableMax = {
+      valuationScore: 8.5, // discounted and recovering
+      momentumScore: 9.5, // every trend signal aligned (seen in real data)
+      catalystScore: 10, // strongly positive, high-confidence catalysts
+      riskScore: 9.5, // very low ATR%, intact structure, improving
+      sentimentScore: 8.5, // uniformly positive tone
+    };
+    expect(combineStockScore(attainableMax)).toBeGreaterThanOrEqual(9);
+    expect(stockRecommendationLabel(combineStockScore(attainableMax))).toBe("Strong Buy Candidate");
+  });
+
+  it("an excellent stock on every axis scores near the top of the range", () => {
+    // Tight daily ranges => genuinely low ATR%, the way a mega-cap actually trades.
+    const closes = trendCloses(100, 160, 260);
+    const bars = closes.map((c, i) => ({
+      date: new Date(Date.UTC(2025, 0, 1) + i * 86400000).toISOString().slice(0, 10),
+      open: c * 0.999,
+      high: c * 1.004,
+      low: c * 0.997,
+      close: c,
+      volume: 1_000_000,
+    }));
+    const ind = computeIndicators(bars);
+    const dd = computeDrawdown(bars, 120); // ~25% off the high — the value sweet spot
+    const result = scoreStock({
+      indicators: ind,
+      drawdown: { ...dd!, trend: "improving" },
+      catalysts: [
+        { impactScore: 5, confidence: "high", status: "upcoming" },
+        { impactScore: 4, confidence: "high", status: "occurred" },
+      ],
+    });
+    // Was 8.0 before the two-sided rebalance, and could never have exceeded ~8.1.
+    expect(result.overallScore).toBeGreaterThan(8.5);
+    expect(result.components.riskScore).toBeGreaterThan(7.5); // old hard ceiling
+    expect(result.components.valuationScore).toBeGreaterThan(7); // old hard ceiling
   });
 });
 
@@ -263,12 +335,52 @@ describe("scoreStock — fundamentals lead the score when supplied", () => {
   });
 });
 
+describe("directionalCatalysts (roadmap #67)", () => {
+  const c = (impactScore: number, status = "occurred") => ({
+    impactScore,
+    confidence: "low" as const,
+    status,
+  });
+
+  it("drops impact-0 items — they carry no direction", () => {
+    // 74% of stored catalysts are neutral yahoo-news. Averaging a few real
+    // signals across hundreds of them crushed the component: NVDA's mean over
+    // everything was 0.31 vs 1.09 over directional items only.
+    expect(directionalCatalysts([c(0), c(2), c(0), c(-3)])).toHaveLength(2);
+  });
+
+  it("keeps only the most recent N so a stale backlog can't dominate", () => {
+    const many = Array.from({ length: 50 }, () => c(1));
+    expect(directionalCatalysts(many, 30)).toHaveLength(30);
+  });
+
+  it("keeps the LATEST items, not the earliest", () => {
+    const cs = [c(-4), ...Array.from({ length: 30 }, () => c(1))];
+    // The stale -4 at the front must fall out of a 30-item window.
+    expect(directionalCatalysts(cs, 30).every((x) => x.impactScore === 1)).toBe(true);
+  });
+
+  it("returns nothing when every catalyst is neutral", () => {
+    // Consequence that matters: such a ticker is then treated as having NO
+    // catalysts, so catalyst weight is redistributed rather than dragging the
+    // score to a false neutral.
+    expect(directionalCatalysts([c(0), c(0), c(0)])).toEqual([]);
+  });
+});
+
 describe("valuationScore + sentimentScore", () => {
   it("treats moderate drawdowns as better value than near-highs", () => {
     const bars = barsFromCloses(trendCloses(100, 200, 260));
     const nearHigh = valuationScore(computeDrawdown(bars, 199));
     const dipped = valuationScore(computeDrawdown(bars, 160)); // ~20% off high
     expect(dipped.score).toBeGreaterThan(nearHigh.score);
+  });
+
+  it("rates a discounted-but-recovering stock above its old 7.0 ceiling", () => {
+    const bars = barsFromCloses(trendCloses(100, 200, 260));
+    const dipped = computeDrawdown(bars, 150); // ~25% off the high
+    // A recovering discount is the value sweet spot; the old lookup capped at 7.
+    expect(valuationScore({ ...dipped, trend: "improving" }).score).toBeGreaterThan(7);
   });
 
   it("sentiment follows catalyst tone", () => {

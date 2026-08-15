@@ -1,5 +1,5 @@
 import type { Bar, SetupType } from "@/lib/types";
-import { computeIndicators, type IndicatorSnapshot } from "./indicators";
+import { computeIndicators, sma, type IndicatorSnapshot } from "./indicators";
 import { riskRewardRatio } from "./riskManagement";
 
 // Swing-trade setup detection from daily bars. Heuristic pattern checks —
@@ -78,32 +78,50 @@ function detectPullbackToSupport(ind: IndicatorSnapshot, bars: Bar[]): DetectedS
   );
 }
 
+/**
+ * A breakout is a level that has been BROKEN, not one being approached. The
+ * previous version keyed off `ind.resistance`, which `supportResistance` defines
+ * as the nearest swing high strictly ABOVE price — so it could only ever fire
+ * while price was still capped, and fired on every approach to a ceiling. Most
+ * approaches get rejected (that is what makes a level resistance), which is why
+ * it backtested at a 9.5% win rate over 40 matured setups. It now keys off
+ * `clearedHigh` (the highest swing high price has cleared) and requires a fresh,
+ * volume-confirmed crossing that has not yet run away from the level.
+ */
 function detectBreakout(ind: IndicatorSnapshot, bars: Bar[]): DetectedSetup | null {
-  const { price, resistance, atr14, relativeVolume } = ind;
-  if (resistance == null || atr14 == null) return null;
-  // Price within striking distance (1%) or just above prior resistance with volume.
-  const nearBreakout = price >= resistance * 0.99 && price <= resistance * 1.03;
-  if (!nearBreakout) return null;
-  const volumeConfirms = relativeVolume != null && relativeVolume >= 1.3;
-  const stop = resistance - 1.5 * atr14;
-  const entryLow = Math.max(price, resistance);
-  const entryHigh = resistance * 1.02;
-  const t1 = entryHigh + 2 * (entryHigh - stop);
-  const t2 = entryHigh + 3 * (entryHigh - stop);
-  let quality = volumeConfirms ? 7.5 : 5.5;
+  const { price, clearedHigh, atr14, relativeVolume } = ind;
+  if (clearedHigh == null || atr14 == null) return null;
+  if (price <= clearedHigh) return null; // not broken yet
+  // Extended moves are chasing: the retest entry is already gone.
+  if (price > clearedHigh * 1.05) return null;
+  // A crossing, not a stock that has simply been above the level for weeks.
+  const priorCloses = bars.slice(-6, -1).map((b) => b.close);
+  if (!priorCloses.some((c) => c <= clearedHigh)) return null;
+  // Volume is what separates a real break from a drift through the level.
+  if (!(relativeVolume != null && relativeVolume >= 1.3)) return null;
+
+  const stop = clearedHigh - 1.5 * atr14;
+  // The broken level becomes support on a retest, so it anchors the entry zone.
+  const entryLow = clearedHigh;
+  const entryHigh = Math.max(price, clearedHigh * 1.01);
+  // Targets are measured from the entry MID because that is where the outcome
+  // resolver fills; measuring from entryHigh advertised an R/R the trade never got.
+  const mid = (entryLow + entryHigh) / 2;
+  const risk = mid - stop;
+  let quality = 6.5;
+  if (relativeVolume >= 2) quality += 1;
   if (ind.sma50 != null && price > ind.sma50) quality += 0.5;
+  if (ind.sma200 != null && price > ind.sma200) quality += 0.5;
   return buildSetup(
     "breakout",
     quality,
     entryLow,
     entryHigh,
     stop,
-    t1,
-    t2,
-    "Close back below the breakout level (failed breakout).",
-    volumeConfirms
-      ? "Breaking resistance on above-average volume."
-      : "At resistance — needs volume confirmation before entry.",
+    mid + 2 * risk,
+    mid + 3 * risk,
+    "Close back below the broken level (failed breakout).",
+    `Broke above ${round2(clearedHigh)} on ${relativeVolume.toFixed(1)}x average volume.`,
   );
 }
 
@@ -134,11 +152,26 @@ function detectOversoldBounce(ind: IndicatorSnapshot, bars: Bar[]): DetectedSetu
 function detectMaReclaim(ind: IndicatorSnapshot, bars: Bar[]): DetectedSetup | null {
   const { price, sma50, atr14 } = ind;
   if (sma50 == null || atr14 == null || bars.length < 6) return null;
-  // Price closed back above 50-SMA within the last 2 bars after being below.
-  const prevCloses = bars.slice(-6, -2).map((b) => b.close);
-  const wasBelow = prevCloses.some((c) => c < sma50);
+  const closes = bars.map((b) => b.close);
+  const idx = bars.length - 1;
+  // Price closed back above the 50-SMA within the last 2 bars after being below.
+  // Each prior close is compared against the average AS OF THAT BAR: comparing
+  // old closes to *today's* average misjudges whether price was ever really below
+  // it, and a falling average made the check trivially true.
+  let wasBelow = false;
+  for (let i = Math.max(0, idx - 5); i <= idx - 2; i++) {
+    const smaThen = sma(closes.slice(0, i + 1), 50);
+    if (smaThen != null && closes[i] < smaThen) {
+      wasBelow = true;
+      break;
+    }
+  }
   const nowAbove = price > sma50;
   if (!(wasBelow && nowAbove && price < sma50 * 1.04)) return null;
+  // NOTE: filtering out reclaims of a *falling* 50-SMA (the "bull trap" theory)
+  // was tried and measured over 288 tickers of history — it halved the signal
+  // count (1,922 -> 1,067 matured) while the win rate stayed at 35.5%. No edge,
+  // so it is deliberately not filtered. Don't re-add it without new evidence.
   const stop = sma50 - 1.5 * atr14;
   const t1 = price + 2 * (price - stop);
   const t2 = price + 3 * (price - stop);

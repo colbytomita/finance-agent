@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { loadConfig } from "@/lib/config";
 import { isCatalystStale } from "@/services/catalysts";
+import { atr } from "@/services/indicators";
 import { pairKey, suppressedSetupPairs } from "@/services/setupArchive";
 import {
   summarizeClosedTrades,
@@ -159,9 +160,28 @@ export function journalEntries() {
     .all();
 }
 
-/** Realized stats over all closed trades in the DB. */
+/**
+ * Realized stats over closed trades, skipping any flagged `excludedFromStats`
+ * (see the column comment: batch closes from development are real rows but not
+ * real exit decisions, so counting them would misreport the strategy).
+ */
 export function getTradePerformance(): TradeStats {
-  return summarizeClosedTrades(closedTrades() as ClosedTradeInput[], journalEntries() as JournalInput[]);
+  const trades = closedTrades().filter((t) => !t.excludedFromStats);
+  return summarizeClosedTrades(trades as ClosedTradeInput[], journalEntries() as JournalInput[]);
+}
+
+/**
+ * Tickers with an unacknowledged "no live stop at the broker" alert (roadmap
+ * #75). Read from the alerts the coverage check writes rather than querying the
+ * broker, so rendering a page costs no API call.
+ */
+export function tickersMissingStops(): Set<string> {
+  const rows = getDb()
+    .select()
+    .from(schema.alerts)
+    .where(and(eq(schema.alerts.alertType, "stop_missing"), eq(schema.alerts.acknowledged, false)))
+    .all();
+  return new Set(rows.map((r) => r.ticker).filter((t): t is string => t != null));
 }
 
 export function recentScoreChanges(limit = 15) {
@@ -238,6 +258,21 @@ export function tickerBars(ticker: string, limit = 250) {
     .limit(limit)
     .all();
   return rows.reverse();
+}
+
+/**
+ * ATR(14) per ticker, so the trade dialog can express stop distance in ATR terms
+ * (roadmap #71). Only the last 30 bars are read per ticker — enough for a 14-day
+ * ATR without pulling a year of history for a display-only figure.
+ */
+export function atrByTicker(tickers: string[]): Map<string, number | null> {
+  const out = new Map<string, number | null>();
+  for (const ticker of new Set(tickers)) {
+    // priceBars rows use `barDate`; the indicator helpers expect `Bar.date`.
+    const bars = tickerBars(ticker, 30).map((b) => ({ ...b, date: b.barDate }));
+    out.set(ticker, bars.length >= 15 ? atr(bars, 14) : null);
+  }
+  return out;
 }
 
 export interface JournalStats {

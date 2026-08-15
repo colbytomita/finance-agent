@@ -151,6 +151,12 @@ export const activeTrades = sqliteTable("active_trades", {
   // Last synced Alpaca order status (services/orderSync). Terminal statuses
   // (filled/canceled/expired/rejected/replaced) stop polling for that trade.
   brokerOrderStatus: text("broker_order_status"),
+  // Keeps a real trade out of the realized-performance stats without deleting
+  // it. Needed for trades that were closed as a batch during development rather
+  // than as genuine exit decisions — they are real rows, but including them in
+  // win rate / avg R would misreport how the strategy actually did.
+  excludedFromStats: integer("excluded_from_stats", { mode: "boolean" }).notNull().default(false),
+  excludedReason: text("excluded_reason"),
 });
 
 export const tradeSetups = sqliteTable("trade_setups", {

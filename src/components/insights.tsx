@@ -103,7 +103,8 @@ export function StockScoreInsight({
         Stock score {score.overallScore.toFixed(1)}/10 · {score.recommendation}
       </PanelTitle>
       <p className="mb-1.5 text-zinc-500">
-        Weighted blend of five components (confidence: {score.confidence}).
+        Weighted blend (confidence: {score.confidence}). Components at 0% are shown for context but do not
+        move the score.
       </p>
       <table className="w-full">
         <tbody>
@@ -156,7 +157,11 @@ const COMPONENT_META: Record<
   momentum: { label: "Momentum", field: "momentumScore" },
   catalyst: { label: "Catalysts", field: "catalystScore" },
   risk: { label: "Risk", field: "riskScore", note: "10 = low risk." },
-  sentiment: { label: "Sentiment", field: "sentimentScore" },
+  sentiment: {
+    label: "Sentiment",
+    field: "sentimentScore",
+    note: "Not blended — derived from the same catalysts as the catalyst score, so its weight was folded into it.",
+  },
 };
 
 export function StockComponentInsight({

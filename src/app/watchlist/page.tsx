@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   activeSetups,
   allWatchlist,
+  atrByTicker,
   latestDrawdown,
   latestScore,
   latestSnapshot,
@@ -37,6 +38,8 @@ export default function WatchlistPage() {
   const recs = portfolioWatchlistRecommendations(cfg.portfolioWatchlistRecLimit);
   const setups = activeSetups();
   const avoidEarningsWithin = effectiveConfig(cfg).avoidEarningsWithinDays;
+  // ATR(14) per ticker for the order dialog's stop-distance context (#71).
+  const atrs = atrByTicker(items.map((i) => i.ticker));
   const rows = items.map((w) => ({
     w,
     snap: latestSnapshot(w.ticker),
@@ -175,6 +178,7 @@ export default function WatchlistPage() {
                       riskPerTradePercent: cfg.riskPerTradePercent,
                       accountValue,
                       maxPositionWeightPercent: cfg.maxPortfolioConcentrationPercent,
+                      atr14: atrs.get(w.ticker) ?? null,
                     }}
                   />
                 </td>

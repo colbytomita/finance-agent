@@ -49,6 +49,14 @@ import type { StockRecommendationLabel } from "@/lib/types";
 
 const CACHE_KEY = "performance_report_v2";
 
+/**
+ * The day `detectBreakout` was redefined. Setups detected before this came from
+ * a detector that could never fire on an actual breakout (it keyed off
+ * `resistance`, which is by definition still above price), so breakout stats
+ * pool two different definitions until the older detections age out.
+ */
+export const BREAKOUT_DETECTOR_CHANGED_ON = "2026-08-14";
+
 export function readCachedReport(): PerformanceReport | null {
   const row = getDb()
     .select()
@@ -435,6 +443,13 @@ async function runSetupPerformance(
     );
   if (overall.triggered === 0 && pending > 0)
     notes.push("No matured setups have triggered yet — check back once the earliest detections have run their course.");
+  if (setups.some((s) => s.setupType === "breakout" && s.detectedAt < BREAKOUT_DETECTOR_CHANGED_ON))
+    notes.push(
+      `Breakout setups detected before ${BREAKOUT_DETECTOR_CHANGED_ON} came from an earlier detector that fired when price ` +
+        `APPROACHED resistance rather than when it broke through, and backtested at a 23.2% win rate. The current detector ` +
+        `requires a fresh, volume-confirmed break of a cleared level (38.3% over the same history). Breakout figures mix ` +
+        `both definitions until the older detections age out.`,
+    );
 
   return {
     performance: {

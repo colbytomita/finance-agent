@@ -21,6 +21,7 @@ import { refreshPrices } from "@/services/quotes";
 import { upsertPortfolioSnapshot } from "@/services/portfolioHistory";
 import { generateAlerts } from "@/services/alerts";
 import { syncBrokerOrders } from "@/services/orderSync";
+import { checkStopCoverage } from "@/services/stopCoverage";
 import { rollCatalystStatuses, scanYahooNews } from "@/services/catalysts";
 import { AlpacaService } from "@/services/alpaca";
 import { runDiscoveryScan } from "@/services/discoveryAgent";
@@ -102,6 +103,18 @@ async function maybeRefresh(): Promise<void> {
         `order sync: ${orders.checked} checked, ${orders.corrected} corrected, ` +
           `${orders.canceled} canceled, ${orders.closed} auto-closed, ${orders.flagged} flagged` +
           (orders.errors.length ? `, ${orders.errors.length} error(s)` : ""),
+      );
+    }
+    // Reconcile intended stops against what is actually working at the broker
+    // (roadmap #75). One request for the whole account; detection only.
+    const coverage = await checkStopCoverage().catch((e) => {
+      log(`stop coverage check failed: ${errorMessage(e)}`);
+      return null;
+    });
+    if (coverage?.gaps.length) {
+      log(
+        `stop coverage: ${coverage.gaps.length} of ${coverage.checked} position(s) with no live stop — ` +
+          coverage.gaps.map((g) => g.ticker).join(", "),
       );
     }
     for (const t of getTrackedTickers()) {

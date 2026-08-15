@@ -408,6 +408,125 @@ export function DeleteButton({ url, label = "✕" }: { url: string; label?: stri
   );
 }
 
+/**
+ * Sells the position at the broker and records the close at the actual fill.
+ * Two-step by design: this sends a REAL order, so the first click only arms the
+ * confirmation, which states exactly what will be sold. Distinct from
+ * `CloseTradeButton`, which only records a close in the app and leaves the
+ * broker position untouched.
+ */
+export function ExitTradeButton({
+  tradeId,
+  holdingId,
+  ticker,
+  shares,
+  isLive = false,
+}: {
+  tradeId?: number;
+  /** Exit a bare portfolio holding instead of a tracked trade. */
+  holdingId?: number;
+  ticker: string;
+  shares: number;
+  isLive?: boolean;
+}) {
+  const { call, busy, error } = useApiAction();
+  const [armed, setArmed] = useState(false);
+  const url = holdingId != null ? `/api/portfolio/${holdingId}/exit` : `/api/trades/${tradeId}/exit`;
+
+  if (!armed) {
+    return (
+      <button className="btn" onClick={() => setArmed(true)} title={`Sell ${shares} ${ticker} at market`}>
+        Exit
+      </button>
+    );
+  }
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <span className="text-xs text-amber-300">
+        Sell {shares} {ticker} at market{isLive ? " (LIVE — real money)" : ""}?
+      </span>
+      <button
+        className="btn btn-danger"
+        disabled={busy}
+        onClick={async () => {
+          const ok = await call(url, {
+            method: "POST",
+            body: { confirmLive: isLive },
+            errorText: "Exit failed.",
+          });
+          if (ok) setArmed(false);
+        }}
+      >
+        {busy ? "Selling…" : "Confirm"}
+      </button>
+      <button type="button" className="btn" onClick={() => setArmed(false)} disabled={busy}>
+        Cancel
+      </button>
+      {error && <span className="text-xs text-red-400">{error}</span>}
+    </span>
+  );
+}
+
+/**
+ * Re-places a trade's protective stop at the broker. Shown only when the
+ * coverage check has found the recorded stop has no live order behind it, so the
+ * position is actually unprotected. User-initiated — the app surfaces the gap
+ * and never places the order itself.
+ */
+export function RestoreStopButton({
+  tradeId,
+  ticker,
+  stopPrice,
+  shares,
+  isLive = false,
+}: {
+  tradeId: number;
+  ticker: string;
+  stopPrice: number;
+  shares: number;
+  isLive?: boolean;
+}) {
+  const { call, busy, error } = useApiAction();
+  const [armed, setArmed] = useState(false);
+
+  if (!armed) {
+    return (
+      <button
+        className="btn border-amber-500/60 text-amber-300"
+        onClick={() => setArmed(true)}
+        title={`No stop is working at the broker for ${ticker}`}
+      >
+        ⚠ Restore stop
+      </button>
+    );
+  }
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <span className="text-xs text-amber-300">
+        Place GTC stop @ {stopPrice} for {shares} {ticker}{isLive ? " (LIVE)" : ""}?
+      </span>
+      <button
+        className="btn btn-danger"
+        disabled={busy}
+        onClick={async () => {
+          const ok = await call(`/api/trades/${tradeId}/restore-stop`, {
+            method: "POST",
+            body: { confirmLive: isLive },
+            errorText: "Could not place the stop.",
+          });
+          if (ok) setArmed(false);
+        }}
+      >
+        {busy ? "Placing…" : "Confirm"}
+      </button>
+      <button type="button" className="btn" onClick={() => setArmed(false)} disabled={busy}>
+        Cancel
+      </button>
+      {error && <span className="text-xs text-red-400">{error}</span>}
+    </span>
+  );
+}
+
 export function CloseTradeButton({ tradeId, ticker }: { tradeId: number; ticker: string }) {
   const { submit, busy, error } = useSubmit(`/api/trades/${tradeId}`, "PATCH");
   const [open, setOpen] = useState(false);
@@ -438,6 +557,16 @@ export function CloseTradeButton({ tradeId, ticker }: { tradeId: number; ticker:
       <div className={field}>
         <label>Lessons</label>
         <input name="lessons" className="w-40" />
+      </div>
+      {/* Without this the thesis-played-out rate on /performance can never be
+          computed — nothing else in the app ever sets the field. */}
+      <div className={field}>
+        <label>Thesis played out?</label>
+        <select name="thesisPlayedOut" className="w-28" defaultValue="">
+          <option value="">not recorded</option>
+          <option value="yes">yes</option>
+          <option value="no">no</option>
+        </select>
       </div>
       <button className="btn btn-danger" disabled={busy}>
         {busy ? "…" : "Close trade"}

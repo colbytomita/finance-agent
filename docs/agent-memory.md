@@ -1,6 +1,181 @@
 # Agent Memory
 
-Last updated: 2026-08-06.
+Last updated: 2026-08-14.
+
+## 2026-08-14 session — v10 executed (#66, #67, #68, #72–#76) + a broker-state investigation
+
+Colby asked "how is this project doing performance wise", then "start fixing
+those issues", then requested the stock-page trade panel and exit buttons, then
+asked why his limit orders had been cancelled. Nine roadmap items shipped.
+**Everything is UNCOMMITTED** (finance-agent rule: never commit unless asked).
+**Tests 501 → 560 across 45 files; `npx tsc --noEmit` clean; migration 0009.**
+Full per-item detail with tables lives in `docs/ROADMAP.md` — this is the map.
+
+### The through-line worth reading first
+
+**Four separate times this session, a plausible fix was wrong and only
+measurement caught it.** That is the transferable lesson, not any single fix:
+
+1. "Breakout fails → require volume confirmation." The volume-confirmed subset
+   went **0-for-4**. Dropped before any code was written.
+2. "ma_reclaim catches bull traps → filter reclaims of a falling 50-SMA." Built,
+   then measured: **halved the sample (1,922 → 1,067 matured) for an unchanged
+   35.5% win rate.** Reverted; the null result is recorded in a comment in
+   `detectMaReclaim` so it is not re-derived.
+3. "Make riskScore two-sided by re-basing to a neutral 5.5." Measured: it pushed
+   the **median stock down** (Buy 17 → 7, Watch/Hold 29 → 40) because real
+   holdings cluster at 2.5–4% ATR. Kept the base at 7 and added only upside.
+4. "7 of 8 open trades have live bracket legs" — asserted from the app's
+   `stop_loss` column **without asking the broker**. Wrong: 5 of 11 positions had
+   no live stop at all.
+
+**Method that works, use it:** run OLD and NEW logic over the **same recomputed
+inputs** in one process, keeping the old implementation inline as a control.
+Comparing new output against **stored** rows is confounded (stored scores were
+built from live quotes + earnings nudges) and produced a false negative that cost
+a full cycle. And: if a change is monotone by construction but the measurement
+shows non-monotone results, **trust the construction and debug the measurement.**
+
+### What shipped
+
+- **#68 breakout detector — it could never fire on a breakout.**
+  `supportResistance` defines `resistance` as the nearest swing high *strictly
+  above* price, so `price >= resistance*0.99` only ever meant "climbed to within
+  1% below a ceiling"; `price <= resistance*1.03` was dead code. Proven against
+  data: across all 616 stored breakout rows `entry_range_low > entry_range_high`
+  never occurs. Fixed with a new `clearedHigh` indicator + fresh-crossing test +
+  5% extension cap + volume as a hard gate; targets now measured from the entry
+  **mid** (the resolver fills at mid, so measuring from `entryHigh` advertised an
+  R/R the trade never got). **Replay over 288 tickers with the old logic as a
+  control on identical data: 23.2% → 38.3% win rate, +0.04R → +0.10R.**
+  `setupDetection.ts` had **no unit tests at all** — that is how it survived.
+- **#66 the top band was arithmetically impossible.** `riskScore` capped at 7.5
+  (base 7, subtract-only), `valuationScore` at 7.0 (flat {4.5,6,7} lookup) → max
+  blend **7.46**. Both are two-sided now. A/B: 36 of 54 raised, 0 lowered.
+- **#67 catalyst compression is an INPUT problem, not a range problem.** 74% of
+  stored catalysts have `impact_score = 0` (mostly `yahoo-news`), and mega-caps
+  hold 300+ rows, so the *mean* buried real signal (NVDA 0.31 over everything vs
+  1.09 over directional only). New `directionalCatalysts()` feeds scoring only;
+  the display timeline is unchanged. Sentiment weight → 0, folded into catalyst
+  (0.25 → 0.35). Rejected on evidence: net-pressure tanh (saturates, median
+  9.97) and strongest-signal (one −3 headline pinned four mega-caps at 3.61).
+- **#72 `thesisPlayedOut` was uncollectable AND would have been inverted.** The
+  close form never collected it, and the route used `z.coerce.boolean()` =
+  `Boolean(v)`, so the string `"no"` → **true**. **Grep for `z.coerce.boolean()`
+  anywhere else before trusting it.**
+- **#73 a third of the realized sample was dev cleanup.** 5 of 16 closed trades
+  batch-closed within ~2 minutes on 2026-06-25. New `excluded_from_stats` /
+  `excluded_reason` columns (**migration 0009**); **rows kept, flagged not
+  deleted**. Realized avg R −0.22 → **+0.00**, avg return −1.86% → **+0.71%**.
+  **ORCL (−2.67R) is now excluded, so #69/#71 rest on a trade that has left the
+  live sample — re-check them before acting.**
+- **#74 / #76 exits.** `tradeExit.ts` sequences cancel legs → market close →
+  poll for a real fill → close at the **actual** fill; refuses when the market is
+  closed; re-places the stop and raises a critical alert if the sell fails after
+  cancelling. `exitAll.ts` adds a bulk exit behind a typed `EXIT ALL` phrase —
+  sequential, never aborts the batch on one failure, records exit reason +
+  thesis on every journal entry, re-runs the performance backtest afterwards.
+- **#75 stop-coverage reconciliation.** Compares each open trade's *recorded*
+  stop against orders actually working at the broker; `stop_missing` alerts;
+  user-initiated `restore-stop` places a standalone **GTC** stop.
+
+- **#71 stop-distance-vs-ATR advisory.** Premise re-verified on the post-#73
+  sample: 14 of 15 closed trades with a stop sat at **1.49–2.12× ATR(14)**; the
+  sole outlier is **V at 0.61×**, and V is *not* excluded, so the finding stands
+  (n=1 still does not establish "tight stops lose"). The order dialog now shows
+  `stop N.NN× ATR(14)` beside the live R/R, amber under 1×. `pretradeRiskProblems`
+  deliberately unchanged — advisory, never a block.
+
+### The broker-state findings (these will bite again)
+
+- **`?status=open` does NOT return orders in `held`**, which is where a bracket's
+  protective stop waits. And `nested=true` hides bracket children inside their
+  parent (**31 orders returned nested vs 77 flat**). The first cut of
+  `openOrdersFor` used both and therefore missed **5 live stop legs** — an exit
+  would have sold the position and left an orphaned stop that can later execute
+  and **flip the account short**, the exact failure the design exists to prevent.
+  Now `status=all&nested=false` filtered by an explicit `LIVE_ORDER_STATUSES` set.
+  **A broker's "open" is not your definition of open — enumerate statuses.**
+- **Why orders get cancelled, confirmed pair-by-pair:** a bracket is **OCO**, so
+  a filled stop cancels its target and vice versa (MSFT, AMGN, EIX, EXC, V, RTX,
+  BABA, MA, AMZN, TSLA — all normal). Separately, the 2026-06-25 orders used
+  `time_in_force=day`, so their protective legs expired at that day's close and
+  were never replaced; orders from 2026-07-06 onward use `gtc`.
+- **QBTS is unexplained**: both legs cancelled 2026-07-27 at 07:03/08:00 UTC,
+  **neither filled**, position still held, no corporate action in activities.
+- **Never infer broker state from the app DB. Query the broker.**
+
+### State at session end
+
+- **Uncommitted**, tests 560/45, typecheck clean, migration 0009 pending commit.
+- Account: equity $101,269.64 on a $100k paper account (**+1.27% all-time**);
+  open book cost $17,292 → value $18,362 = **+$1,069.52 (+6.2%)**, but **$82,908
+  (82%) is idle cash**, so the 6.2% is on ~18% deployed. **QBTS alone is $424.71
+  = 40% of the entire gain.**
+- **Colby plans to exit everything at Monday 2026-08-17's open (09:30 ET) and
+  redeploy.** `/swing` → "Exit all 8 positions…". **That bulk exit has never run
+  against the broker** (market closed all session) — #74b covers the first real
+  round-trip, and Monday IS it.
+- 18 pending Agent Picks (XOM 8.1, COP 8.1, MS 7.9, SMCI 7.9, ASML 7.8, PLTR
+  7.8 …) already exist for redeployment — **no need to spend LLM credits** on a
+  fresh scan. They were scored *before* #66/#67 and will re-score on refresh.
+- **Open and important: #67b** — #66 and #67 both widened the score and both were
+  validated on *distribution shape only*. Neither has been shown to predict
+  anything, and the Buy band now holds 43% of the watchlist (was 15%).
+  Recalibrate the bands on **forward returns** once 20 trading days have matured.
+
+## 2026-08-06 session (later still) — the first real performance evaluation → roadmap v10
+
+Colby asked "how has this finance agent been performing?" This is the first time
+the question was answered with numbers rather than vibes. Sources: the
+`/performance` backtest re-run at 21:00Z (1,545 score events, 55 tickers,
+2026-06-13 → 2026-08-06), 16 closed trades, 83 matured setups. **Nothing was
+built for this** — v10 is written, no v10 item is implemented except the #70
+measurement. Roadmap v10 in `docs/ROADMAP.md` carries the full tables.
+
+**Headline: risk control works; selection has not demonstrated forward edge; the
+score is mostly a restatement of trailing momentum.**
+
+- **Score calibration.** Read t-stats, not percentages. Backward the score is
+  overwhelming (Buy band pre5 **+3.00%, t=8.68**; Avoid band **−5.16%,
+  t=−11.81**). Forward at 5 days **nothing is significant and the ordering
+  inverts** — Buy −0.58% is *worse* than Hold −0.37%. At post20 the ordering is
+  monotonic but only the downside is solid (Avoid −9.49%, **t=−6.16**, n=102;
+  Buy +2.48% at t=1.49 on n=25 is noise). **So: a reliable "what to avoid"
+  detector, an unproven "what to buy" detector.**
+- **The score's ceiling is structural (#66).** In 26,667 rows the score has
+  **never reached 8** — min 2.8, max **7.7**, mean 6.10. "Strong Buy" (9–10)
+  has zero events ever; "Strong Avoid" has 44. Cause: the heavily-weighted
+  components are compressed — catalyst (w=0.25) spans 3.79–6.66 = 0.72 pts of
+  swing, sentiment (w=0.10) spans 4.36–6.22 = **0.19 pts** and literally cannot
+  move a band. Only **momentum has real range (1.5–9.5)**, which is *why* the
+  score mirrors momentum. Max achievable ≈ 7.46, matching the observed 7.7.
+- **Setups (#68).** 83 matured, 27.8% win, avg R **+0.07** ≈ breakeven — and
+  breakeven only because **`breakout` (27 matured, 1 win in 13 triggered,
+  avg R −0.24)** cancels out pullback_to_support (55.6%, +0.26) and
+  momentum_continuation (37.5%, +0.24).
+- **Realized trades.** 16 closed, 25% win, avg −1.86%, avg R **−0.22**, net
+  **+$95 on $17,749 deployed (+0.54%) vs SPY +1.84%** — underperformed the
+  benchmark. Profit factor 1.17 is dollar-weighted and flattering.
+- **#70 MEASURED — exits are *not* the problem.** Actual exits −0.379R vs
+  holding to +20d −0.212R: holding better by 0.168R/trade, but that is a small
+  net of huge opposing effects on n=12 (exiting saved 1.5–2.4R on TSLA×3/ORCL,
+  cost 2.9R and 4.8R on RTX/V). **No exit-logic change is justified.** Item
+  closed, not deferred.
+- **The one actionable find (#71).** Stops are mostly sane at 1.6–2.5× ATR(14).
+  **V's was 1.43% against a 2.36% ATR = 0.61×** — inside a single day's range;
+  stopped instantly, then ran to +3.82R, forgoing **4.83R**, the biggest swing
+  in the book. Only 2 trades sit under 1.5× ATR so "tight stops lose" is NOT
+  established — but flagging a sub-1× ATR stop in the trade dialog is cheap and
+  clearly right.
+
+**Caveat stapled to all of it:** eight weeks, one mild-uptrend regime (SPY
++1.84%), post20 only matures for events before ~07-09, 16 trades. The *negative*
+findings rest on the big samples and are the trustworthy half; the positive ones
+do not clear the bar. Re-run before treating any of it as settled.
+
+**#66/#67 need Colby's decision before any code moves** — rescaling the bands or
+widening components changes every score on every page.
 
 ## 2026-08-06 session (later) — #63: GDELT was never rate-limited to death; our connector threw the data away
 
