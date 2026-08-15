@@ -241,12 +241,50 @@ None of this is a verdict on the strategy; it is a verdict on what has been
   **Accept:** a breakout row built only from detections after 2026-08-14, held
   against the 38.3% / +0.10R the replay predicts.
 
-- [ ] **68c. `expired` is the largest single setup outcome** *(not yet
-  investigated)*
-  **Why:** carried over from #68 — 31 of 67 triggered setups expired without
-  touching target or stop inside 20 days, more than won and lost combined. That
-  is a target-distance / horizon question, not a direction question, and the
-  breakout fix does not address it.
+- [x] **68c. `expired` is the largest single setup outcome** *(MEASURED
+  2026-08-14 — the premise was backwards; expiry is not a defect)*
+  **The question:** 44 of 111 triggered setups expire without touching target or
+  stop inside 20 days. Is the target too far, or the horizon too short?
+  **Method:** replayed the current detectors over 288 tickers (11,266 episodes),
+  then re-resolved the *same* setups under different target multiples and
+  horizons. **Expectancy (avg R over triggered) is the decider** — a nearer
+  target wins more often but wins less, so win rate alone would mislead.
+
+  | target | horizon | win rate | expired | **avg R** |
+  |---|---|---|---|---|
+  | 1R | 20d | 54.2% | 13.1% | 0.014 |
+  | 1.5R | 20d | 43.0% | 21.0% | 0.032 |
+  | **2R (current)** | **20d** | **34.4%** | **28.2%** | **0.059** |
+  | 2.5R | 20d | 27.4% | 33.9% | 0.086 |
+  | 3R | 20d | 22.1% | 37.7% | 0.108 |
+  | 2R | 40d | 37.4% | 11.8% | 0.076 |
+  | 3R | 40d | 27.4% | 19.2% | **0.143** |
+
+  **Expectancy rises monotonically with target distance.** Pulling targets in to
+  "fix" expiry would raise the win rate and *lower* the return — the exact trap of
+  optimising the comfortable metric. Every setup type measured worse at 1.5R than
+  at 2R, and `pullback_to_support` went **negative** (+0.014 → −0.011). n=9,968
+  triggered, so this is not a small-sample artifact.
+  **The real constraint is the horizon, not the target.** The same setups at 40
+  days expire 11.8% instead of 28.2% and return 0.076R instead of 0.059R (+29%).
+  **What shipped:** a `/performance` note stating this whenever expiry exceeds
+  20% of triggered setups, so neither Colby nor a future session "fixes" expiry by
+  shortening targets. `SETUP_HORIZON_DAYS` was **deliberately left at 20** —
+  changing it would silently reshape every historical comparison, and 20 days
+  matches the ~15-day average hold actually observed in the closed trades.
+  Widening it is a strategy decision (would he really hold 40 days?), not a
+  measurement tweak. See #68d.
+
+- [ ] **68d. Decide whether the setup horizon should be 20 or 40 days** *(small,
+  needs Colby — a strategy question, not a code question)*
+  **Why:** #68c shows 40 days is materially better on paper (+29% expectancy at
+  2R, expiry 28% → 12%). But the horizon is only a *measurement* parameter — the
+  app does not enforce a time stop, so the real question is how long he is
+  actually willing to hold a swing position. Realized trades average ~15 days.
+  **What:** either keep 20 and accept expiry as the cost of a 2R target, or move
+  to 40 and re-baseline every setup statistic (and say so on `/performance`, the
+  way the breakout detector change is labelled). Reporting BOTH horizons is a
+  third option and probably the most honest.
 
 <details><summary>Original #68 entry (pre-fix, kept for the record)</summary>
   **Why:** over 83 matured setups (20-day horizon), by type:

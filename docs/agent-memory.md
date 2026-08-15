@@ -86,6 +86,19 @@ shows non-monotone results, **trust the construction and debug the measurement.*
   `stop N.NN× ATR(14)` beside the live R/R, amber under 1×. `pretradeRiskProblems`
   deliberately unchanged — advisory, never a block.
 
+- **#68c setup expiry — the premise was backwards.** 44 of 111 triggered setups
+  expire, which reads as a defect. Replaying 11,266 episodes and re-resolving the
+  same setups at different targets shows **expectancy rises monotonically with
+  target distance** (avg R 0.014 @1R → 0.059 @2R → 0.108 @3R, n=9,968 triggered).
+  Pulling targets in would raise the win rate and **lower** the return; every type
+  was worse at 1.5R, and `pullback_to_support` went negative. **The horizon is the
+  binding constraint** — the same setups at 40 days expire 11.8% instead of 28.2%
+  and return 0.076R instead of 0.059R. `SETUP_HORIZON_DAYS` left at 20 on purpose
+  (changing it reshapes every historical comparison; 20d matches the ~15-day
+  observed hold). A `/performance` note now states this so it is not re-"fixed".
+  **General lesson: when a metric looks bad, check whether it is the cost of
+  something good before optimising it away.**
+
 ### The broker-state findings (these will bite again)
 
 - **`?status=open` does NOT return orders in `held`**, which is where a bracket's
