@@ -100,6 +100,39 @@ shows non-monotone results, **trust the construction and debug the measurement.*
   something good before optimising it away.**
 
 
+### Two scoring engines, and the overlapping-window trap (2026-08-15)
+
+`stock_scores` now holds **2,015 old-engine rows** (2026-06-13 → the cutover) and
+a growing new-engine set. Handling: **label, do not delete, do not backfill.**
+`SCORING_ENGINE_CHANGED_ON` in signalPerformance.ts makes `/performance` state
+which engine its calibration describes. The old rows are a valid record of what
+the app actually said and the evidence that motivated the change; recomputed
+counterfactuals must never be written into that table.
+
+**To answer #67b early, the new engine was replayed over history** with the old
+engine inlined as a control on identical inputs (bars as of each date, catalysts
+filtered by `discovered_at <= date`, staleness aged as of that date).
+
+**The first pass was wrong, and that is the lesson.** One event per ticker-day
+gave 1,252 events and appeared to show the new engine diluting the Buy band
+(separation 7.46 → 5.01 pts; Buy t 5.96 → 1.96). Consecutive daily events share
+19 of their 20 forward days, so they are **not independent** and every t-stat was
+inflated — including the old engine's flattering 5.96.
+
+Re-run with non-overlapping windows (stride = the 20-day horizon) leaves **57
+independent events**: old Buy +2.85% (t=1.16, n=9), new Buy +2.97% (t=1.67,
+n=19). The new engine is marginally *better* and flags twice as many
+opportunities, and **nothing is significant**. A threshold sweep that looked
+compelling on the overlapping data (≥7.8 → +3.03%, t=3.64) collapses on the
+independent data.
+
+**Conclusion: do not recalibrate the bands yet — there is not enough data, and
+tuning on the overlapping numbers would have fit noise.** Independent events
+accrue at ~54/month, so #67b needs **2–3 months**, not 20 trading days. General
+rule: before quoting significance, ask how many *independent* observations exist,
+and treat a t-stat above ~4 on a two-month real-world signal as a measurement
+artifact until proven otherwise.
+
 ### Merged, and the runner-restart trap (2026-08-15)
 
 PR #39 merged to main (`0487c7e`). **The jobs runner does not hot-reload** — it

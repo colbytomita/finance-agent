@@ -57,6 +57,19 @@ const CACHE_KEY = "performance_report_v2";
  */
 export const BREAKOUT_DETECTOR_CHANGED_ON = "2026-08-14";
 
+/**
+ * When the jobs runner restarted onto the roadmap #66/#67 scoring engine — the
+ * moment the app began emitting scores from a different blend (two-sided risk and
+ * valuation, directional-only catalysts, sentiment folded into catalyst).
+ *
+ * Scores on either side of this are NOT the same measurement, so calibration
+ * pooled across it describes neither engine. The old rows are kept: they are a
+ * valid record of what the app actually said, and they are the evidence that
+ * motivated the change. This constant exists so the report can say which engine
+ * it is describing.
+ */
+export const SCORING_ENGINE_CHANGED_ON = "2026-08-15T16:17:20Z";
+
 export function readCachedReport(): PerformanceReport | null {
   const row = getDb()
     .select()
@@ -213,6 +226,22 @@ function coverageNote(s: StudiedEvents, primaryN: number, label: string): string
 }
 
 /** Build deduped score events (one per ticker per day, latest score that day). */
+/** How many stored score rows fall either side of the scoring-engine cutover. */
+function scoreEngineSplit(): { before: number; after: number } {
+  const rows = getDb()
+    .select({ calculatedAt: schema.stockScores.calculatedAt })
+    .from(schema.stockScores)
+    .all();
+  let before = 0;
+  let after = 0;
+  for (const r of rows) {
+    if (!r.calculatedAt) continue;
+    if (r.calculatedAt < SCORING_ENGINE_CHANGED_ON) before++;
+    else after++;
+  }
+  return { before, after };
+}
+
 function buildScoreEvents(): {
   events: SignalEvent[];
   totalRows: number;
@@ -269,6 +298,16 @@ async function runScoreCalibration(
   if (events.length > 0 && !studied.spyAvailable) notes.push("SPY benchmark unavailable — abnormal returns can't be computed.");
   const cn = events.length > 0 ? coverageNote(studied, primaryN, "score") : null;
   if (cn) notes.push(cn);
+  // Say which engine this describes. Scores before and after the #66/#67 cutover
+  // come from different blends, so a pooled verdict describes neither.
+  const split = scoreEngineSplit();
+  if (split.before > 0 && split.after > 0)
+    notes.push(
+      `Two scoring engines are present: ${split.before} score row(s) predate ${SCORING_ENGINE_CHANGED_ON} ` +
+        `(the roadmap #66/#67 blend went live then) and ${split.after} follow it. Because a 20-day forward ` +
+        `window needs ~4 weeks to mature, the calibration above still describes almost entirely the OLDER ` +
+        `engine. Treat it as the old engine's verdict until the newer sample matures.`,
+    );
 
   return {
     calibration: {

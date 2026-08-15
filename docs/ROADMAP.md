@@ -167,6 +167,39 @@ None of this is a verdict on the strategy; it is a verdict on what has been
   **Accept:** band boundaries chosen from measured forward returns, with the
   supporting table recorded here — and an explicit note if the data does not
   support five bands.
+  **REPLAY RESULT (2026-08-15) — there is not yet enough data to recalibrate, and
+  attempting it would fit noise.** Rather than wait for the live sample, the new
+  engine was replayed over 2026-06-13 → today with the old engine inlined as a
+  control on identical inputs (bars as of each date, catalysts filtered by
+  `discovered_at <= date`, staleness aged as of that date — no lookahead).
+
+  **The first pass was wrong and the correction is the point.** Scoring every
+  ticker-day gave 1,252 events and appeared to show the new engine diluting the
+  Buy band (separation 7.46 → 5.01 pts, Buy t-stat 5.96 → 1.96). That was an
+  **autocorrelation artifact**: consecutive daily events share 19 of their 20
+  forward days, so they are not independent and every t-stat was inflated —
+  including the old engine's flattering 5.96.
+
+  Re-run with **non-overlapping** windows (one event per ticker per 20 trading
+  days), which leaves **57 genuinely independent events**:
+
+  | engine | Buy n | Buy mean | Buy t |
+  |---|---|---|---|
+  | old | 9 | +2.85% | 1.16 |
+  | new | 19 | **+2.97%** | 1.67 |
+
+  The new engine is marginally *better* and flags twice as many opportunities,
+  but **nothing clears significance** (all |t| < 2). **57 independent events over
+  one mild-uptrend regime cannot distinguish the two engines.** A threshold sweep
+  looked compelling on the overlapping data (≥7.8 → +3.03%, t=3.64) and collapses
+  on the independent data (n too small to evaluate). **Do not move the band
+  thresholds on this evidence.**
+
+  **What #67b actually needs:** independent events accumulate at roughly one per
+  ticker per 20 trading days ≈ ~54/month at the current watchlist size. Reaching
+  ~150–200 independent events is a **2–3 month** wait, not 20 trading days. Until
+  then the ladder stays as-is and the honest statement is "not yet measurable".
+
   **Data-hygiene note (2026-08-15):** the scoring changes only took effect when
   the jobs runner was restarted at **2026-08-15T16:17:20Z** — `tsx` loads code
   once at startup, so the runner had been writing pre-#66/#67 scores for ~32
