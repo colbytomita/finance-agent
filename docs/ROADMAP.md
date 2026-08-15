@@ -505,6 +505,13 @@ None of this is a verdict on the strategy; it is a verdict on what has been
   in `held`. Alerts written at the right severities; the button renders on
   /stock/QBTS and not on /stock/AVGO. 546 tests.
 
+- [x] **75b. The restorable stops are now far from price — review before placing**
+  *(MOOT 2026-08-15 — Colby is exiting every position at Monday's open, so there
+  is nothing to restore a stop on. #75's detection and the Restore-stop button
+  remain live for future positions.)*
+
+<details><summary>Original #75b entry</summary>
+
 - [ ] **75b. The restorable stops are now far from price — review before placing**
   *(small, needs Colby's judgement, not code)*
   **Why:** restoring the *recorded* stop re-places it where it was set at entry,
@@ -525,6 +532,7 @@ None of this is a verdict on the strategy; it is a verdict on what has been
   (edit the trade, then restore), or accept it unprotected deliberately. Relates
   to #71 (stop distance vs ATR), which is the natural place to compute a sensible
   level rather than reusing the entry-time one.
+</details>
 
 <details><summary>Original #75 entry (the audit that prompted it)</summary>
 
@@ -647,7 +655,24 @@ the problems were configuration and indexing, not structure.
 
 ## v10 — Tier 3: exits, and the one real risk hole
 
-- [ ] **69. Stops hold at −1R except when price gaps through them** *(small)*
+- [x] **69. Stops hold at −1R except when price gaps through them** *(CLOSED
+  2026-08-15 — premise invalidated by #73, nothing built)*
+  **Why closed:** the item rested on two trades that gapped through their stop,
+  **ORCL −2.67R and TSLA −1.26R**. #73 established that both were part of the
+  2026-06-25 development batch-close, not real exit decisions, and they are now
+  `excluded_from_stats`. Re-checked against the live 11-trade sample:
+
+  | | count |
+  |---|---|
+  | losses worse than −1.15R (gapped through) | **0** |
+  | losses that held at ~−1R (−0.98 to −1.10) | 8 |
+
+  **Every loss in the live sample held at its stop.** There is no gap-risk
+  evidence left to act on, so the proposed overnight-gap stat in the trade dialog
+  would be a feature built on a finding that no longer exists. Re-open only if a
+  real trade gaps through its stop.
+  **The good news stands and is now stronger:** stop discipline is working
+  mechanically — 8 of 8 losses landed within 2% of −1R.
   **Why:** the good news from 16 closed trades — the losses cluster
   extraordinarily tightly at exactly −1R (V −1.00, EIX −1.00, MA −1.01, EXC
   −1.01, RTX −1.02, AMZN −0.98). **Risk control is working mechanically.** The
