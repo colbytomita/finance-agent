@@ -1,5 +1,5 @@
 import type { AlpacaService } from "./alpaca";
-import { exitTradeAtBroker, type ExitableTrade, type ExitResult } from "./tradeExit";
+import type { ExitableTrade, ExitResult } from "./tradeExit";
 
 // Bulk exit — close every open position in one reviewed action (roadmap #76).
 //
@@ -101,17 +101,3 @@ export async function exitAllPositions(
     failed: failedRows.length,
   };
 }
-
-/** Default wiring for production use. */
-export const defaultExitOne = (
-  svc: AlpacaService,
-  trade: BulkExitTarget,
-  closeTradeFn: BulkExitCloseFn,
-  onAlert: BulkExitOptions["onAlert"],
-): Promise<ExitResult> =>
-  exitTradeAtBroker(svc, trade, { closeTradeFn: (o) => closeTradeFn(trade, o), onAlert });
-
-export type BulkExitCloseFn = (
-  trade: BulkExitTarget,
-  opts: { exitPrice: number; exitReason: string },
-) => unknown;

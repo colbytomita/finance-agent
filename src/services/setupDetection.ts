@@ -49,7 +49,9 @@ function buildSetup(
   };
 }
 
-function detectPullbackToSupport(ind: IndicatorSnapshot, bars: Bar[]): DetectedSetup | null {
+// `_bars` is unused here but kept so every detector shares one signature and can
+// live in the DETECTORS array below.
+function detectPullbackToSupport(ind: IndicatorSnapshot, _bars: Bar[]): DetectedSetup | null {
   const { price, ema21, sma50, rsi14, atr14 } = ind;
   if (ema21 == null || sma50 == null || atr14 == null) return null;
   // Uptrend + price pulled back near 21-EMA without breaking 50-SMA.
@@ -188,7 +190,7 @@ function detectMaReclaim(ind: IndicatorSnapshot, bars: Bar[]): DetectedSetup | n
   );
 }
 
-function detectMomentumContinuation(ind: IndicatorSnapshot, bars: Bar[]): DetectedSetup | null {
+function detectMomentumContinuation(ind: IndicatorSnapshot, _bars: Bar[]): DetectedSetup | null {
   const { price, ema8, ema21, rsi14, atr14, relativeVolume } = ind;
   if (ema8 == null || ema21 == null || rsi14 == null || atr14 == null) return null;
   const strong = ema8 > ema21 && rsi14 >= 55 && rsi14 <= 72;

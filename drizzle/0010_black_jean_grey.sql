@@ -1,0 +1,1 @@
+CREATE INDEX `idx_catalysts_ticker_status` ON `catalysts` (`ticker`,`status`);
