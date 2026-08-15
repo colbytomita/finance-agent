@@ -2,6 +2,44 @@
 
 Last updated: 2026-08-14.
 
+## ▶ START HERE — state at 2026-08-15 21:40Z
+
+`main` @ `937b37b`, everything committed and pushed, working tree clean.
+**564 tests / 45 files green; `npx tsc --noEmit` clean.** `npm run build` works
+again — but it no longer type-checks, so **`tsc --noEmit` is the real gate**.
+Jobs runner is Running on the merged code.
+
+**The one actionable roadmap item is #80 — multi-account / multi-broker.** Its
+spec and an 11-task implementation plan are already written:
+
+- `docs/superpowers/specs/2026-08-15-multi-account-brokerage-design.md`
+- `docs/superpowers/plans/2026-08-15-multi-account-brokerage.md`
+
+Read the plan rather than re-deriving it. Execution method is still undecided —
+subagent-driven or inline. **Plan Task 8 restarts the jobs runner, and Monday
+2026-08-17 is the first real broker run of the exit path (#74b), so consider
+holding execution until after Monday's open.**
+
+**Time-sensitive:** Monday 2026-08-17, 09:30 ET / 03:30 HST, Colby exits every
+position (`/swing` → "Exit all 8 positions…") and redeploys. 8 open trades, 18
+holdings. That bulk exit has never touched the broker — the market was closed for
+this entire session — so exiting one position individually first is the sensible
+de-risk. 18 pending Agent Picks already exist for redeployment; no scan needed.
+
+**Everything else is blocked:** #67b needs ~150 independent events (~2–3 months,
+not 20 trading days); #68b needs matured post-fix breakout setups; #68d is a
+decision for Colby, not code. #69 and #75b are closed — do not re-open.
+
+**Three traps that will cause real harm if forgotten:**
+1. The jobs runner does **not** hot-reload. After any scoring/detector/scheduler
+   change run `scripts/stop-jobs-task.ps1` then `Start-ScheduledTask`. Never bare
+   `Stop-ScheduledTask` — it orphans the node tree.
+2. `stock_scores` holds **two scoring engines**, cutover `2026-08-15T16:17:20Z`.
+   Filter on it for any calibration work.
+3. Overlapping forward windows inflate t-stats. Stride by the horizon.
+
+---
+
 ## 2026-08-14 session — v10 executed (#66, #67, #68, #72–#76) + a broker-state investigation
 
 Colby asked "how is this project doing performance wise", then "start fixing
