@@ -7,8 +7,8 @@ Last updated: 2026-08-14.
 Colby asked "how is this project doing performance wise", then "start fixing
 those issues", then requested the stock-page trade panel and exit buttons, then
 asked why his limit orders had been cancelled. Nine roadmap items shipped.
-**Everything is UNCOMMITTED** (finance-agent rule: never commit unless asked).
-**Tests 501 → 560 across 45 files; `npx tsc --noEmit` clean; migration 0009.**
+**Committed on branch `roadmap-v10-execution`, PR #39** (he merges PRs himself).
+**Tests 501 → 564 across 45 files; `npx tsc --noEmit` clean; migrations 0009 + 0010.**
 Full per-item detail with tables lives in `docs/ROADMAP.md` — this is the map.
 
 ### The through-line worth reading first
@@ -98,6 +98,35 @@ shows non-monotone results, **trust the construction and debug the measurement.*
   observed hold). A `/performance` note now states this so it is not re-"fixed".
   **General lesson: when a metric looks bad, check whether it is the cost of
   something good before optimising it away.**
+
+
+### App review + performance pass (#77-#79)
+
+**`next build` had been broken for three weeks, so the dev server was the only
+way to run the app.** TypeScript 7 is the native rewrite: its package `exports`
+map points `"."` at `lib/version.cjs` (a version string, not the classic compiler
+API), while Next 16.2.10's build still expects `typescript.sys`,
+`readConfigFile` and `formatDiagnostic`. It resolved the package, got an object
+with no `.sys`, and failed with `The "id" argument must be of type string`.
+Fixed with `typescript: { ignoreBuildErrors: true }`; **`npx tsc --noEmit`
+remains the real type gate**, now with `noUnusedLocals`/`noUnusedParameters`.
+Measured dev vs production, warm: `/` 196->33ms, `/swing` 422->77ms,
+`/watchlist` 933->125ms, `/status` 205->31ms, `/stock/AVGO` 123->16ms -- **5-8x
+on every page**. Use `npm run dev` while developing, `npm start` to use the app.
+
+**Indexing:** `catalysts(ticker, status)` added (migration 0010) -- scoring
+full-scanned 9k rows once per ticker per 2-minute refresh (27.2ms -> 11.0ms per
+54-ticker pass), and that table only grows. `price_bars` (120k rows) *looked*
+unindexed but is covered by its `UNIQUE(ticker, timeframe, bar_date)`
+auto-index -- worth checking rather than assuming.
+
+**Dead code:** a scan of every exported function found **exactly one** genuinely
+unreachable export in 25k lines, and it was mine from earlier the same day
+(`defaultExitOne`, never wired up). The no-dead-code discipline is holding.
+
+**Verdict: structurally healthy, no refactor warranted.** 25k source / 7.4k test
+lines, largest file 860, DB layer ~60ms of a page's work. The problems were
+configuration and indexing, not structure.
 
 ### The broker-state findings (these will bite again)
 

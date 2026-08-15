@@ -550,6 +550,61 @@ None of this is a verdict on the strategy; it is a verdict on what has been
   2026-08-17 09:30 ET) and the guard correctly refuses; #74b still covers the
   first real round-trip.
 
+## v10 — Tier 4: app review (2026-08-14)
+
+- [x] **77. `next build` had been broken for three weeks — no production build
+  existed** *(DONE 2026-08-14; the highest-impact finding of the review)*
+  **Why:** the build failed with the opaque `The "id" argument must be of type
+  string. Received undefined`, so the **dev server was the only way to run the
+  app**. Root cause: TypeScript 7 is the native rewrite, and its package
+  `exports` map points `"."` at `lib/version.cjs` — a version string, not the
+  classic compiler API. Next 16.2.10's build still expects `typescript.sys` /
+  `readConfigFile` / `formatDiagnostic`, so it resolved the package, got an
+  object with no `.sys`, and crashed.
+  **Fix:** `typescript: { ignoreBuildErrors: true }` in `next.config.ts`, with the
+  reasoning recorded inline. **Type safety is not lost** — `npm run typecheck` is
+  the project's gate and passes under TS7 (now with `noUnusedLocals` too). Revisit
+  when Next supports TS7 natively.
+  **Measured, production build vs dev server, same pages, warm:**
+
+  | page | dev | prod | |
+  |---|---|---|---|
+  | `/` | 196ms | **33ms** | 5.9× |
+  | `/swing` | 422ms | **77ms** | 5.5× |
+  | `/watchlist` | 933ms | **125ms** | 7.5× |
+  | `/portfolio` | 255ms | **40ms** | 6.4× |
+  | `/status` | 205ms | **31ms** | 6.6× |
+  | `/events` | 296ms | **38ms** | 7.8× |
+  | `/stock/AVGO` | 123ms | **16ms** | 7.9× |
+
+  Development still uses `npm run dev` for hot reload; `npm start` is now
+  available for actually *using* the app (e.g. during market hours).
+
+- [x] **78. `catalysts` was full-scanned once per ticker per refresh** *(DONE)*
+  Scoring calls `getCatalystInputs` for every tracked ticker on every ~2-minute
+  refresh, and each call scanned all 9k rows. Index on `(ticker, status)`
+  (migration 0010): **27.2ms → 11.0ms** per 54-ticker pass, and the table only
+  grows since it is the news feed. **Checked the others too:** `price_bars` (120k
+  rows) looked unindexed but is covered by its `UNIQUE(ticker, timeframe,
+  bar_date)` auto-index — the hot path was already a SEARCH, so the scary-looking
+  table was never the problem.
+
+- [x] **79. Dead-code and unused-symbol audit** *(DONE)*
+  A scan of every exported function/const found **exactly one genuinely
+  unreachable export** in 25k lines — `defaultExitOne`, which I had added earlier
+  that same day and never wired up. Removed, with its companion type and a
+  then-unused import. Everything else flagged was either a type exported for
+  documentation or a symbol used within its own file.
+  Enabled `noUnusedLocals` + `noUnusedParameters`: **only 4 issues across the
+  whole codebase**, all fixed (two unused imports; two unused detector params
+  renamed `_bars`, kept so every detector shares one signature). Cheap permanent
+  guard against exactly the litter I had just created.
+
+**Review verdict:** structurally healthy. 25k source / 7.4k test lines, largest
+file 860 lines, no dead code beyond the one item above, DB query layer fast
+(~60ms of a page's work; `atrByTicker` is 27ms of it). No refactor was warranted —
+the problems were configuration and indexing, not structure.
+
 ## v10 — Tier 3: exits, and the one real risk hole
 
 - [ ] **69. Stops hold at −1R except when price gaps through them** *(small)*

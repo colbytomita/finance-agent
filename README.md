@@ -87,7 +87,8 @@ This is a **single-user, localhost tool** — it has no authentication or CSRF p
 | `npm run jobs` | background scheduler (market-aware refresh + due-check-driven catalyst scan and daily maintenance incl. retention, backtest, backup) |
 | `npm run watchdog` | one heartbeat check; notifies if the job runner is down — normally run by the watchdog task |
 | `npm test` | vitest suite (pure logic + in-memory-SQLite persistence tests — 564 tests) |
-| `npm run typecheck` | strict TypeScript check |
+| `npm run typecheck` | strict TypeScript check (`noUnusedLocals` + `noUnusedParameters`) — **the real type gate**, since `next build` skips type-checking (see `next.config.ts`) |
+| `npm start` | production server — **5–8× faster per page than `npm run dev`**; use it when using the app rather than developing it |
 | `npm run db:generate` | generate a SQL migration in `drizzle/` after editing `src/db/schema.ts` |
 | `npm run db:restore -- <file>` | restore the database from a `data/backups/` file (see below); snapshots the current DB first |
 | `npm run db:seed` | optional demo data — not required; the app is designed to run on your real data |
