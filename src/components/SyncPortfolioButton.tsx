@@ -6,9 +6,14 @@ export function SyncPortfolioButton() {
   const { call, busy, msg, error } = useApiAction();
 
   const sync = () =>
-    call<{ synced: number }>("/api/portfolio/sync", {
+    call<{ synced: number; removed: number }>("/api/portfolio/sync", {
       errorText: "sync failed",
-      message: (d) => `Synced ${d.synced} position(s)`,
+      // Name the removals explicitly: a sync that drops a closed position is
+      // the one case where the table shrinks, and silence there reads as a bug.
+      message: (d) =>
+        d.removed > 0
+          ? `Synced ${d.synced} position(s), removed ${d.removed} closed`
+          : `Synced ${d.synced} position(s)`,
     });
 
   return (

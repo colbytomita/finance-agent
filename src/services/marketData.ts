@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { effectiveConfig, loadConfig } from "@/lib/config";
 import { AlpacaService } from "./alpaca";
@@ -34,9 +34,30 @@ import { getTrackedTickers, latestSnapshot } from "@/lib/queries";
 export { getTrackedTickers };
 export { latestSnapshot as getLatestSnapshot };
 
-/** Sync Alpaca positions into portfolio_holdings. */
-export async function syncPortfolio(): Promise<{ synced: number } | { error: string }> {
-  const alpaca = AlpacaService.fromEnv();
+/**
+ * Holdings the broker no longer reports, and so should be dropped.
+ *
+ * Only broker-sourced rows are eligible. A "manual" row is a position the user
+ * entered themselves and the broker was never asked about, so its absence from
+ * getPositions() says nothing about whether it is still held.
+ */
+export function staleBrokerHoldings(
+  existing: { ticker: string; source: string }[],
+  brokerTickers: Set<string>,
+): string[] {
+  return existing
+    .filter((h) => h.source === "alpaca" && !brokerTickers.has(h.ticker))
+    .map((h) => h.ticker);
+}
+
+/** What syncPortfolio needs from a broker client; narrowed so tests can inject a fake. */
+type PositionSource = Pick<AlpacaService, "getPositions">;
+
+/** Sync Alpaca positions into portfolio_holdings, adding, updating and removing. */
+export async function syncPortfolio(
+  client?: PositionSource,
+): Promise<{ synced: number; removed: number } | { error: string }> {
+  const alpaca = client ?? AlpacaService.fromEnv();
   if (!alpaca) return { error: "Alpaca credentials not configured" };
   const db = getDb();
   try {
@@ -58,7 +79,23 @@ export async function syncPortfolio(): Promise<{ synced: number } | { error: str
         .onConflictDoUpdate({ target: schema.portfolioHoldings.ticker, set: values })
         .run();
     }
-    return { synced: positions.length };
+
+    // Reconcile removals. This is only reached when getPositions() SUCCEEDED —
+    // a failed read throws and is caught below — so a network blip can never be
+    // mistaken for "the account is flat" and wipe the book. An empty list from a
+    // healthy call IS a real answer (a flat account) and must clear the broker
+    // rows: without this the upsert-only loop left closed positions in place
+    // forever, and the price refresh kept repricing them so they looked live.
+    const stale = staleBrokerHoldings(
+      db.select().from(schema.portfolioHoldings).all(),
+      new Set(positions.map((p) => p.ticker)),
+    );
+    if (stale.length > 0) {
+      db.delete(schema.portfolioHoldings)
+        .where(inArray(schema.portfolioHoldings.ticker, stale))
+        .run();
+    }
+    return { synced: positions.length, removed: stale.length };
   } catch (e) {
     return { error: errorMessage(e) };
   }
